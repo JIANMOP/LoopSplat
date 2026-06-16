@@ -1,0 +1,500 @@
+$ /home/lk/miniconda3/envs/loop_splat/bin/python -c "
+import os; os.environ['DISABLE_WANDB']='true'
+os.chdir('/data/p/.pfy/LoopSplat')
+from src.utils.io_utils import load_config
+from src.entities.gaussian_slam import GaussianSLAM
+c = load_config('_test_config.yaml')
+c['frame_limit'] = 3
+c['use_wandb'] = False
+print('Instantiating...')
+gs = GaussianSLAM(c)
+print('Running...')
+gs.run()
+print('OK')
+"
+[killed after timeout]
+/home/lk/miniconda3/envs/loop_splat/lib/python3.10/site-packages/torch/cuda/__init__.py:51: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[06-01 10:59:53] WARNING  Customized build of Open3D is not detected,  o3d.py:11
+                          to resolve this you can do:                           
+                          pip install -U python-pycg                            
+                 WARNING  Failed to obtain monitor info!               vis.py:43
+Instantiating...
+Tracking config
+{'alpha_thre': 0.98,
+ 'cam_rot_lr': 0.002,
+ 'cam_trans_lr': 0.01,
+ 'enable_exposure': False,
+ 'filter_alpha': False,
+ 'filter_outlier_depth': False,
+ 'gt_camera': False,
+ 'help_camera_initialization': False,
+ 'init_err_ratio': 5,
+ 'iterations': 200,
+ 'mask_invalid_depth': True,
+ 'odometer_method': 'hybrid',
+ 'odometry_type': 'const_speed',
+ 'soft_alpha': True,
+ 'w_color_loss': 0.6}
+Mapping config
+{'alpha_thre': 0.6,
+ 'current_view_opt_iterations': 0.4,
+ 'iterations': 100,
+ 'map_every': 1,
+ 'new_frame_sample_size': 30000,
+ 'new_points_radius': 0.0001,
+ 'new_submap_every': 50,
+ 'new_submap_gradient_points_num': 50000,
+ 'new_submap_iterations': 100,
+ 'new_submap_points_num': 100000,
+ 'pruning_thre': 0.5,
+ 'submap_using_motion_heuristic': True}
+Loop closure config
+{'final': False,
+ 'min_interval': 3,
+ 'min_similarity': 0.5,
+ 'pgo_edge_prune_thres': 0.25,
+ 'pgo_max_iterations': 500,
+ 'registration': {'base_lr': 0.005,
+                  'method': 'gs_reg',
+                  'min_overlap_ratio': 0.2,
+                  'use_render': False},
+ 'voxel_size': 0.02}
+Running...
+
+Mapping frame 0
+Number of added points:  116608
+Gaussian model size 116608
+Optimization time:  1.440725326538086
+PSNR this frame: 38.874202728271484
+Saved rendering vis of color/depth at 0000_0100.jpg
+
+Mapping frame 1
+Number of added points:  12726
+Gaussian model size 98582
+Optimization time:  0.9805102348327637
+PSNR this frame: 22.379108428955078
+
+Tracking frame 2
+iter: 0, color_loss: 37492.15234, depth_loss: 5595.36572 , cam_quad_err: 0.00221, cam_trans_err: 0.00997
+iter: 20, color_loss: 13145.07715, depth_loss: 3921.95264 , cam_quad_err: 0.00143, cam_trans_err: 0.00417
+iter: 40, color_loss: 11890.22852, depth_loss: 3942.07910 , cam_quad_err: 0.00121, cam_trans_err: 0.00498
+iter: 60, color_loss: 11580.20703, depth_loss: 3789.72095 , cam_quad_err: 0.00103, cam_trans_err: 0.00428
+iter: 80, color_loss: 11737.65625, depth_loss: 3755.36328 , cam_quad_err: 0.00108, cam_trans_err: 0.00449
+iter: 100, color_loss: 11831.96582, depth_loss: 3741.22046 , cam_quad_err: 0.00109, cam_trans_err: 0.00448
+iter: 120, color_loss: 11827.43164, depth_loss: 3743.98877 , cam_quad_err: 0.00108, cam_trans_err: 0.00440
+iter: 140, color_loss: 11792.07129, depth_loss: 3745.32178 , cam_quad_err: 0.00108, cam_trans_err: 0.00445
+iter: 160, color_loss: 11726.80859, depth_loss: 3750.75928 , cam_quad_err: 0.00107, cam_trans_err: 0.00448
+iter: 180, color_loss: 11702.14648, depth_loss: 3751.73999 , cam_quad_err: 0.00107, cam_trans_err: 0.00449
+frame_id: 2, cam_quad_err: 0.00102, cam_trans_err: 0.00457 , cam_quad_err: 0.00102, cam_trans_err: 0.00457
+
+Mapping frame 2
+Number of added points:  5483
+Gaussian model size 89375
+Optimization time:  0.9577560424804688
+PSNR this frame: 29.434738159179688
+
+Tracking frame 3
+iter: 0, color_loss: 13587.45996, depth_loss: 2357.42969 , cam_quad_err: 0.00422, cam_trans_err: 0.00472
+iter: 20, color_loss: 14986.51270, depth_loss: 2716.26831 , cam_quad_err: 0.00254, cam_trans_err: 0.00707
+iter: 40, color_loss: 10074.54102, depth_loss: 2161.85986 , cam_quad_err: 0.00124, cam_trans_err: 0.00405
+iter: 60, color_loss: 9344.07617, depth_loss: 2083.02197 , cam_quad_err: 0.00109, cam_trans_err: 0.00297
+iter: 80, color_loss: 8703.62695, depth_loss: 2091.37500 , cam_quad_err: 0.00114, cam_trans_err: 0.00296
+iter: 100, color_loss: 8648.30469, depth_loss: 2093.14404 , cam_quad_err: 0.00118, cam_trans_err: 0.00290
+iter: 120, color_loss: 8893.22656, depth_loss: 2110.41455 , cam_quad_err: 0.00116, cam_trans_err: 0.00300
+iter: 140, color_loss: 8638.33789, depth_loss: 2092.19629 , cam_quad_err: 0.00117, cam_trans_err: 0.00291
+iter: 160, color_loss: 8637.24902, depth_loss: 2092.14160 , cam_quad_err: 0.00116, cam_trans_err: 0.00289
+iter: 180, color_loss: 8701.70898, depth_loss: 2084.31934 , cam_quad_err: 0.00117, cam_trans_err: 0.00281
+frame_id: 3, cam_quad_err: 0.00117, cam_trans_err: 0.00291 , cam_quad_err: 0.00117, cam_trans_err: 0.00291
+
+Mapping frame 3
+Number of added points:  4066
+Gaussian model size 80578
+Optimization time:  0.9386823177337646
+PSNR this frame: 32.34501266479492
+
+Tracking frame 4
+iter: 0, color_loss: 23055.58203, depth_loss: 2472.10718 , cam_quad_err: 0.00092, cam_trans_err: 0.00734
+iter: 20, color_loss: 11177.54297, depth_loss: 1679.70715 , cam_quad_err: 0.00079, cam_trans_err: 0.00314
+iter: 40, color_loss: 11894.50000, depth_loss: 1681.55640 , cam_quad_err: 0.00086, cam_trans_err: 0.00296
+iter: 60, color_loss: 7723.06592, depth_loss: 1660.07520 , cam_quad_err: 0.00039, cam_trans_err: 0.00267
+iter: 80, color_loss: 7209.52539, depth_loss: 1701.94080 , cam_quad_err: 0.00025, cam_trans_err: 0.00265
+iter: 100, color_loss: 7155.53027, depth_loss: 1675.53967 , cam_quad_err: 0.00032, cam_trans_err: 0.00283
+iter: 120, color_loss: 7115.97559, depth_loss: 1677.71558 , cam_quad_err: 0.00032, cam_trans_err: 0.00263
+iter: 140, color_loss: 7169.24609, depth_loss: 1701.85474 , cam_quad_err: 0.00033, cam_trans_err: 0.00291
+iter: 160, color_loss: 7094.25146, depth_loss: 1692.15479 , cam_quad_err: 0.00030, cam_trans_err: 0.00279
+iter: 180, color_loss: 7148.57178, depth_loss: 1676.17358 , cam_quad_err: 0.00030, cam_trans_err: 0.00266
+frame_id: 4, cam_quad_err: 0.00032, cam_trans_err: 0.00271 , cam_quad_err: 0.00032, cam_trans_err: 0.00271
+
+Mapping frame 4
+Number of added points:  5092
+Gaussian model size 78981
+Optimization time:  0.928469181060791
+PSNR this frame: 34.94192886352539
+
+Tracking frame 5
+iter: 0, color_loss: 9150.14062, depth_loss: 1640.12769 , cam_quad_err: 0.00127, cam_trans_err: 0.00831
+iter: 20, color_loss: 10854.37305, depth_loss: 1752.43408 , cam_quad_err: 0.00077, cam_trans_err: 0.00461
+iter: 40, color_loss: 8826.88379, depth_loss: 1615.81921 , cam_quad_err: 0.00040, cam_trans_err: 0.00377
+iter: 60, color_loss: 8040.59521, depth_loss: 1556.92456 , cam_quad_err: 0.00041, cam_trans_err: 0.00333
+iter: 80, color_loss: 7904.04883, depth_loss: 1580.28687 , cam_quad_err: 0.00050, cam_trans_err: 0.00356
+iter: 100, color_loss: 7876.62402, depth_loss: 1576.90210 , cam_quad_err: 0.00050, cam_trans_err: 0.00349
+iter: 120, color_loss: 7877.05078, depth_loss: 1576.06128 , cam_quad_err: 0.00049, cam_trans_err: 0.00351
+iter: 140, color_loss: 7875.02930, depth_loss: 1576.23596 , cam_quad_err: 0.00050, cam_trans_err: 0.00350
+iter: 160, color_loss: 8140.52295, depth_loss: 1584.15979 , cam_quad_err: 0.00051, cam_trans_err: 0.00343
+iter: 180, color_loss: 8055.25293, depth_loss: 1579.97998 , cam_quad_err: 0.00050, cam_trans_err: 0.00343
+frame_id: 5, cam_quad_err: 0.00049, cam_trans_err: 0.00350 , cam_quad_err: 0.00049, cam_trans_err: 0.00350
+
+Mapping frame 5
+Number of added points:  5668
+Gaussian model size 78765
+Optimization time:  0.9336667060852051
+PSNR this frame: 35.59528350830078
+
+Tracking frame 6
+iter: 0, color_loss: 27133.37500, depth_loss: 2571.15039 , cam_quad_err: 0.00147, cam_trans_err: 0.01142
+iter: 20, color_loss: 9956.44141, depth_loss: 1671.04626 , cam_quad_err: 0.00211, cam_trans_err: 0.00418
+iter: 40, color_loss: 8645.80469, depth_loss: 1625.51880 , cam_quad_err: 0.00152, cam_trans_err: 0.00346
+iter: 60, color_loss: 8992.11133, depth_loss: 1581.17700 , cam_quad_err: 0.00159, cam_trans_err: 0.00384
+iter: 80, color_loss: 8925.86523, depth_loss: 1644.34155 , cam_quad_err: 0.00163, cam_trans_err: 0.00393
+iter: 100, color_loss: 8398.20898, depth_loss: 1586.93823 , cam_quad_err: 0.00157, cam_trans_err: 0.00389
+iter: 120, color_loss: 8654.94141, depth_loss: 1583.79431 , cam_quad_err: 0.00162, cam_trans_err: 0.00389
+iter: 140, color_loss: 9023.97656, depth_loss: 1647.10181 , cam_quad_err: 0.00164, cam_trans_err: 0.00391
+iter: 160, color_loss: 8423.82422, depth_loss: 1585.13989 , cam_quad_err: 0.00156, cam_trans_err: 0.00387
+iter: 180, color_loss: 8666.52734, depth_loss: 1585.65735 , cam_quad_err: 0.00162, cam_trans_err: 0.00392
+frame_id: 6, cam_quad_err: 0.00155, cam_trans_err: 0.00388 , cam_quad_err: 0.00155, cam_trans_err: 0.00388
+
+Mapping frame 6
+Number of added points:  6510
+Gaussian model size 79405
+Optimization time:  0.9382879734039307
+PSNR this frame: 32.02220153808594
+
+Tracking frame 7
+iter: 0, color_loss: 18181.51562, depth_loss: 1628.62329 , cam_quad_err: 0.00160, cam_trans_err: 0.01621
+iter: 20, color_loss: 17102.49609, depth_loss: 1999.35034 , cam_quad_err: 0.00191, cam_trans_err: 0.00864
+iter: 40, color_loss: 9598.93750, depth_loss: 1564.06262 , cam_quad_err: 0.00198, cam_trans_err: 0.00538
+iter: 60, color_loss: 8994.51562, depth_loss: 1577.44519 , cam_quad_err: 0.00177, cam_trans_err: 0.00596
+iter: 80, color_loss: 8988.76562, depth_loss: 1574.96704 , cam_quad_err: 0.00183, cam_trans_err: 0.00563
+iter: 100, color_loss: 9126.45312, depth_loss: 1573.15588 , cam_quad_err: 0.00185, cam_trans_err: 0.00574
+iter: 120, color_loss: 9021.30469, depth_loss: 1575.94226 , cam_quad_err: 0.00188, cam_trans_err: 0.00567
+iter: 140, color_loss: 9330.06641, depth_loss: 1596.76562 , cam_quad_err: 0.00191, cam_trans_err: 0.00551
+iter: 160, color_loss: 9565.34766, depth_loss: 1604.13757 , cam_quad_err: 0.00182, cam_trans_err: 0.00582
+iter: 180, color_loss: 9031.29980, depth_loss: 1582.61377 , cam_quad_err: 0.00187, cam_trans_err: 0.00583
+frame_id: 7, cam_quad_err: 0.00186, cam_trans_err: 0.00573 , cam_quad_err: 0.00186, cam_trans_err: 0.00573
+
+Mapping frame 7
+Number of added points:  5971
+Gaussian model size 80913
+Optimization time:  0.9445395469665527
+PSNR this frame: 33.108062744140625
+
+Tracking frame 8
+iter: 0, color_loss: 11385.44922, depth_loss: 1637.18921 , cam_quad_err: 0.00100, cam_trans_err: 0.01282
+iter: 20, color_loss: 10589.22266, depth_loss: 1621.55505 , cam_quad_err: 0.00121, cam_trans_err: 0.00426
+iter: 40, color_loss: 9118.29785, depth_loss: 1602.18286 , cam_quad_err: 0.00150, cam_trans_err: 0.00388
+iter: 60, color_loss: 8658.91699, depth_loss: 1625.25903 , cam_quad_err: 0.00153, cam_trans_err: 0.00422
+iter: 80, color_loss: 8844.64062, depth_loss: 1644.57300 , cam_quad_err: 0.00149, cam_trans_err: 0.00438
+iter: 100, color_loss: 8965.74414, depth_loss: 1659.66309 , cam_quad_err: 0.00151, cam_trans_err: 0.00434
+iter: 120, color_loss: 8843.98047, depth_loss: 1637.87170 , cam_quad_err: 0.00152, cam_trans_err: 0.00410
+iter: 140, color_loss: 9034.72168, depth_loss: 1585.62000 , cam_quad_err: 0.00149, cam_trans_err: 0.00384
+iter: 160, color_loss: 8957.72070, depth_loss: 1585.07275 , cam_quad_err: 0.00146, cam_trans_err: 0.00378
+iter: 180, color_loss: 9000.29785, depth_loss: 1592.04102 , cam_quad_err: 0.00148, cam_trans_err: 0.00385
+frame_id: 8, cam_quad_err: 0.00146, cam_trans_err: 0.00386 , cam_quad_err: 0.00146, cam_trans_err: 0.00386
+
+Mapping frame 8
+Number of added points:  6061
+Gaussian model size 82429
+Optimization time:  0.9586117267608643
+PSNR this frame: 32.885013580322266
+
+Tracking frame 9
+iter: 0, color_loss: 20844.65234, depth_loss: 1928.33118 , cam_quad_err: 0.00185, cam_trans_err: 0.01308
+iter: 20, color_loss: 14910.65527, depth_loss: 2651.70557 , cam_quad_err: 0.00301, cam_trans_err: 0.00772
+iter: 40, color_loss: 11079.57129, depth_loss: 1952.70020 , cam_quad_err: 0.00340, cam_trans_err: 0.00780
+iter: 60, color_loss: 10912.20312, depth_loss: 2033.56458 , cam_quad_err: 0.00356, cam_trans_err: 0.00797
+iter: 80, color_loss: 10869.65332, depth_loss: 1996.62219 , cam_quad_err: 0.00365, cam_trans_err: 0.00814
+iter: 100, color_loss: 10846.46289, depth_loss: 2011.51514 , cam_quad_err: 0.00364, cam_trans_err: 0.00820
+iter: 120, color_loss: 10848.36230, depth_loss: 2007.83228 , cam_quad_err: 0.00362, cam_trans_err: 0.00816
+iter: 140, color_loss: 10853.52734, depth_loss: 2002.11328 , cam_quad_err: 0.00363, cam_trans_err: 0.00817
+iter: 160, color_loss: 11088.04102, depth_loss: 1997.41150 , cam_quad_err: 0.00367, cam_trans_err: 0.00819
+iter: 180, color_loss: 11404.44922, depth_loss: 2087.76172 , cam_quad_err: 0.00360, cam_trans_err: 0.00810
+frame_id: 9, cam_quad_err: 0.00363, cam_trans_err: 0.00820 , cam_quad_err: 0.00363, cam_trans_err: 0.00820
+
+Mapping frame 9
+Number of added points:  4858
+Gaussian model size 82076
+Optimization time:  0.957904577255249
+PSNR this frame: 31.955963134765625
+
+Tracking frame 10
+iter: 0, color_loss: 33426.25781, depth_loss: 2835.55420 , cam_quad_err: 0.00536, cam_trans_err: 0.01632
+iter: 20, color_loss: 16724.84766, depth_loss: 2550.39185 , cam_quad_err: 0.00427, cam_trans_err: 0.01039
+iter: 40, color_loss: 12612.34961, depth_loss: 2501.29907 , cam_quad_err: 0.00342, cam_trans_err: 0.00830
+iter: 60, color_loss: 12111.90820, depth_loss: 2304.72314 , cam_quad_err: 0.00327, cam_trans_err: 0.00774
+iter: 80, color_loss: 12079.66211, depth_loss: 2337.07812 , cam_quad_err: 0.00336, cam_trans_err: 0.00802
+iter: 100, color_loss: 12055.90234, depth_loss: 2347.74146 , cam_quad_err: 0.00339, cam_trans_err: 0.00812
+iter: 120, color_loss: 12059.22754, depth_loss: 2340.32690 , cam_quad_err: 0.00337, cam_trans_err: 0.00806
+iter: 140, color_loss: 12059.39746, depth_loss: 2340.03809 , cam_quad_err: 0.00337, cam_trans_err: 0.00807
+iter: 160, color_loss: 12058.86914, depth_loss: 2340.76050 , cam_quad_err: 0.00337, cam_trans_err: 0.00807
+iter: 180, color_loss: 12059.20996, depth_loss: 2340.18896 , cam_quad_err: 0.00337, cam_trans_err: 0.00807
+frame_id: 10, cam_quad_err: 0.00337, cam_trans_err: 0.00807 , cam_quad_err: 0.00337, cam_trans_err: 0.00807
+
+Mapping frame 10
+Number of added points:  5433
+Gaussian model size 82530
+Optimization time:  0.9579648971557617
+PSNR this frame: 29.712799072265625
+Saved rendering vis of color/depth at 0010_0100.jpg
+
+Tracking frame 11
+iter: 0, color_loss: 20823.77930, depth_loss: 2076.08398 , cam_quad_err: 0.00299, cam_trans_err: 0.01628
+iter: 20, color_loss: 12333.09766, depth_loss: 2433.67358 , cam_quad_err: 0.00295, cam_trans_err: 0.00891
+iter: 40, color_loss: 10510.93262, depth_loss: 2231.12402 , cam_quad_err: 0.00313, cam_trans_err: 0.00696
+iter: 60, color_loss: 10007.29492, depth_loss: 2155.69043 , cam_quad_err: 0.00320, cam_trans_err: 0.00731
+iter: 80, color_loss: 9928.67871, depth_loss: 2134.53516 , cam_quad_err: 0.00322, cam_trans_err: 0.00724
+iter: 100, color_loss: 9910.76172, depth_loss: 2139.33643 , cam_quad_err: 0.00323, cam_trans_err: 0.00725
+iter: 120, color_loss: 9910.25098, depth_loss: 2138.28857 , cam_quad_err: 0.00322, cam_trans_err: 0.00725
+iter: 140, color_loss: 9909.59961, depth_loss: 2139.32568 , cam_quad_err: 0.00322, cam_trans_err: 0.00727
+iter: 160, color_loss: 9911.06055, depth_loss: 2141.21655 , cam_quad_err: 0.00322, cam_trans_err: 0.00723
+iter: 180, color_loss: 10405.71680, depth_loss: 2169.25342 , cam_quad_err: 0.00321, cam_trans_err: 0.00686
+frame_id: 11, cam_quad_err: 0.00322, cam_trans_err: 0.00726 , cam_quad_err: 0.00322, cam_trans_err: 0.00726
+
+Mapping frame 11
+Number of added points:  4811
+Gaussian model size 81251
+Optimization time:  0.9600439071655273
+PSNR this frame: 32.339691162109375
+
+Tracking frame 12
+iter: 0, color_loss: 24757.90234, depth_loss: 2737.54517 , cam_quad_err: 0.00423, cam_trans_err: 0.01723
+iter: 20, color_loss: 13472.58984, depth_loss: 2215.13135 , cam_quad_err: 0.00423, cam_trans_err: 0.00843
+iter: 40, color_loss: 10089.58984, depth_loss: 2146.66333 , cam_quad_err: 0.00367, cam_trans_err: 0.00771
+iter: 60, color_loss: 9573.77344, depth_loss: 2192.04688 , cam_quad_err: 0.00407, cam_trans_err: 0.00773
+iter: 80, color_loss: 9540.05273, depth_loss: 2201.67163 , cam_quad_err: 0.00411, cam_trans_err: 0.00806
+iter: 100, color_loss: 9543.91406, depth_loss: 2183.65283 , cam_quad_err: 0.00413, cam_trans_err: 0.00783
+iter: 120, color_loss: 9540.42578, depth_loss: 2185.74121 , cam_quad_err: 0.00413, cam_trans_err: 0.00793
+iter: 140, color_loss: 9540.88379, depth_loss: 2185.57324 , cam_quad_err: 0.00413, cam_trans_err: 0.00792
+iter: 160, color_loss: 9540.67578, depth_loss: 2185.32959 , cam_quad_err: 0.00413, cam_trans_err: 0.00793
+iter: 180, color_loss: 9541.51270, depth_loss: 2184.76758 , cam_quad_err: 0.00413, cam_trans_err: 0.00793
+frame_id: 12, cam_quad_err: 0.00413, cam_trans_err: 0.00792 , cam_quad_err: 0.00413, cam_trans_err: 0.00792
+
+Mapping frame 12
+Number of added points:  3184
+Gaussian model size 79472
+Optimization time:  0.9525530338287354
+PSNR this frame: 29.515331268310547
+
+Tracking frame 13
+iter: 0, color_loss: 26877.04102, depth_loss: 3060.79663 , cam_quad_err: 0.00530, cam_trans_err: 0.01482
+iter: 20, color_loss: 16611.09180, depth_loss: 2876.29150 , cam_quad_err: 0.00439, cam_trans_err: 0.01026
+iter: 40, color_loss: 13733.43945, depth_loss: 2554.27954 , cam_quad_err: 0.00441, cam_trans_err: 0.00947
+iter: 60, color_loss: 13371.74805, depth_loss: 2599.57568 , cam_quad_err: 0.00444, cam_trans_err: 0.01013
+iter: 80, color_loss: 13359.12305, depth_loss: 2614.14307 , cam_quad_err: 0.00449, cam_trans_err: 0.01024
+iter: 100, color_loss: 13345.86133, depth_loss: 2613.13916 , cam_quad_err: 0.00449, cam_trans_err: 0.01028
+iter: 120, color_loss: 13347.01562, depth_loss: 2611.20557 , cam_quad_err: 0.00449, cam_trans_err: 0.01025
+iter: 140, color_loss: 13347.19922, depth_loss: 2610.73584 , cam_quad_err: 0.00449, cam_trans_err: 0.01025
+iter: 160, color_loss: 13346.91992, depth_loss: 2611.06714 , cam_quad_err: 0.00449, cam_trans_err: 0.01025
+iter: 180, color_loss: 13347.08203, depth_loss: 2610.77344 , cam_quad_err: 0.00449, cam_trans_err: 0.01025
+frame_id: 13, cam_quad_err: 0.00449, cam_trans_err: 0.01026 , cam_quad_err: 0.00449, cam_trans_err: 0.01026
+
+Mapping frame 13
+Number of added points:  6871
+Gaussian model size 81758
+Optimization time:  0.9641072750091553
+PSNR this frame: 31.1781005859375
+
+Tracking frame 14
+iter: 0, color_loss: 14380.26855, depth_loss: 2699.85254 , cam_quad_err: 0.00488, cam_trans_err: 0.02176
+iter: 20, color_loss: 12376.15430, depth_loss: 2497.05786 , cam_quad_err: 0.00330, cam_trans_err: 0.00884
+iter: 40, color_loss: 10842.64355, depth_loss: 2360.64062 , cam_quad_err: 0.00335, cam_trans_err: 0.00901
+iter: 60, color_loss: 10231.33496, depth_loss: 2324.36523 , cam_quad_err: 0.00341, cam_trans_err: 0.00963
+iter: 80, color_loss: 10236.37402, depth_loss: 2329.61523 , cam_quad_err: 0.00340, cam_trans_err: 0.00926
+iter: 100, color_loss: 10216.42188, depth_loss: 2324.89819 , cam_quad_err: 0.00341, cam_trans_err: 0.00934
+iter: 120, color_loss: 10214.22949, depth_loss: 2324.98364 , cam_quad_err: 0.00340, cam_trans_err: 0.00931
+iter: 140, color_loss: 10214.18750, depth_loss: 2325.40405 , cam_quad_err: 0.00340, cam_trans_err: 0.00933
+iter: 160, color_loss: 10216.57910, depth_loss: 2326.70459 , cam_quad_err: 0.00341, cam_trans_err: 0.00928
+iter: 180, color_loss: 10519.69531, depth_loss: 2346.48193 , cam_quad_err: 0.00341, cam_trans_err: 0.00907
+frame_id: 14, cam_quad_err: 0.00341, cam_trans_err: 0.00930 , cam_quad_err: 0.00341, cam_trans_err: 0.00930
+
+Mapping frame 14
+Number of added points:  8895
+Gaussian model size 84798
+Optimization time:  0.9634678363800049
+PSNR this frame: 33.087162017822266
+
+Tracking frame 15
+iter: 0, color_loss: 19537.36133, depth_loss: 3100.18896 , cam_quad_err: 0.00421, cam_trans_err: 0.01078
+iter: 20, color_loss: 14505.88281, depth_loss: 2955.06860 , cam_quad_err: 0.00441, cam_trans_err: 0.01053
+iter: 40, color_loss: 9951.08789, depth_loss: 2347.85400 , cam_quad_err: 0.00432, cam_trans_err: 0.01097
+iter: 60, color_loss: 9444.65625, depth_loss: 2313.07520 , cam_quad_err: 0.00467, cam_trans_err: 0.00967
+iter: 80, color_loss: 9341.05273, depth_loss: 2300.83130 , cam_quad_err: 0.00451, cam_trans_err: 0.00993
+iter: 100, color_loss: 9319.62891, depth_loss: 2298.21191 , cam_quad_err: 0.00453, cam_trans_err: 0.00987
+iter: 120, color_loss: 9316.26758, depth_loss: 2302.76416 , cam_quad_err: 0.00453, cam_trans_err: 0.00991
+iter: 140, color_loss: 9317.36230, depth_loss: 2300.18774 , cam_quad_err: 0.00453, cam_trans_err: 0.00989
+iter: 160, color_loss: 9316.60449, depth_loss: 2301.05762 , cam_quad_err: 0.00453, cam_trans_err: 0.00989
+iter: 180, color_loss: 9317.05762, depth_loss: 2300.49658 , cam_quad_err: 0.00453, cam_trans_err: 0.00988
+frame_id: 15, cam_quad_err: 0.00453, cam_trans_err: 0.00989 , cam_quad_err: 0.00453, cam_trans_err: 0.00989
+
+Mapping frame 15
+Number of added points:  5174
+Gaussian model size 83272
+Optimization time:  0.96297287940979
+PSNR this frame: 32.106300354003906
+
+Tracking frame 16
+iter: 0, color_loss: 30053.15234, depth_loss: 4038.37793 , cam_quad_err: 0.00523, cam_trans_err: 0.01963
+iter: 20, color_loss: 12263.83984, depth_loss: 2808.83228 , cam_quad_err: 0.00523, cam_trans_err: 0.01494
+iter: 40, color_loss: 12020.25879, depth_loss: 2846.43286 , cam_quad_err: 0.00512, cam_trans_err: 0.01379
+iter: 60, color_loss: 11557.38672, depth_loss: 2868.26709 , cam_quad_err: 0.00515, cam_trans_err: 0.01393
+iter: 80, color_loss: 11481.11719, depth_loss: 2845.44336 , cam_quad_err: 0.00517, cam_trans_err: 0.01373
+iter: 100, color_loss: 11480.01172, depth_loss: 2834.65674 , cam_quad_err: 0.00517, cam_trans_err: 0.01383
+iter: 120, color_loss: 11477.30273, depth_loss: 2836.74072 , cam_quad_err: 0.00517, cam_trans_err: 0.01379
+iter: 140, color_loss: 11476.57129, depth_loss: 2837.50708 , cam_quad_err: 0.00517, cam_trans_err: 0.01380
+iter: 160, color_loss: 11476.73633, depth_loss: 2837.23804 , cam_quad_err: 0.00517, cam_trans_err: 0.01380
+iter: 180, color_loss: 11476.57715, depth_loss: 2837.28564 , cam_quad_err: 0.00517, cam_trans_err: 0.01380
+frame_id: 16, cam_quad_err: 0.00517, cam_trans_err: 0.01380 , cam_quad_err: 0.00517, cam_trans_err: 0.01380
+
+Mapping frame 16
+Number of added points:  7622
+Gaussian model size 85961
+Optimization time:  0.9854035377502441
+PSNR this frame: 30.24765968322754
+
+Tracking frame 17
+iter: 0, color_loss: 26546.48828, depth_loss: 3752.66870 , cam_quad_err: 0.00529, cam_trans_err: 0.02658
+iter: 20, color_loss: 13464.14160, depth_loss: 2891.53320 , cam_quad_err: 0.00572, cam_trans_err: 0.02114
+iter: 40, color_loss: 13098.35938, depth_loss: 2682.12012 , cam_quad_err: 0.00513, cam_trans_err: 0.01609
+iter: 60, color_loss: 12848.44043, depth_loss: 2735.28174 , cam_quad_err: 0.00495, cam_trans_err: 0.01615
+iter: 80, color_loss: 12823.52930, depth_loss: 2725.62964 , cam_quad_err: 0.00510, cam_trans_err: 0.01645
+iter: 100, color_loss: 12819.94922, depth_loss: 2727.10278 , cam_quad_err: 0.00510, cam_trans_err: 0.01629
+iter: 120, color_loss: 12823.83984, depth_loss: 2719.58105 , cam_quad_err: 0.00508, cam_trans_err: 0.01628
+iter: 140, color_loss: 12822.10352, depth_loss: 2721.50171 , cam_quad_err: 0.00509, cam_trans_err: 0.01630
+iter: 160, color_loss: 12822.53613, depth_loss: 2720.69141 , cam_quad_err: 0.00509, cam_trans_err: 0.01629
+iter: 180, color_loss: 12822.88086, depth_loss: 2720.74927 , cam_quad_err: 0.00509, cam_trans_err: 0.01629
+frame_id: 17, cam_quad_err: 0.00509, cam_trans_err: 0.01629 , cam_quad_err: 0.00509, cam_trans_err: 0.01629
+
+Mapping frame 17
+Number of added points:  7495
+Gaussian model size 85999
+Optimization time:  0.9980940818786621
+PSNR this frame: 30.043973922729492
+
+Tracking frame 18
+iter: 0, color_loss: 19406.50391, depth_loss: 3323.13696 , cam_quad_err: 0.00590, cam_trans_err: 0.02656
+iter: 20, color_loss: 13396.55859, depth_loss: 2961.60986 , cam_quad_err: 0.00718, cam_trans_err: 0.02096
+iter: 40, color_loss: 10742.07227, depth_loss: 2524.24561 , cam_quad_err: 0.00653, cam_trans_err: 0.01601
+iter: 60, color_loss: 10530.02930, depth_loss: 2496.65381 , cam_quad_err: 0.00647, cam_trans_err: 0.01656
+iter: 80, color_loss: 10488.56055, depth_loss: 2506.26807 , cam_quad_err: 0.00657, cam_trans_err: 0.01663
+iter: 100, color_loss: 10482.75098, depth_loss: 2510.23218 , cam_quad_err: 0.00660, cam_trans_err: 0.01657
+iter: 120, color_loss: 10484.09375, depth_loss: 2507.23535 , cam_quad_err: 0.00658, cam_trans_err: 0.01653
+iter: 140, color_loss: 10483.61133, depth_loss: 2507.74023 , cam_quad_err: 0.00658, cam_trans_err: 0.01654
+iter: 160, color_loss: 10482.62695, depth_loss: 2509.16260 , cam_quad_err: 0.00658, cam_trans_err: 0.01653
+iter: 180, color_loss: 10489.08984, depth_loss: 2503.54883 , cam_quad_err: 0.00658, cam_trans_err: 0.01655
+frame_id: 18, cam_quad_err: 0.00659, cam_trans_err: 0.01654 , cam_quad_err: 0.00659, cam_trans_err: 0.01654
+
+Mapping frame 18
+Number of added points:  8783
+Gaussian model size 87294
+Optimization time:  1.0039982795715332
+PSNR this frame: 31.170211791992188
+
+Tracking frame 19
+iter: 0, color_loss: 15793.77148, depth_loss: 2312.57812 , cam_quad_err: 0.00706, cam_trans_err: 0.01167
+iter: 20, color_loss: 11823.12695, depth_loss: 2525.05933 , cam_quad_err: 0.00654, cam_trans_err: 0.01460
+iter: 40, color_loss: 9206.12500, depth_loss: 2429.00122 , cam_quad_err: 0.00553, cam_trans_err: 0.01399
+iter: 60, color_loss: 8863.95508, depth_loss: 2415.91382 , cam_quad_err: 0.00555, cam_trans_err: 0.01393
+iter: 80, color_loss: 8786.17188, depth_loss: 2399.52271 , cam_quad_err: 0.00558, cam_trans_err: 0.01398
+iter: 100, color_loss: 8783.56445, depth_loss: 2396.19189 , cam_quad_err: 0.00555, cam_trans_err: 0.01397
+iter: 120, color_loss: 8785.71680, depth_loss: 2392.27930 , cam_quad_err: 0.00555, cam_trans_err: 0.01400
+iter: 140, color_loss: 8786.00684, depth_loss: 2391.20972 , cam_quad_err: 0.00555, cam_trans_err: 0.01400
+iter: 160, color_loss: 8785.99609, depth_loss: 2391.30029 , cam_quad_err: 0.00555, cam_trans_err: 0.01400
+iter: 180, color_loss: 8785.87500, depth_loss: 2391.34570 , cam_quad_err: 0.00555, cam_trans_err: 0.01400
+frame_id: 19, cam_quad_err: 0.00555, cam_trans_err: 0.01400 , cam_quad_err: 0.00555, cam_trans_err: 0.01400
+
+Mapping frame 19
+Number of added points:  9144
+Gaussian model size 89250
+Optimization time:  1.002983808517456
+PSNR this frame: 30.356578826904297
+
+Tracking frame 20
+iter: 0, color_loss: 23590.94141, depth_loss: 2923.88965 , cam_quad_err: 0.00364, cam_trans_err: 0.00734
+iter: 20, color_loss: 10905.86328, depth_loss: 2353.28369 , cam_quad_err: 0.00396, cam_trans_err: 0.01128
+iter: 40, color_loss: 10356.86523, depth_loss: 2363.01562 , cam_quad_err: 0.00462, cam_trans_err: 0.01420
+iter: 60, color_loss: 9893.76465, depth_loss: 2264.90967 , cam_quad_err: 0.00441, cam_trans_err: 0.01392
+iter: 80, color_loss: 9820.50977, depth_loss: 2289.37109 , cam_quad_err: 0.00451, cam_trans_err: 0.01406
+iter: 100, color_loss: 9822.25977, depth_loss: 2285.92236 , cam_quad_err: 0.00449, cam_trans_err: 0.01398
+iter: 120, color_loss: 9818.59375, depth_loss: 2289.01245 , cam_quad_err: 0.00450, cam_trans_err: 0.01399
+iter: 140, color_loss: 9819.24512, depth_loss: 2288.11475 , cam_quad_err: 0.00450, cam_trans_err: 0.01399
+iter: 160, color_loss: 9819.21484, depth_loss: 2288.08105 , cam_quad_err: 0.00450, cam_trans_err: 0.01399
+iter: 180, color_loss: 9818.86133, depth_loss: 2288.53052 , cam_quad_err: 0.00450, cam_trans_err: 0.01399
+frame_id: 20, cam_quad_err: 0.00450, cam_trans_err: 0.01399 , cam_quad_err: 0.00450, cam_trans_err: 0.01399
+
+Mapping frame 20
+Number of added points:  7132
+Gaussian model size 89891
+Optimization time:  1.031249761581421
+PSNR this frame: 29.7032527923584
+Saved rendering vis of color/depth at 0020_0100.jpg
+
+Tracking frame 21
+iter: 0, color_loss: 30167.13086, depth_loss: 4041.04053 , cam_quad_err: 0.00454, cam_trans_err: 0.01334
+iter: 20, color_loss: 11024.99219, depth_loss: 2339.84668 , cam_quad_err: 0.00461, cam_trans_err: 0.00995
+iter: 40, color_loss: 9966.11719, depth_loss: 2238.64868 , cam_quad_err: 0.00510, cam_trans_err: 0.01390
+iter: 60, color_loss: 9448.75000, depth_loss: 2316.60767 , cam_quad_err: 0.00509, cam_trans_err: 0.01400
+iter: 80, color_loss: 9468.67383, depth_loss: 2292.99219 , cam_quad_err: 0.00506, cam_trans_err: 0.01356
+iter: 100, color_loss: 9456.25977, depth_loss: 2296.22559 , cam_quad_err: 0.00509, cam_trans_err: 0.01371
+iter: 120, color_loss: 9449.54590, depth_loss: 2304.03125 , cam_quad_err: 0.00508, cam_trans_err: 0.01365
+iter: 140, color_loss: 9449.61523, depth_loss: 2303.74121 , cam_quad_err: 0.00509, cam_trans_err: 0.01367
+iter: 160, color_loss: 9449.91992, depth_loss: 2303.23438 , cam_quad_err: 0.00508, cam_trans_err: 0.01367
+iter: 180, color_loss: 9449.90723, depth_loss: 2303.29150 , cam_quad_err: 0.00508, cam_trans_err: 0.01367
+frame_id: 21, cam_quad_err: 0.00509, cam_trans_err: 0.01367 , cam_quad_err: 0.00509, cam_trans_err: 0.01367
+/home/lk/miniconda3/envs/loop_splat/lib/python3.10/site-packages/faiss/contrib/torch_utils.py:51: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  x.storage().data_ptr() + x.storage_offset() * 4)
+
+Mapping frame 21
+Number of added points:  7734
+Gaussian model size 91910
+Optimization time:  1.0051546096801758
+PSNR this frame: 29.71561050415039
+
+Tracking frame 22
+iter: 0, color_loss: 18433.79688, depth_loss: 2694.51318 , cam_quad_err: 0.00506, cam_trans_err: 0.01693
+iter: 20, color_loss: 9633.76758, depth_loss: 2479.92188 , cam_quad_err: 0.00461, cam_trans_err: 0.01385
+iter: 40, color_loss: 9976.70215, depth_loss: 2666.07666 , cam_quad_err: 0.00448, cam_trans_err: 0.01407
+iter: 60, color_loss: 9275.98730, depth_loss: 2616.53906 , cam_quad_err: 0.00438, cam_trans_err: 0.01383
+iter: 80, color_loss: 9292.36035, depth_loss: 2585.58862 , cam_quad_err: 0.00442, cam_trans_err: 0.01361
+iter: 100, color_loss: 9282.57812, depth_loss: 2581.99146 , cam_quad_err: 0.00442, cam_trans_err: 0.01366
+iter: 120, color_loss: 9276.80566, depth_loss: 2587.69214 , cam_quad_err: 0.00441, cam_trans_err: 0.01366
+iter: 140, color_loss: 9275.52344, depth_loss: 2589.10742 , cam_quad_err: 0.00441, cam_trans_err: 0.01365
+iter: 160, color_loss: 9274.89453, depth_loss: 2589.96069 , cam_quad_err: 0.00441, cam_trans_err: 0.01365
+iter: 180, color_loss: 9275.25879, depth_loss: 2589.85352 , cam_quad_err: 0.00441, cam_trans_err: 0.01366
+frame_id: 22, cam_quad_err: 0.00441, cam_trans_err: 0.01366 , cam_quad_err: 0.00441, cam_trans_err: 0.01366
+
+Mapping frame 22
+Number of added points:  8379
+Gaussian model size 93650
+Optimization time:  1.0160598754882812
+PSNR this frame: 30.677631378173828
+
+Tracking frame 23
+iter: 0, color_loss: 13503.62891, depth_loss: 3057.98682 , cam_quad_err: 0.00322, cam_trans_err: 0.01692
+iter: 20, color_loss: 13708.94629, depth_loss: 2335.45947 , cam_quad_err: 0.00450, cam_trans_err: 0.01519
+iter: 40, color_loss: 10436.16895, depth_loss: 2310.09888 , cam_quad_err: 0.00421, cam_trans_err: 0.01483
+iter: 60, color_loss: 10132.04395, depth_loss: 2347.63867 , cam_quad_err: 0.00420, cam_trans_err: 0.01525
+iter: 80, color_loss: 10064.94141, depth_loss: 2380.41943 , cam_quad_err: 0.00422, cam_trans_err: 0.01492
+iter: 100, color_loss: 10058.63965, depth_loss: 2382.95923 , cam_quad_err: 0.00423, cam_trans_err: 0.01501
+iter: 120, color_loss: 10059.49805, depth_loss: 2381.67212 , cam_quad_err: 0.00423, cam_trans_err: 0.01499
+iter: 140, color_loss: 10059.58594, depth_loss: 2381.07568 , cam_quad_err: 0.00423, cam_trans_err: 0.01500
+iter: 160, color_loss: 10059.97852, depth_loss: 2380.44019 , cam_quad_err: 0.00423, cam_trans_err: 0.01500
+iter: 180, color_loss: 10060.12598, depth_loss: 2380.09180 , cam_quad_err: 0.00423, cam_trans_err: 0.01500
+frame_id: 23, cam_quad_err: 0.00423, cam_trans_err: 0.01500 , cam_quad_err: 0.00423, cam_trans_err: 0.01500
+
+Mapping frame 23
+Number of added points:  7598
+Gaussian model size 94238
+Optimization time:  1.036628007888794
+PSNR this frame: 30.62025833
+
+[… truncated 22443 chars …]

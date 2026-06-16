@@ -1,0 +1,866 @@
+[2311.16728] Photo-SLAM: Real-time Simultaneous Localization and Photorealistic Mapping for Monocular, Stereo, and RGB-D Cameras
+https://ar5iv.labs.arxiv.org/html/2311.16728
+
+<!DOCTYPE html>
+
+[2311.16728] Photo-SLAM: Real-time Simultaneous Localization and Photorealistic Mapping for Monocular, Stereo, and RGB-D Cameras
+
+Photo-SLAM: Real-time Simultaneous Localization and Photorealistic Mapping for Monocular, Stereo, and RGB-D Cameras
+
+Huajian Huang1  Longwei Li2  Hui Cheng2  Sai-Kit Yeung1
+
+1The Hong Kong University of Science and Technology  2Sun Yat-sen University 
+
+hhuangbg@connect.ust.hk,
+lilw23@mail2.sysu.edu.cn,
+chengh9@mail.sysu.edu.cn,
+saikit@ust.hk
+
+Abstract
+
+The integration of neural rendering and the SLAM system recently showed promising results in joint localization and photorealistic view reconstruction.
+However, existing methods, fully relying on implicit representations, are so resource-hungry that they cannot run on portable devices, which deviates from the original intention of SLAM. In this paper, we present Photo-SLAM, a novel SLAM framework with a hyper primitives map. Specifically, we simultaneously exploit explicit geometric features for localization and learn implicit photometric features to represent the texture information of the observed environment.
+In addition to actively densifying hyper primitives based on geometric features, we further introduce a Gaussian-Pyramid-based training method to progressively learn multi-level features, enhancing photorealistic mapping performance. The extensive experiments with monocular, stereo, and RGB-D datasets prove that our proposed system Photo-SLAM significantly outperforms current state-of-the-art SLAM systems for online photorealistic mapping, e.g., PSNR is 30% higher and rendering speed is hundreds of times faster in the Replica dataset.
+Moreover, the Photo-SLAM can run at real-time speed using an embedded platform such as Jetson AGX Orin, showing the potential of robotics applications.
+
+1 Introduction
+
+Figure 1: Photo-SLAM is a novel framework for simultaneous localization and photorealistic mapping in real-time supporting monocular, stereo, and RGB-D cameras. It can reconstruct high-fidelity views of scenes while render speed is up to 1000 FPS.
+
+Simultaneous Localization and Mapping (SLAM) using cameras is a fundamental problem in both computer vision and robotics, seeking to enable autonomous systems to navigate and comprehend their surroundings.
+Traditional SLAM systems [24, 9, 7, 8] primarily focus on geometric mapping, providing accurate but visually simplistic representations of the environment. However, recent developments in neural rendering [34, 39] have demonstrated the potential of integrating photorealistic view reconstruction into the SLAM pipeline, enhancing the perception capabilities of robotic systems.
+
+Despite the promising results achieved through the integration of neural rendering and SLAM, existing methods simply and heavily rely on implicit representations, making them computationally intensive and unsuitable for deployment on resource-constrained devices. For example, Nice-SLAM [45] leverages a hierarchical grid [41] to store learnable features representing the environment while ESLAM [16] utilizes multi-scale compact tensor components [3]. They then jointly estimate the camera poses and optimize features by minimizing the reconstruction loss of a batch of ray sampling [21]. Such an optimization process is time-consuming.
+Consequently, it is indispensable for them to incorporate corresponding depth information
+obtained from various sources such as RGB-D cameras, dense optical flow estimators [32], or monocular depth estimators [12] to ensure efficient convergence.
+Additionally, since the implicit features are decoded by the multi-layer perceptrons (MLP),
+it is typically necessary to carefully define a bounding area to normalize ray sampling for optimal performance [14].
+It essentially limits the scalability of the system. These limitations imply that they cannot provide real-time exploration and mapping capabilities in the unknown environment using portable platforms, which is one of the main objectives of SLAM.
+
+In this paper, we propose Photo-SLAM, an innovative framework that addresses the scalability and computational resource constraints of existing methods, while achieving precise localization and online photorealistic mapping.
+We maintain a hyper primitives map which is composed of point clouds storing ORB features [26], rotation, scaling, density, and spherical harmonic (SH) coefficients [37, 10].
+The hyper primitives map allows the system to efficiently optimize tracking using a factor graph solver and learn the corresponding mapping by backpropagating the loss between the original images and rendering images. The images are rendered by 3D Gaussian splatting [18] rather than ray sampling. Although the introduction of a 3D Gaussian splatting renderer can reduce view reconstruction costs, it does not enable the generation of high-fidelity rendering for online incremental mapping, in particular in monocular scenarios.
+To achieve high-quality mapping without reliance on dense depth information, we further propose a geometry-based densification strategy and a Gaussian-Pyramid-based (GP) learning method. Importantly, GP learning facilitates the progressive acquisition of multi-level features which effectively enhances the mapping performance of our system.
+
+To evaluate the efficacy of our proposed approach, we conduct extensive experiments employing diverse datasets captured by monocular, stereo, and RGB-D cameras. These experiment results unequivocally demonstrate that Photo-SLAM attains state-of-the-art performance in terms of localization efficiency, photorealistic mapping quality, and rendering speed. Furthermore, the real-time execution of the Photo-SLAM system on the embedded devices showcases its potential for practical robotics applications. The schematic overview of Photo-SLAM is demonstrated in Fig. 1 and Fig. 2(b).
+
+In summary, the main contributions of this work include:
+
+• 
+
+We developed the first simultaneous localization and photorealistic mapping system based on hyper primitives map. The novel framework supports monocular, stereo, and RGB-D cameras, in indoor and outdoor environments.
+
+• 
+
+We proposed Gaussian-Pyramid-based learning allowing the model to efficiently and effectively learn multi-level features realizing high-fidelity mapping.
+
+• 
+
+The system, fully implemented in C++ and CUDA, achieves start-of-the-art performance and can run at real-time speed even on embedded platforms.
+The code will be publicly available.
+
+2 Related Work
+
+(a) 
+
+(b) 
+
+Figure 2: The Photo-SLAM contains four main components, including localization, explicit geometry mapping, implicit photorealistic mapping, and loop closure components, while maintaining a map with hyper primitives. 
+
+Visual localization and mapping is a problem that aims to build a proper representation of an unknown environment via cameras while estimating their poses within that environment. In contrast to SfM techniques, visual SLAM techniques typically pursue a better trade-off between accuracy and real-time performance. In this section, we focus on visual SLAM and conduct a brief review.
+
+Graph Solver vs Neural Solver.
+Classical SLAM methods widely adopt factor graphs to model complex optimization problems between variables (i.e., poses and landmarks) and measurements (i.e., observations and constraints). To achieve real-time performance, SLAM methods incrementally propagate their pose estimations while avoiding expensive operations. For example, ORB-SLAM series methods  [24, 23, 2] rely on extracting and tracking lightweight geometric features across consecutive frames, which perform bundle adjustment locally instead of globally. Moreover, direct SLAMs like LSD-SLAM [7] and DSO [8] operate on raw image intensities, without the cost of geometric feature extractions. They maintain a sparse or semi-dense map represented by point clouds online, even on the resource-constraint system. Benefiting from the success of deep-learning models, learnable parameters and models are introduced into SLAM making the pipeline differentiable. Some methods such as DeepTAM [44] predict camera poses by the neural network [17] end-to-end, while the accuracy is limited.
+To enhance performance, some methods, e.g., D3VO [40] and Droid-SLAM  [33], introduce monocular depth estimation [12] or dense optical flow estimation [32] models into the SLAM pipeline as supervision signals. Therefore, they can generate depth maps that explicitly represent the scene geometry. With the large-scale synthetic SLAM dataset, TartanAir [36], available for training, Droid-SLAM building upon RAFT [32] achieves state-of-the-art performance. However, the pure neural-based solver is computationally expensive and their performance would significantly degrade on the unseen scenes.
+
+Explicit Representation vs Implicit Representation.
+In order to obtain dense reconstruction, some methods including KinectFusion [15], BundleFusion [6], and InfiniTAM [25] utilize the implicit representation, Truncated Signed Distance Function (TSDF) [5], to integrate the incoming RGB-D images and reconstruct a continuous surface, which can run in real time on GPU. Although they can obtain dense reconstruction, view rendering quality is limited. Recently, neural rendering techniques represented by neural radiance field (NeRF) [21] have achieved breathtaking novel view synthesis.
+Given camera poses, NeRF implicitly models the scene geometry and color by multi-layer perceptrons (MLP). The MLP is optimized by minimizing the loss of rendering images and training views. iMAP [29] then adapts NeRF for incremental mapping, optimizing not only MLP but also camera poses. The following work Nice-SLAM [45] introduces multi-resolution grids [41] to store features reducing the cost of deep MLP query. Co-SLAM [35] and ESLAM [16] explore Instant-NGP [22] and TensoRF [3] respectively to further accelerate the mapping speed. However, implicitly joint optimization of camera poses and geometry representation is still ill-conditioned. Inevitably, they rely on explicit depth information from RGB-D cameras or additional model predictions for fast convergence of the radiance field.
+
+Our proposed Photo-SLAM seeks to recover a concise representation of the observed environment for immersive exploration rather than reconstructing a dense mesh.
+It maintains a map with hyper primitives online which capitalizes on explicit geometric feature points for accurate and efficient localization while leveraging implicit representations to capture and model the texture information. Please refer to Fig. 2(a) for the taxonomy of existing systems.
+Since Photo-SLAM achieves high-quality mapping without reliance on dense depth information, it can support RGB-D cameras as well as monocular and stereo cameras.
+
+3 Photo-SLAM
+
+Photo-SLAM contains four main components, including localization, geometry mapping, photorealistic mapping, and loop closure, shown in Fig. 2(b). Each component runs in a parallel thread and jointly maintains a hyper primitives map.
+
+(a) 
+
+(b) 
+
+(c) 
+
+(d) 
+
+(e) 
+
+Figure 3: Comparison of different progressive training methods. The encoder ℰnsubscriptℰ𝑛\mathcal{E}_{n} here represents a structure to regress features ℱnsubscriptℱ𝑛\mathcal{F}_{n} which can be an MLP, voxel grid, hash table, positional encoding, etc. The decoder 𝒟nsubscript𝒟𝑛\mathcal{D}_{n} here represents a structure converting ℱnsubscriptℱ𝑛\mathcal{F}_{n} into density, color, or other information. We proposed a new method based on the Gaussian pyramid to efficiently learn multi-level features.
+
+3.1 Hyper Primitives Map
+
+In our system, hyper primitives are defined as a set of point clouds 𝐏∈ℝ3𝐏superscriptℝ3\mathbf{P}\in\mathbb{R}^{3} associated with ORB features [26] 𝐎∈ℝ256𝐎superscriptℝ256\mathbf{O}\in\mathbb{R}^{256}, rotation 𝐫∈S​O​(3)𝐫𝑆𝑂3\mathbf{r}\in SO(3), scaling 𝐬∈ℝ3𝐬superscriptℝ3\mathbf{s}\in\mathbb{R}^{3}, density σ∈ℝ1𝜎superscriptℝ1\sigma\in\mathbb{R}^{1}, and spherical harmonic coefficients 𝐒𝐇∈ℝ16𝐒𝐇superscriptℝ16\mathbf{SH}\in\mathbb{R}^{16}. ORB features extracted from image frames take responsibility for establishing 2D-to-2D and 2D-to-3D correspondences.
+Once the system successfully estimates the transformation matrix based on sufficient 2D-to-2D correspondences between adjacent frames, the hyper primitives map is initialized via triangulation, and pose tracking gets started.
+During tracking, the localization component processes the incoming images and makes use of 2D-to-3D correspondence to calculate current camera poses.
+In addition, the geometry mapping component will incrementally create and initialize sparse hyper primitives. Finally, the photorealistic component progressively optimizes and densifies hyper primitives.
+
+3.2 Localization and Geometry Mapping
+
+The localization and geometry mapping components provide not only efficient 6-DoF camera pose estimations of the input images, but also sparse 3D points. The optimization problem is formulated as a factor graph solved by the Levenberg–Marquardt (LM) algorithm.
+
+In the localization thread, we use a motion-only bundle adjustment to optimize the camera orientation 𝐑∈S​O​(3)𝐑𝑆𝑂3\mathbf{R}\in SO(3) and position 𝐭∈ℝ3𝐭superscriptℝ3\mathbf{t}\in\mathbb{R}^{3} in order to minimize the reprojection error between matched 2D geometric keypoint 𝐩isubscript𝐩𝑖\mathbf{p}_{i} of the frame and 3D point 𝐏isubscript𝐏𝑖\mathbf{P}_{i}. Let i∈𝒳𝑖𝒳i\in\mathcal{X} be the index of set of matches 𝒳𝒳\mathcal{X}, what we are trying to optimize with LM is
+
+{𝐑,𝐭}=arg⁡min𝐑,𝐭∑i∈𝒳ρ​(∥𝐩i−π​(𝐑𝐏i+𝐭)∥Σg2),𝐑𝐭subscript𝐑𝐭subscript𝑖𝒳𝜌subscriptsuperscriptdelimited-∥∥subscript𝐩𝑖𝜋subscript𝐑𝐏𝑖𝐭2subscriptΣ𝑔\{\mathbf{R},\mathbf{t}\}=\mathop{\arg\min}\limits_{\mathbf{R},\mathbf{t}}\sum_{i\in\mathcal{X}}\rho\left(\lVert\mathbf{p}_{i}-\pi(\mathbf{RP}_{i}+\mathbf{t})\rVert^{2}_{\Sigma_{g}}\right),
+
+(1)
+
+where ΣgsubscriptΣ𝑔\Sigma_{g} is the scale-associated covariance matrix of the keypoint, π​(⋅)𝜋⋅\pi(\cdot) is the 3D-to-2D projection function, and ρ𝜌\rho denotes the robust Huber cost function.
+
+In the geometry mapping thread, we perform a local bundle adjustment on a set of covisible points 𝒫Lsubscript𝒫𝐿\mathcal{P}_{L} and keyframes 𝒦Lsubscript𝒦𝐿\mathcal{K}_{L}. The keyframes are selected frames from the input camera sequence and provide good visual information. We construct a factor graph where each keyframe is a node, and the edges represent constraints between keyframes and matched 3D points. We iteratively minimize the reprojection residual by refining the keyframe poses and 3D points using the first-order derivatives of the error function. We fix the poses of keyframes 𝒦Fsubscript𝒦𝐹\mathcal{K}_{F} which are also observing 𝒫Lsubscript𝒫𝐿\mathcal{P}_{L} but not in 𝒦Lsubscript𝒦𝐿\mathcal{K}_{L}. Let 𝒦=𝒦L∪𝒦F𝒦subscript𝒦𝐿subscript𝒦𝐹\mathcal{K}=\mathcal{K}_{L}\cup\mathcal{K}_{F}, and 𝒳ksubscript𝒳𝑘\mathcal{X}_{k} be the set of matches between 2D keypoints in a keyframe k𝑘k and 3D points in 𝒫Lsubscript𝒫𝐿\mathcal{P}_{L}. The optimization process aims to reduce the geometric inconsistency between 𝒦𝒦\mathcal{K} and 𝒫Lsubscript𝒫𝐿\mathcal{P}_{L}, and is defined as
+
+{𝐏i,𝐑l,𝐭l|i∈𝒫L,l∈𝒦L}=arg⁡min𝐏i,𝐑l,𝐭l∑k∈𝒦∑j∈𝒳kρ​(E​(k,j)),conditional-setsubscript𝐏𝑖subscript𝐑𝑙subscript𝐭𝑙formulae-sequence𝑖subscript𝒫𝐿𝑙subscript𝒦𝐿subscriptsubscript𝐏𝑖subscript𝐑𝑙subscript𝐭𝑙subscript𝑘𝒦subscript𝑗subscript𝒳𝑘𝜌𝐸𝑘𝑗\{\mathbf{P}_{i},\mathbf{R}_{l},\mathbf{t}_{l}|i\in\mathcal{P}_{L},l\in\mathcal{K}_{L}\}=\mathop{\arg\min}\limits_{\mathbf{P}_{i},\mathbf{R}_{l},\mathbf{t}_{l}}\sum_{k\in\mathcal{K}}\sum_{j\in\mathcal{X}_{k}}\rho(E(k,j)),
+
+(2)
+
+with reprojection residual
+
+E​(k,j)=∥𝐩j−π​(𝐑k​𝐏j+𝐭k)∥Σg2.𝐸𝑘𝑗subscriptsuperscriptdelimited-∥∥subscript𝐩𝑗𝜋subscript𝐑𝑘subscript𝐏𝑗subscript𝐭𝑘2subscriptΣ𝑔E(k,j)=\lVert\mathbf{p}_{j}-\pi(\mathbf{R}_{k}\mathbf{P}_{j}+\mathbf{t}_{k})\rVert^{2}_{\Sigma_{g}}.
+
+3.3 Photorealisitc Mapping
+
+The photorealistic mapping thread is responsible for optimizing hyper primitives that are incrementally created by the geometry mapping thread. The hyper primitives can be rasterized by a tile-based renderer to synthesize corresponding images with keyframe poses. The rendering process is formulated as
+
+C​(𝐑,𝐭)=∑i∈N𝐜i​αi​∏j=1i−1(1−αi),𝐶𝐑𝐭subscript𝑖𝑁subscript𝐜𝑖subscript𝛼𝑖superscriptsubscriptproduct𝑗1𝑖11subscript𝛼𝑖C(\mathbf{R,t})=\sum_{i\in N}\mathbf{c}_{i}\alpha_{i}\prod_{j=1}^{i-1}(1-\alpha_{i}),
+
+(3)
+
+where N𝑁N is the number of hyper primitives, 𝐜isubscript𝐜𝑖\mathbf{c}_{i} denotes the color converted from 𝐒𝐇∈ℝ16𝐒𝐇superscriptℝ16\mathbf{SH}\in\mathbb{R}^{16}, and αisubscript𝛼𝑖\alpha_{i} is equal to σi⋅𝒢​(𝐑,𝐭,𝐏i,𝐫i,𝐬i)⋅subscript𝜎𝑖𝒢𝐑𝐭subscript𝐏𝑖subscript𝐫𝑖subscript𝐬𝑖\sigma_{i}\cdot\mathcal{G}(\mathbf{R,t},\mathbf{P}_{i},\mathbf{r}_{i},\mathbf{s}_{i}), 𝒢𝒢\mathcal{G} denotes 3D Gaussian splatting algorithm [18].
+The optimization in terms of position 𝐏𝐏\mathbf{P}, rotation 𝐫𝐫\mathbf{r}, scaling 𝐬𝐬\mathbf{s}, density σ𝜎\sigma, and spherical harmonic coefficients 𝐒𝐇𝐒𝐇\mathbf{SH} is performed by minimizing the photometric loss ℒℒ\mathcal{L} between rendering image Irsubscript𝐼r{I_{\text{r}}} and ground truth image Igtsubscript𝐼gtI_{\text{gt}}, denoted as
+
+ℒ=(1−λ)​|Ir−Igt|1+λ​1−SSIM​(Ir,Igt)2,ℒ1𝜆subscriptsubscript𝐼rsubscript𝐼gt1𝜆1SSIMsubscript𝐼rsubscript𝐼gt2\mathcal{L}=(1-\lambda)\left|{I_{\text{r}}-I_{\text{gt}}}\right|_{1}+\lambda\frac{1-\text{SSIM}(I_{\text{r}},I_{\text{gt}})}{2},
+
+(4)
+
+where SSIM​(Ir,Igt)SSIMsubscript𝐼rsubscript𝐼gt\text{SSIM}(I_{\text{r}},I_{\text{gt}}) denotes structural similarity between two images and λ𝜆\lambda is a weight factor for balance.
+
+3.3.1 Geometry-based Densification
+
+If we consider photorealistic mapping as a regression model of the scene, denser hyper primitives, i.e., more parameters, generally can better model the complexity of the scene for higher rendering quality. To meet the demand for real-time mapping, the geometry mapping component only establishes sparse hyper primitives.
+Therefore, the coarse hyper primitives created by the geometry mapping need to be densified during the optimization of photorealistic mapping. Apart from splitting or cloning hyper primitives with large loss gradients similar to [18], we introduce an additional geometry-based densification strategy.
+
+Experimentally, less than 30%percent3030\% of 2D geometric feature points of frames are active and have corresponding 3D points, especially for non-RGB-D scenarios, as shown in Fig. 4.
+We argue that 2D geometric feature points spatially distributed in the frames essentially represent the region with a complex texture that requires more hyper primitives.
+Therefore, we actively create additional temporary hyper primitives based on the inactive 2D feature points once the keyframe is created for photorealistic mapping. When we use RGB-D cameras, we can directly project the inactive 2D feature points with depth to create temporary hyper primitives. As for monocular scenarios, we estimate the depth of inactive 2D feature points by interpreting the depth of their nearest neighborhood’s active 2D feature points. In stereo scenarios, we rely on a stereo-matching algorithm to estimate the depth of inactive 2D feature points.
+
+Figure 4: We make use of initial geometric information to densify hyper primitives.
+
+3.4 Gaussian-Pyramid-Based Learning
+
+Progressive training is a widely used technology in neural rendering to accelerate the optimization process. Some methods have been proposed to reduce training time while achieving better rendering quality. A basic method is to progressively increase the structure resolution and the number of model parameters. For example, NSVF [20] and DVGO [30] progressively increase the feature grid resolution during training which significantly improves training efficiency compared to previous work. The lower-resolution model is used to initialize the higher-resolution model but is not retained for final inference, as shown in Fig. 3(a). To enhance performance with multi-resolution features, NGLoD [31] progressively trains multiple MLPs as encoders and decoders, while only retaining the final decoder to decode integrated multi-resolution features, as shown in Fig. 3(b). Furthermore, Neuralangelo [19] only maintains a single MLP during training, as shown in Fig. 3(c). It progressively activates different levels of hash tables [22] achieving better performance in large-scale scene reconstruction. Similarly, 3D Gaussian Splatting [18] progressively densifies 3D Gaussian achieving top performance on radiance field rendering. Training different level models in these methods is supervised by the same training images. Conversely, the fourth method (Fig. 3(d)) used in BungeeNeRF [38] is to apply different models to tackle different-resolution images. BungeeNeRF demonstrates the efficiency of explicitly grouping multi-resolution training images for models to learn multi-level features.
+However, such a method is not universal since multi-resolution images are not available for most scenarios.
+
+To make full use of various merits, we propose Gaussian-Pyramid-based (GP) learning (Fig. 3(e)), a new progressive training method. As illustrated in Fig. 5, a Gaussian pyramid is a multi-scale representation of an image containing different levels of detail. It is constructed by repeatedly applying Gaussian smoothing and downsampling operations to the original image. At the beginning training step, the hyper primitives are supervised by the highest level of the pyramid, i.e. level n𝑛n. As training iteration increases, we not only densify hyper primitives as described in Sec. 3.3.1 but also reduce the pyramid level and obtain a new ground truth until reaching the bottom of the Gaussian pyramid. The optimization process using a Gaussian pyramid with n+1 levels can be denoted as
+
+t0:arg⁡minℒ​(Irn,GPn​(Igt)),t1:arg⁡minℒ​(Irn−1,GPn−1​(Igt)),…tn:arg⁡minℒ​(Ir0,GP0​(Igt)),:subscript𝑡0ℒsubscriptsuperscript𝐼𝑛rsuperscriptGP𝑛subscript𝐼gtsubscript𝑡1:ℒsubscriptsuperscript𝐼𝑛1rsuperscriptGP𝑛1subscript𝐼gt…subscript𝑡𝑛:ℒsubscriptsuperscript𝐼0rsuperscriptGP0subscript𝐼gt\begin{split}t_{0}&:\mathop{\arg\min}\mathcal{L}\left(I^{n}_{\text{r}},\text{GP}^{n}(I_{\text{gt}})\right),\\
+t_{1}&:\mathop{\arg\min}\mathcal{L}\left(I^{n-1}_{\text{r}},\text{GP}^{n-1}(I_{\text{gt}})\right),\\
+&\dots\\
+t_{n}&:\mathop{\arg\min}\mathcal{L}\left(I^{0}_{\text{r}},\text{GP}^{0}(I_{\text{gt}})\right),\end{split}
+
+(5)
+
+where ℒ​(Ir,GP​(Igt))ℒsubscript𝐼rGPsubscript𝐼gt\mathcal{L}(I_{\text{r}},\text{GP}(I_{\text{gt}})) is Eq. 4, while GPn​(Igt)superscriptGP𝑛subscript𝐼gt\text{GP}^{n}(I_{\text{gt}}) denotes the ground image in the level n of the Gaussian pyramid. In the experiment, we prove that GP learning significantly improves the performance of photorealistic mapping particularly for monocular cameras.
+
+Figure 5: Training process based on the Gaussian pyramid.
+
+3.5 Loop Closure
+
+Loop Closure [11] is crucial in SLAM because it helps address the problem of accumulated errors and drift that can occur during the localization and geometry mapping process. After detecting a closing loop, we can correct local keyframes and hyper primitives by similarity transformation. With corrected camera poses, the photorealistic mapping component can further get rid of the ghosting caused by odometry drifts and improve the mapping quality.
+
+4 Experiment
+
+In this section, we compare Photo-SLAM to other state-of-the-art (SOTA) SLAM and real-time 3D reconstruction systems in various scenarios encapsulating monocular, stereo, RGB-D cameras, and indoor and outdoor environments. In addition, we evaluate Photo-SLAM performance on various hardware configurations to demonstrate its efficiency. Finally, we conduct an ablation study to verify the effectiveness of the proposed algorithms.
+
+On Replica Dataset
+Localization (cm)
+Mapping
+Resources
+
+Cam
+Method
+
+RMSE ↓↓\downarrow
+
+STD ↓↓\downarrow
+
+PSNR ↑↑\uparrow
+
+SSIM ↑↑\uparrow
+
+LPIPS ↓↓\downarrow
+
+Tracking FPS
+↑↑\uparrow
+
+Rendering FPS
+↑↑\uparrow
+
+GPU Memory Usage
+↓↓\downarrow
+
+Mono
+
+ORB-SLAM3 [2]
+
+3.942
+3.115
+-
+-
+-
+58.749
+-
+0
+
+DROID-SLAM [33]
+
+0.725
+0.308
+-
+-
+-
+35.473
+-
+11 GB
+
+Nice-SLAM* [45]
+
+99.9415
+35.336
+16.311
+0.720
+0.439
+2.384
+0.944
+12 GB
+
+Orbeez-SLAM [4]
+
+-
+-
+23.246
+0.790
+0.336
+49.200
+1.030
+6 GB
+
+Go-SLAM [43]
+
+71.054
+24.593
+21.172
+0.703
+0.421
+25.366
+0.821
+22 GB
+
+Ours (Jetson)
+1.235
+0.756
+29.284
+0.883
+0.139
+18.315
+95.057
+4 GB
+
+Ours (Laptop)
+0.713
+0.524
+33.049
+0.926
+0.086
+19.974
+353.504
+4 GB
+
+Ours
+1.091
+0.892
+33.302
+0.926
+0.078
+41.646
+911.262
+6 GB
+
+RGB-D
+
+ORB-SLAM3 [2]
+
+1.833
+1.478
+-
+-
+-
+52.209
+-
+0
+
+DROID-SLAM [33]
+
+0.634
+0.248
+-
+-
+-
+36.452
+-
+11 GB
+
+BundleFusion [6]
+
+1.606
+0.969
+23.839
+0.822
+0.197
+8.630
+-
+5 GB
+
+Nice-SLAM [45]
+
+2.350
+1.590
+26.158
+0.832
+0.232
+2.331
+0.611
+12 GB
+
+Orbeez-SLAM [4]
+
+0.888
+0.562
+32.516
+0.916
+0.112
+41.333
+1.401
+6 GB
+
+ESLAM [16]
+
+0.568
+0.274
+30.594
+0.866
+0.162
+6.687
+2.626
+21 GB
+
+Co-SLAM [35]
+
+1.158
+0.602
+30.246
+0.864
+0.175
+14.575
+3.745
+4 GB
+
+Go-SLAM [43]
+
+0.571
+0.218
+24.158
+0.766
+0.352
+19.437
+0.444
+24 GB
+
+Ours (Jetson)
+0.581
+0.289
+31.978
+0.916
+0.101
+17.926
+116.395
+4 GB
+
+Ours (Laptop)
+0.590
+0.289
+34.853
+0.944
+0.062
+20.597
+396.082
+4 GB
+
+Ours
+0.604
+0.298
+34.958
+0.942
+0.059
+42.485
+1084.017
+5 GB
+
+Table 1: Quantitative results on the Replica dataset. We mark the best two results with first and second. Nice-SLAM* means the depth supervision is disabled. “-” denotes the system does not support view rendering or fails to track camera poses. The results of Photo-SLAM running on the laptop and Jetson platform are denoted as “Ours (Laptop)” and “Ours (Jetson)” respectively.
+
+(a) 
+
+(b) 
+
+(c) 
+
+(d) 
+
+(e) 
+
+Figure 6: Qualitative comparison of diverse systems using RGB-D images from dataset Replica. Photo-SLAM can reconstruct high-fidelity scenes while others are over-smooth and have obvious artifacts. Zoom in for better views.
+
+(a) 
+
+(b) 
+
+(c) 
+
+Figure 7: Mapping comparison with other monocular camera systems.
+
+On TUM Dataset
+fr1-desk
+fr2-xyz
+fr3-office
+
+Cam
+Method
+RMSE (cm) ↓↓\downarrow
+PSNR ↑↑\uparrow
+SSIM ↑↑\uparrow
+LPIPS ↓↓\downarrow
+RMSE (cm) ↓↓\downarrow
+PSNR ↑↑\uparrow
+SSIM ↑↑\uparrow
+LPIPS ↓↓\downarrow
+RMSE (cm) ↓↓\downarrow
+PSNR ↑↑\uparrow
+SSIM ↑↑\uparrow
+LPIPS ↓↓\downarrow
+
+Mono
+
+ORB-SLAM3 [2]
+
+1.534
+-
+-
+-
+0.720
+-
+-
+-
+1.400
+-
+-
+-
+
+DROID-SLAM [33]
+
+78.245
+-
+-
+-
+36.050
+-
+-
+-
+154.383
+-
+-
+-
+
+Go-SLAM [43]
+
+33.122
+11.705
+0.406
+0.614
+28.584
+14.807
+0.443
+0.572
+105.755
+13.572
+0.480
+0.643
+
+Ours (Jetson)
+1.757
+18.811
+0.681
+0.329
+0.558
+21.347
+0.727
+0.187
+1.687
+18.884
+0.672
+0.289
+
+Ours (Laptop)
+1.549
+20.515
+0.733
+0.241
+0.852
+21.575
+0.739
+0.157
+1.542
+19.138
+0.680
+0.259
+
+Ours
+1.539
+20.972
+0.743
+0.228
+0.984
+21.072
+0.726
+0.166
+1.257
+19.591
+0.692
+0.239
+
+RGB-D
+
+ORB-SLAM3 [2]
+
+1.724
+-
+-
+-
+0.385
+-
+-
+-
+1.698
+-
+-
+-
+
+DROID-SLAM [33]
+
+91.985
+-
+-
+-
+41.833
+-
+-
+-
+160.141
+-
+-
+-
+
+Nice-SLAM [45]
+
+19.317
+12.003
+0.417
+0.510
+36.103
+18.200
+0.603
+0.313
+25.309
+16.341
+0.548
+0.386
+
+ESLAM [16]
+
+3.359
+17.497
+0.561
+0.484
+31.448
+22.225
+0.727
+0.233
+25.808
+19.113
+0.616
+0.359
+
+Co-SLAM [35]
+
+3.094
+16.419
+0.482
+0.591
+31.347
+19.176
+0.595
+0.374
+25.374
+17.863
+0.547
+0.452
+
+Go-SLAM [43]
+
+2.119
+15.794
+0.531
+0.538
+31.788
+16.118
+0.534
+0.419
+26.802
+16.499
+0.566
+0.569
+
+Ours (Jetson)
+4.571
+18.273
+0.663
+0.338
+0.360
+23.127
+0.780
+0.149
+1.874
+19.781
+0.701
+0.235
+
+Ours (Laptop)
+1.891
+20.403
+0.728
+0.251
+0.361
+22.570
+0.777
+0.158
+1.315
+21.569
+0.749
+0.184
+
+Ours
+2.603
+20.870
+0.743
+0.239
+0.346
+22.094
+0.765
+0.169
+1.001
+22.744
+0.780
+0.154
+
+Table 2: Quantitative results on the TUM RGB-D dataset. We mark the best two results with first and second.
+
+(a) 
+
+(b) 
+
+(c) 
+
+Figure 8: Qualitative results of Photo-SLAM on dataset TUM.
+
+4.1 Implementation and Experiment Setup
+
+We implemented Photo-SLAM fully in C++ and CUDA, making use of ORB-SLAM3 [2], 3D Gaussian splatting [18], and the LibTorch framework. The optimization of photorealistic mapping is performed with the Stochastic Gradient Descent algorithm while we use a fixed learning rate and λ=0.2𝜆0.2\lambda=0.2. Considering image resolution of the testing dataset, the level of the Gaussian pyramid is set to three, i.e. n=2𝑛2n=2 by default.
+The compared baseline includes a SOTA classical SLAM system ORB-SLAM3 [2], a real-time RGB-D dense reconstruction system BundleFusion [6], a deep-learning based system DROID-SLAM [33], and recent SLAM systems supporting view synthesis, i.e. Nice-SLAM [45], Orbeez-SLAM [4], ESLAM [16], Co-SLAM [35], and Go-SLAM [43].
+
+Hardware. We ran Photo-SLAM and all compared methods using their official code in a desktop with an NVIDIA RTX 4090 24 GB GPU, an Intel Core i9-13900K CPU, and 64 GB RAM. We further tested Photo-SLAM on a laptop and a Jetson AGX Orin Developer Kit. The laptop is equipped with an NVIDIA RTX 3080ti 16 GB Laptop GPU, an Intel Core i9-12900HX, and 32 GB RAM.
+
+Datasets and Metrics. We performed tests for monocular and RGB-D sensor types on the well-known RGB-D datasets: the Replica dataset [27, 29] and the TUM RGB-D dataset [28]. As for stereo tests, we used the EuRoC MAV dataset [1]. Besides indoor scenes, we utilize a ZED 2 stereo camera to collect outdoor scenes for extra evaluation.
+
+Following the convention, we used the Absolute Trajectory Error (ATE) metric [13] to estimate the accuracy of localization, while the RMSE and STD of ATE are reported. Quantitative measurements in terms of PSNR, SSIM, and LPIPS [42] are adopted to analyze the performance of photorealistic mapping. We also report the requirement of computing resources by showing the tracking FPS, rendering FPS, and GPU memory usage. The evaluation regarding mesh reconstruction is out of the range of this work.
+Moreover, to lower the effect of the nondeterministic nature of multi-threading and machine-learning systems, we ran each sequence five times and reported the average results for each metric. Please refer to the supplementary for details.
+
+On Euroc Stereo
+
+ORB-
+
+SLAM3
+
+DROID-
+
+SLAM
+
+Ours
+
+(Jetson)
+
+Ours
+
+(Laptop)
+
+Ours
+
+MH-01
+RMSE (cm) ↓↓\downarrow
+4.379
+39.514
+4.207
+4.049
+4.109
+
+PSNR ↑↑\uparrow
+
+-
+-
+13.979
+13.962
+13.952
+
+SSIM ↑↑\uparrow
+
+-
+-
+0.426
+0.421
+0.420
+
+LPIPS ↓↓\downarrow
+
+-
+-
+0.428
+0.378
+0.366
+
+MH-02
+RMSE (cm) ↓↓\downarrow
+4.525
+39.265
+4.193
+4.731
+4.441
+
+PSNR ↑↑\uparrow
+
+-
+-
+14.210
+14.254
+14.201
+
+SSIM ↑↑\uparrow
+
+-
+-
+0.436
+0.436
+0.430
+
+LPIPS ↓↓\downarrow
+
+-
+-
+0.447
+0.373
+0.356
+
+V1-01
+RMSE (cm) ↓↓\downarrow
+8.940
+21.646
+8.830
+8.836
+8.821
+
+PSNR ↑↑\uparrow
+
+-
+-
+16.933
+17.025
+17.069
+
+SSIM ↑↑\uparrow
+
+-
+-
+0.626
+0.622
+0.618
+
+LPIPS ↓↓\downarrow
+
+-
+-
+0.321
+0.284
+0.266
+
+V2-01
+RMSE (cm) ↓↓\downarrow
+26.904
+15.344
+26.643
+26.736
+26.609
+
+PSNR ↑↑\uparrow
+
+-
+-
+16.038
+16.052
+15.677
+
+SSIM ↑↑\uparrow
+
+-
+-
+0.643
+0.635
+0.622
+
+LPIPS ↓↓\downarrow
+
+-
+-
+0.347
+0.314
+0.323
+
+Table 3: Quantitative results on the EuRoC MAV dataset, using stereo inputs. Our Photo-SLAM is the first system to support online photorealistic mapping with stereo cameras.
+
+Figure 9: Mapping results of Photo-SLAM using a hand-held stereo camera in an outdoor unbounding scene.
+
+4.2 Results and Evaluation
+
+On Replica.
+As quantitative comparison demonstrated in Table 1, Photo-SLAM achieves top performance in terms of mapping quality. With competitive localization accuracy, Photo-SLAM can track the camera poses in real time. Moreover, Photo-SLAM renders hundreds of photorealistic views in a resolution of 1200×\times680 per second with less GPU memory usage. Even on the embedded platform, the rendering speed of Photo-SLAM is about 100 FPS.
+
+In monocular scenarios, Photo-SLAM significantly suppresses other methods.
+When we disabled the depth supervision of Nice-SLAM [45], its accuracy of localization dramatically decreased while the mapping was of 16.311 PSNR. We conduct a qualitative comparison in Fig. 7. The mapping results of Photo-SLAM are photorealistic.
+
+In RGB-D scenarios, we ran BundleFusion [6] with RGB-D sequences and then extracted textured mesh. And then w
+
+[… truncated 17702 chars …]

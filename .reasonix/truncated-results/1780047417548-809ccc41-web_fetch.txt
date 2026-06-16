@@ -1,0 +1,221 @@
+GI-SLAM: Gaussian-Inertial SLAM
+https://arxiv.org/html/2503.18275v1
+
+<!DOCTYPE html>
+
+GI-SLAM: Gaussian-Inertial SLAM
+
+GI-SLAM: Gaussian-Inertial SLAM
+
+Xulang Liu
+
+Sun Yat-sen University
+
+Guangzhou, China
+
+  
+Ning Tan
+
+Sun Yat-sen University
+
+Guangzhou, China
+
+Abstract
+
+3D Gaussian Splatting (3DGS) has recently emerged as a powerful representation of geometry and appearance for dense Simultaneous Localization and Mapping (SLAM). Through rapid, differentiable rasterization of 3D Gaussians, many 3DGS SLAM methods achieve near real-time rendering and accelerated training. However, these methods largely overlook inertial data, witch is a critical piece of information collected from the inertial measurement unit (IMU). In this paper, we present GI-SLAM, a novel gaussian-inertial SLAM system which consists of an IMU-enhanced camera tracking module and a realistic 3D Gaussian-based scene representation for mapping. Our method introduces an IMU loss that seamlessly integrates into the deep learning framework underpinning 3D Gaussian Splatting SLAM, effectively enhancing the accuracy, robustness and efficiency of camera tracking. Moreover, our SLAM system supports a wide range of sensor configurations, including monocular, stereo, and RGBD cameras, both with and without IMU integration. Our method achieves competitive performance compared with existing state-of-the-art real-time methods on the EuRoC and TUM-RGBD datasets.
+
+1 Introduction
+
+Dense Visual Simultaneous Localization and Mapping (SLAM) is a fundamental problem in 3D computer vision with numerous applications in fields such as autonomous driving, robotic navigation and planning, as well as augmented reality (AR) and virtual reality (VR). The goal of dense SLAM is to construct a detailed map of an unknown environment while simultaneously tracking the camera pose, ensuring that embodied agents can perform downstream tasks in previously unseen 3D environments. Traditional SLAM methods utilize point clouds[9, 25, 44], surfels[38], meshes[1], or voxel grids[23] for scene representation to create dense maps, achieving significant progress in localization accuracy. However, these methods still face substantial limitations for applications requiring high-fidelity, fine-grained 3D dense mapping.
+
+To enhance the visual fidelity of 3D maps, researchers have explored SLAM methods based on Neural Radiance Fields (NeRF)[22]. These approaches leverage differentiable volumetric rendering to train implicit neural networks, enabling photometrically accurate 3D representations of the environment. This novel map representation is compact, continuous, and efficient, and it can be optimized through differentiable rendering, making it particularly beneficial for applications such as navigation, planning, and reconstruction. Methods such as iMAP[33] pioneered the use of MLP-based representations for real-time tracking and mapping, while NICE-SLAM[48] introduced a hierarchical voxel-based strategy to enhance scalability and reconstruction quality. Further advancements like Vox-Fusion[45] and ESLAM[15] have improved memory efficiency and tracking robustness through dynamic voxel allocation and multi-scale feature planes. Co-SLAM[37] explore InstantNGP[24] to further accelerate the mapping speed. Despite these advancements, NeRF-SLAM still faces challenges such as high computational cost, slow convergence, and difficulties in handling large-scale dynamic environments due to model capacity limitations and catastrophic forgetting.
+
+More recently, 3D Gaussians[18] have emerged as an alternative representation of radiance fields, achieving equal or superior rendering quality compared to traditional NeRFs while being significantly faster in rendering and training. Building on this success, some works[16, 12, 41, 43, 21] have integrated 3D Gaussian Splatting (3DGS) with dense visual SLAM systems and achieved significant advancements in both mapping accuracy and computational efficiency. However, to the best of our knowledge, no existing work has effectively integrated inertial data—which is crucial for accurate camera pose estimation in visual SLAM—into a 3DGS SLAM framework.
+
+IMUs are commonly found in many mobile devices and robots, and they are frequently integrated into traditional visual SLAM systems[29, 4, 5, 39, 2] to enhance the accuracy and robustness of camera tracking. To this end, we propose GI-SLAM, a novel Gaussian-inertial SLAM system that consists of an IMU-enhanced camera tracking module and a photo-realistic 3D Gaussian scene representation for mapping. In our system, we introduce a novel IMU loss function, which, when combined with the photometric loss function, improves the accuracy and robustness of camera tracking. Additionally, we propose a keyframe selection strategy based on Gaussian visibility and motion data to prevent the selection of motion-blurred keyframes, thereby improving the quality of the reconstructed map.
+In summary, the main contributions of this work include:
+
+•
+
+We propose a novel simultaneous localization and photorealistic mapping system based on 3D Gaussian Splatting (3DGS), called GI-SLAM. The proposed framework supports monocular, stereo, and RGBD cameras, with or without IMU integration, and is designed to operate effectively in both indoor and outdoor environments.
+
+•
+
+We present a keyframe selection strategy based on Gaussian visibility and motion constraint to prevent the selection of motion-blurred keyframes.
+
+•
+
+We conducted extensive evaluations of our proposed system on the TUM and EuRoC datasets with IMU data, demonstrating competitive performance.
+
+Figure 1: SLAM system overview.
+
+2 Related Work
+
+In this section, we provide a concise overview of various dense SLAM approaches, with a particular focus on recent methods that utilize implicit representations encoded in overfit neural networks for tracking and mapping. For a more comprehensive review of NeRF-based and 3DGS-based SLAM techniques, we refer interested readers to the excellent survey[36].
+
+Classical dense SLAM
+
+There has been extensive work on 3D reconstruction over the past decades. Traditional dense SLAM methods have explored various map representations, including point clouds[9, 17, 19], surfels[42, 38, 31], and Gaussian mixture models[10, 11]. truncated signed-distance functions (TSDF)[26, 6, 7, 14]. Among these, Surfel-based approaches like ElasticFusion[42] represent the scene as a collection of circular surface elements, enabling real-time tracking and mapping. TSDF-based methods such as KinectFusion[26] and its extensions[27, 28] have demonstrated impressive real-time 3D reconstruction capabilities by leveraging efficient volumetric integration and voxel hashing techniques. While these classical methods provide geometrically accurate reconstructions, they often struggle with scalability and handling uncertainty in depth measurements. Recent advances have introduced learning-based methods such as RoutedFusion[40] and DI-Fusion[13], which leverage deep networks to improve robustness against noisy depth inputs. These works primarily focus on the geometry reconstruction, while differently, our method takes both 3D reconstruction and photorealistic rendering into account simultaneously.
+
+NeRF-based dense SLAM
+
+Several recent works have explored the use of neural radiance fields(NeRF)[22] for dense SLAM, leveraging its ability to efficiently represent scene geometry and appearance. For instance, iMAP[33] pioneered the integration of neural implicit representations into SLAM, using a single MLP to dynamically build a scene-specific 3D model. This approach provides efficient geometry representation and automatic detail control but struggles with scalability and catastrophic forgetting in larger environments. NICE-SLAM[48] improved upon iMAP by adopting a hierarchical feature grid representation with multi-level voxel encodings, enhancing reconstruction quality and mitigating catastrophic forgetting through localized updates. Vox-Fusion[45] further introduced an octree-based voxel allocation strategy, allowing for dynamic scene encoding and efficient memory management. More recent advancements, such as ESLAM[15], utilize multi-scale feature planes to optimize memory efficiency and improve reconstruction speed by leveraging a TSDF-based representation. Co-SLAM[37] combines smooth coordinate encodings with sparse hash grids, achieving robust tracking and high-fidelity map reconstruction with efficient hole-filling techniques. Additionally, GO-SLAM[47] integrates global optimization techniques like loop closure and bundle adjustment to ensure long-term trajectory consistency. Alternative representations have also been explored. Point-SLAM[30] employs dynamic neural point clouds, adaptively adjusting density based on scene information for memory-efficient mapping. Other works such as Plenoxel-SLAM[35] eschew neural networks entirely, leveraging voxel grids with trilinear interpolation for efficient real-time mapping and tracking. Despite these advances, NeRF-based SLAM systems face challenges related to computational complexity and memory consumption, which hinder real-time performance on large-scale scenes. Our 3DGS-based approach aims to address these limitations by introducing a more memory-efficient representation and faster rendering pipeline.
+
+3DGS-based dense SLAM
+
+Recently, with the great success of 3D Gaussian Splatting(3DGS)[18], some works have integrated 3DGS with dense SLAM systems. MonoGS[21] employs 3D Gaussians as the sole representation for online reconstruction, utilizing direct optimization for camera tracking and introducing Gaussian shape regularization to maintain geometric consistency. Photo-SLAM[12] integrates explicit geometric features with implicit texture representations within a hyper primitives map, optimizing camera poses through multi-threaded factor graph solving. SplaTAM[16] refines tracking and mapping by optimizing Gaussian parameters through re-rendering errors and incremental densification strategies, though it remains sensitive to motion blur and depth noise. GS-SLAM[43] introduces an adaptive expansion strategy to dynamically manage 3D Gaussians and a coarse-to-fine tracking approach to enhance pose estimation accuracy. Gaussian-SLAM[46] organizes scenes into independently optimized sub-maps based on camera motion, improving scalability for larger environments. Compact-GSSLAM[20] addresses memory constraints by reducing Gaussian ellipsoid parameters and employing a sliding window-based masking strategy for efficient resource allocation. Despite these advancements, challenges persist in achieving robust real-time performance, particularly in handling dynamic scenes and motion blur. Our approach introduces an IMU-based loss to incorporate inertial information into the 3DGS framework, significantly enhancing camera tracking accuracy and robustness. Additionally, motion constraints are utilized to filter frames susceptible to motion blur, thereby improving overall mapping quality. This integration of IMU data with 3DGS-based SLAM ensures more stable tracking and higher-fidelity reconstructions in challenging environments.
+
+3 Method
+
+GI-SLAM contains three main components, including localization, mapping, and keyframing, shown in Fig. 1. Our proposed framework is an online SLAM system that simultaneously tracks camera poses and reconstructs dense scene geometry using RGB, depth, and IMU data. This is achieved through the following steps: First, the camera pose is initialized, and an initial 3D Gaussian scene representation is generated. Camera tracking is then performed by comparing the rendered RGB and depth images from the 3D Gaussian map with the input images, depth data, and IMU measurements. Each incoming frame is evaluated to determine whether it qualifies as a keyframe. If identified as a keyframe, the 3D Gaussian map is updated accordingly, which in turn enhances subsequent camera tracking. This process repeats iteratively until the SLAM system is terminated.
+
+Figure 2: Trajectory tracking result of the monocular camera setup on the TUM dataset.
+
+3.1 Localization
+
+We take advantage of the differentiable nature of the 3D Gaussian map rendering process by parameterizing the pose matrix used to represent the camera pose, enabling optimization via gradient descent. The camera pose is represented using an S⁢E⁢(3)𝑆𝐸3SE(3)italic_S italic_E ( 3 ) homogeneous transformation matrix:
+
+𝐏t∈S⁢E⁢(3)=[𝐑t𝐭t𝟎⊤1].subscript𝐏𝑡𝑆𝐸3matrixsubscript𝐑𝑡subscript𝐭𝑡superscript0top1\mathbf{P}_{t}\in SE(3)=\begin{bmatrix}\mathbf{R}_{t}&\mathbf{t}_{t}\\
+\mathbf{0}^{\top}&1\end{bmatrix}.bold_P start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT ∈ italic_S italic_E ( 3 ) = [ start_ARG start_ROW start_CELL bold_R start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT end_CELL start_CELL bold_t start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT end_CELL end_ROW start_ROW start_CELL bold_0 start_POSTSUPERSCRIPT ⊤ end_POSTSUPERSCRIPT end_CELL start_CELL 1 end_CELL end_ROW end_ARG ] .
+
+(1)
+
+We assume that the previous camera pose is accurate, and update the current camera pose based on it:
+
+𝐏t=𝐏t−1⋅Δ⁢𝐏,subscript𝐏𝑡⋅subscript𝐏𝑡1Δ𝐏\mathbf{P}_{t}=\mathbf{P}_{t-1}\cdot\Delta\mathbf{P},bold_P start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT = bold_P start_POSTSUBSCRIPT italic_t - 1 end_POSTSUBSCRIPT ⋅ roman_Δ bold_P ,
+
+(2)
+
+where 𝐏tsubscript𝐏𝑡\mathbf{P}_{t}bold_P start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT represents the current camera pose, 𝐏t−1subscript𝐏𝑡1\mathbf{P}_{t-1}bold_P start_POSTSUBSCRIPT italic_t - 1 end_POSTSUBSCRIPT denotes the previous pose, and Δ⁢𝐏Δ𝐏\Delta\mathbf{P}roman_Δ bold_P is the incremental transformation estimated through optimization. The refinement of Δ⁢𝐏Δ𝐏\Delta\mathbf{P}roman_Δ bold_P is achieved by minimizing the alignment error between the sensor data (RGB, depth, and IMU measurements) and the corresponding RGB and depth images rendered from the 3D Gaussian map. This optimization process involves minimizing a weighted combination of three loss functions: the RGB loss, which measures photometric consistency; the depth loss, which ensures geometric accuracy; and the IMU loss, which enforces inertial constraints.
+
+RGB Loss
+
+In the monocular case, we minimise the following RGB loss:
+
+ℒr⁢g⁢b=‖I⁢(𝒢,𝐏t−1⋅Δ⁢𝐏)−I¯‖1.subscriptℒ𝑟𝑔𝑏subscriptnorm𝐼𝒢⋅subscript𝐏𝑡1Δ𝐏¯𝐼1\mathcal{L}_{rgb}=\left\|I(\mathcal{G},\mathbf{P}_{t-1}\cdot\Delta\mathbf{P})-%
+\bar{I}\right\|_{1}.caligraphic_L start_POSTSUBSCRIPT italic_r italic_g italic_b end_POSTSUBSCRIPT = ∥ italic_I ( caligraphic_G , bold_P start_POSTSUBSCRIPT italic_t - 1 end_POSTSUBSCRIPT ⋅ roman_Δ bold_P ) - over¯ start_ARG italic_I end_ARG ∥ start_POSTSUBSCRIPT 1 end_POSTSUBSCRIPT .
+
+(3)
+
+This is an L1 loss function, where I⁢(𝒢,𝐏t−1⋅Δ⁢𝐏)𝐼𝒢⋅subscript𝐏𝑡1Δ𝐏I(\mathcal{G},\mathbf{P}_{t-1}\cdot\Delta\mathbf{P})italic_I ( caligraphic_G , bold_P start_POSTSUBSCRIPT italic_t - 1 end_POSTSUBSCRIPT ⋅ roman_Δ bold_P )
+represents the process of rendering the 3D Gaussians 𝒢𝒢\mathcal{G}caligraphic_G into a 2D image at pose 𝐏t−1⋅Δ⁢𝐏⋅subscript𝐏𝑡1Δ𝐏\mathbf{P}_{t-1}\cdot\Delta\mathbf{P}bold_P start_POSTSUBSCRIPT italic_t - 1 end_POSTSUBSCRIPT ⋅ roman_Δ bold_P, and I¯¯𝐼\bar{I}over¯ start_ARG italic_I end_ARG denotes the ground truth image.
+
+Depth Loss
+
+When depth observations are available, we define the depth loss as:
+
+ℒd⁢e⁢p⁢t⁢h=‖D⁢(𝒢,𝐏t−1⋅Δ⁢𝐏)−D¯‖1,subscriptℒ𝑑𝑒𝑝𝑡ℎsubscriptnorm𝐷𝒢⋅subscript𝐏𝑡1Δ𝐏¯𝐷1\mathcal{L}_{depth}=\left\|D(\mathcal{G},\mathbf{P}_{t-1}\cdot\Delta\mathbf{P}%
+)-\bar{D}\right\|_{1},caligraphic_L start_POSTSUBSCRIPT italic_d italic_e italic_p italic_t italic_h end_POSTSUBSCRIPT = ∥ italic_D ( caligraphic_G , bold_P start_POSTSUBSCRIPT italic_t - 1 end_POSTSUBSCRIPT ⋅ roman_Δ bold_P ) - over¯ start_ARG italic_D end_ARG ∥ start_POSTSUBSCRIPT 1 end_POSTSUBSCRIPT ,
+
+(4)
+
+where D⁢(𝒢,𝐏t−1⋅Δ⁢𝐏)𝐷𝒢⋅subscript𝐏𝑡1Δ𝐏D(\mathcal{G},\mathbf{P}_{t-1}\cdot\Delta\mathbf{P})italic_D ( caligraphic_G , bold_P start_POSTSUBSCRIPT italic_t - 1 end_POSTSUBSCRIPT ⋅ roman_Δ bold_P )
+represents depth rasterisation, and D¯¯𝐷\bar{D}over¯ start_ARG italic_D end_ARG denotes the observed depth.
+
+IMU Loss
+
+Our IMU loss function incorporates both translational and rotational constraints from 6-DOF IMU measurements. For translational constraints, we integrate the linear acceleration measurements 𝐚tsubscript𝐚𝑡\mathbf{a}_{t}bold_a start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT with the previous camera frame’s linear velocity 𝐯t−1subscript𝐯𝑡1\mathbf{v}_{t-1}bold_v start_POSTSUBSCRIPT italic_t - 1 end_POSTSUBSCRIPT:
+
+Δ⁢𝐩i⁢m⁢u=𝐯t−1⁢Δ⁢t+12⁢𝐚t⁢Δ⁢t2.Δsubscript𝐩𝑖𝑚𝑢subscript𝐯𝑡1Δ𝑡12subscript𝐚𝑡Δsuperscript𝑡2\Delta\mathbf{p}_{imu}=\mathbf{v}_{t-1}\Delta t+\frac{1}{2}\mathbf{a}_{t}%
+\Delta t^{2}.roman_Δ bold_p start_POSTSUBSCRIPT italic_i italic_m italic_u end_POSTSUBSCRIPT = bold_v start_POSTSUBSCRIPT italic_t - 1 end_POSTSUBSCRIPT roman_Δ italic_t + divide start_ARG 1 end_ARG start_ARG 2 end_ARG bold_a start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT roman_Δ italic_t start_POSTSUPERSCRIPT 2 end_POSTSUPERSCRIPT .
+
+(5)
+
+The translation loss ℒt⁢r⁢a⁢n⁢ssubscriptℒ𝑡𝑟𝑎𝑛𝑠\mathcal{L}_{trans}caligraphic_L start_POSTSUBSCRIPT italic_t italic_r italic_a italic_n italic_s end_POSTSUBSCRIPT is then computed as:
+
+ℒt⁢r⁢a⁢n⁢s=‖Δ⁢𝐩o⁢p⁢t−Δ⁢𝐩i⁢m⁢u‖22,subscriptℒ𝑡𝑟𝑎𝑛𝑠subscriptsuperscriptnormΔsubscript𝐩𝑜𝑝𝑡Δsubscript𝐩𝑖𝑚𝑢22\mathcal{L}_{trans}=\|\Delta\mathbf{p}_{opt}-\Delta\mathbf{p}_{imu}\|^{2}_{2},caligraphic_L start_POSTSUBSCRIPT italic_t italic_r italic_a italic_n italic_s end_POSTSUBSCRIPT = ∥ roman_Δ bold_p start_POSTSUBSCRIPT italic_o italic_p italic_t end_POSTSUBSCRIPT - roman_Δ bold_p start_POSTSUBSCRIPT italic_i italic_m italic_u end_POSTSUBSCRIPT ∥ start_POSTSUPERSCRIPT 2 end_POSTSUPERSCRIPT start_POSTSUBSCRIPT 2 end_POSTSUBSCRIPT ,
+
+(6)
+
+where Δ⁢𝐩o⁢p⁢t∈ℝ3Δsubscript𝐩𝑜𝑝𝑡superscriptℝ3\Delta\mathbf{p}_{opt}\in\mathbb{R}^{3}roman_Δ bold_p start_POSTSUBSCRIPT italic_o italic_p italic_t end_POSTSUBSCRIPT ∈ blackboard_R start_POSTSUPERSCRIPT 3 end_POSTSUPERSCRIPT denotes the optimized displacement between consecutive frames.
+
+For rotational constraints, we derive the relative rotation from angular velocity measurements ωtsubscript𝜔𝑡\mathbf{\omega}_{t}italic_ω start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT:
+
+Δ⁢θi⁢m⁢u=ωt⁢Δ⁢t.Δsubscriptθ𝑖𝑚𝑢subscript𝜔𝑡Δ𝑡\Delta\mathbf{\uptheta}_{imu}=\mathbf{\omega}_{t}\Delta t.roman_Δ roman_θ start_POSTSUBSCRIPT italic_i italic_m italic_u end_POSTSUBSCRIPT = italic_ω start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT roman_Δ italic_t .
+
+(7)
+
+The rotation loss ℒr⁢o⁢tsubscriptℒ𝑟𝑜𝑡\mathcal{L}_{rot}caligraphic_L start_POSTSUBSCRIPT italic_r italic_o italic_t end_POSTSUBSCRIPT is formulated as:
+
+ℒr⁢o⁢t=‖Δ⁢θo⁢p⁢t−Δ⁢θi⁢m⁢u‖22,subscriptℒ𝑟𝑜𝑡subscriptsuperscriptnormΔsubscriptθ𝑜𝑝𝑡Δsubscriptθ𝑖𝑚𝑢22\mathcal{L}_{rot}=\|\Delta\mathbf{\uptheta}_{opt}-\Delta\mathbf{\uptheta}_{imu%
+}\|^{2}_{2},caligraphic_L start_POSTSUBSCRIPT italic_r italic_o italic_t end_POSTSUBSCRIPT = ∥ roman_Δ roman_θ start_POSTSUBSCRIPT italic_o italic_p italic_t end_POSTSUBSCRIPT - roman_Δ roman_θ start_POSTSUBSCRIPT italic_i italic_m italic_u end_POSTSUBSCRIPT ∥ start_POSTSUPERSCRIPT 2 end_POSTSUPERSCRIPT start_POSTSUBSCRIPT 2 end_POSTSUBSCRIPT ,
+
+(8)
+
+where Δ⁢θo⁢p⁢t∈ℝ3Δsubscriptθ𝑜𝑝𝑡superscriptℝ3\Delta\mathbf{\uptheta}_{opt}\in\mathbb{R}^{3}roman_Δ roman_θ start_POSTSUBSCRIPT italic_o italic_p italic_t end_POSTSUBSCRIPT ∈ blackboard_R start_POSTSUPERSCRIPT 3 end_POSTSUPERSCRIPT represents the optimized relative rotation in axis-angle form.
+The final IMU loss combines both components through weighted summation:
+
+ℒi⁢m⁢u=λt⁢ℒt⁢r⁢a⁢n⁢s+λr⁢ℒr⁢o⁢t,subscriptℒ𝑖𝑚𝑢subscript𝜆𝑡subscriptℒ𝑡𝑟𝑎𝑛𝑠subscript𝜆𝑟subscriptℒ𝑟𝑜𝑡\mathcal{L}_{imu}=\lambda_{t}\mathcal{L}_{trans}+\lambda_{r}\mathcal{L}_{rot},caligraphic_L start_POSTSUBSCRIPT italic_i italic_m italic_u end_POSTSUBSCRIPT = italic_λ start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT caligraphic_L start_POSTSUBSCRIPT italic_t italic_r italic_a italic_n italic_s end_POSTSUBSCRIPT + italic_λ start_POSTSUBSCRIPT italic_r end_POSTSUBSCRIPT caligraphic_L start_POSTSUBSCRIPT italic_r italic_o italic_t end_POSTSUBSCRIPT ,
+
+(9)
+
+with λtsubscript𝜆𝑡\lambda_{t}italic_λ start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT and λrsubscript𝜆𝑟\lambda_{r}italic_λ start_POSTSUBSCRIPT italic_r end_POSTSUBSCRIPT being hyper-parameters balancing the two constraints. Both Δ⁢𝐩o⁢p⁢tΔsubscript𝐩𝑜𝑝𝑡\Delta\mathbf{p}_{opt}roman_Δ bold_p start_POSTSUBSCRIPT italic_o italic_p italic_t end_POSTSUBSCRIPT and Δ⁢θo⁢p⁢tΔsubscriptθ𝑜𝑝𝑡\Delta\mathbf{\uptheta}_{opt}roman_Δ roman_θ start_POSTSUBSCRIPT italic_o italic_p italic_t end_POSTSUBSCRIPT are optimized variables in our SLAM framework.
+
+3.2 Mapping
+
+Our method employs 3D Gaussians as the sole 3D scene representation to model the environment, capable of rendering precise RGB and depth images through differentiable rendering. This facilitates the use of gradient-based optimization techniques to update the 3D environmental map.
+
+3D Gaussian Scene Representation
+
+Similar to MonoGS[21], our SLAM system models the scene as a collection of anisotropic 3D Gaussians 𝒢={Gi}𝒢subscript𝐺𝑖\mathcal{G}=\{G_{i}\}caligraphic_G = { italic_G start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT }, where each Gaussian Gisubscript𝐺𝑖G_{i}italic_G start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT is parameterized by its position 𝝁Wi∈ℝ3superscriptsubscript𝝁𝑊𝑖superscriptℝ3\boldsymbol{\mu}_{W}^{i}\in\mathbb{R}^{3}bold_italic_μ start_POSTSUBSCRIPT italic_W end_POSTSUBSCRIPT start_POSTSUPERSCRIPT italic_i end_POSTSUPERSCRIPT ∈ blackboard_R start_POSTSUPERSCRIPT 3 end_POSTSUPERSCRIPT, covariance 𝚺Wi∈ℝ3×3superscriptsubscript𝚺𝑊𝑖superscriptℝ33\boldsymbol{\Sigma}_{W}^{i}\in\mathbb{R}^{3\times 3}bold_Σ start_POSTSUBSCRIPT italic_W end_POSTSUBSCRIPT start_POSTSUPERSCRIPT italic_i end_POSTSUPERSCRIPT ∈ blackboard_R start_POSTSUPERSCRIPT 3 × 3 end_POSTSUPERSCRIPT (defining ellipsoidal geometry), color ci∈ℝ3superscript𝑐𝑖superscriptℝ3c^{i}\in\mathbb{R}^{3}italic_c start_POSTSUPERSCRIPT italic_i end_POSTSUPERSCRIPT ∈ blackboard_R start_POSTSUPERSCRIPT 3 end_POSTSUPERSCRIPT, and opacity αi∈ℝsuperscript𝛼𝑖ℝ\alpha^{i}\in\mathbb{R}italic_α start_POSTSUPERSCRIPT italic_i end_POSTSUPERSCRIPT ∈ blackboard_R. To balance expressiveness and computational efficiency, we parameterize the covariance matrix as:
+
+𝚺Wi=𝐑i⁢𝐒i⁢𝐒i⊤⁢𝐑i⊤,superscriptsubscript𝚺𝑊𝑖subscript𝐑𝑖subscript𝐒𝑖superscriptsubscript𝐒𝑖topsuperscriptsubscript𝐑𝑖top\boldsymbol{\Sigma}_{W}^{i}=\mathbf{R}_{i}\mathbf{S}_{i}\mathbf{S}_{i}^{\top}%
+\mathbf{R}_{i}^{\top},bold_Σ start_POSTSUBSCRIPT italic_W end_POSTSUBSCRIPT start_POSTSUPERSCRIPT italic_i end_POSTSUPERSCRIPT = bold_R start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT bold_S start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT bold_S start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT start_POSTSUPERSCRIPT ⊤ end_POSTSUPERSCRIPT bold_R start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT start_POSTSUPERSCRIPT ⊤ end_POSTSUPERSCRIPT ,
+
+(10)
+
+where 𝐒i∈ℝ3subscript𝐒𝑖superscriptℝ3\mathbf{S}_{i}\in\mathbb{R}^{3}bold_S start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT ∈ blackboard_R start_POSTSUPERSCRIPT 3 end_POSTSUPERSCRIPT is a diagonal scaling matrix, and 𝐑i∈SO⁢(3)subscript𝐑𝑖SO3\mathbf{R}_{i}\in\text{SO}(3)bold_R start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT ∈ SO ( 3 ) (represented as a quaternion) defines rotation. This formulation avoids explicit surface extraction and enables efficient scene reconstruction through volume rendering. The continuous 3D representation allows adaptive refinement of Gaussians during mapping.
+
+Differentiable Rendering
+
+To bridge 3D Gaussians with 2D observations, we project Gisubscript𝐺𝑖G_{i}italic_G start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT onto the image plane via a differentiable geometric transformation. Given camera pose 𝑻C⁢W∈SE⁢(3)subscript𝑻𝐶𝑊SE3\boldsymbol{T}_{CW}\in\text{SE}(3)bold_italic_T start_POSTSUBSCRIPT italic_C italic_W end_POSTSUBSCRIPT ∈ SE ( 3 ), the 3D Gaussian 𝒩⁢(𝝁W,𝚺W)𝒩subscript𝝁𝑊subscript𝚺𝑊\mathcal{N}(\boldsymbol{\mu}_{W},\boldsymbol{\Sigma}_{W})caligraphic_N ( bold_italic_μ start_POSTSUBSCRIPT italic_W end_POSTSUBSCRIPT , bold_Σ start_POSTSUBSCRIPT italic_W end_POSTSUBSCRIPT ) maps to a 2D Gaussian 𝒩⁢(𝝁I,𝚺I)𝒩subscript𝝁𝐼subscript𝚺𝐼\mathcal{N}(\boldsymbol{\mu}_{I},\boldsymbol{\Sigma}_{I})caligraphic_N ( bold_italic_μ start_POSTSUBSCRIPT italic_I end_POSTSUBSCRIPT , bold_Σ start_POSTSUBSCRIPT italic_I end_POSTSUBSCRIPT ) as:
+
+𝝁I=π⁢(𝑻C⁢W⁢𝝁W),𝚺I=𝐉𝐖⁢𝚺W⁢𝐖⊤⁢𝐉⊤,formulae-sequencesubscript𝝁𝐼𝜋subscript𝑻𝐶𝑊subscript𝝁𝑊subscript𝚺𝐼𝐉𝐖subscript𝚺𝑊superscript𝐖topsuperscript𝐉top\boldsymbol{\mu}_{I}=\pi(\boldsymbol{T}_{CW}\boldsymbol{\mu}_{W}),\quad%
+\boldsymbol{\Sigma}_{I}=\mathbf{J}\mathbf{W}\boldsymbol{\Sigma}_{W}\mathbf{W}^%
+{\top}\mathbf{J}^{\top},bold_italic_μ start_POSTSUBSCRIPT italic_I end_POSTSUBSCRIPT = italic_π ( bold_italic_T start_POSTSUBSCRIPT italic_C italic_W end_POSTSUBSCRIPT bold_italic_μ start_POSTSUBSCRIPT italic_W end_POSTSUBSCRIPT ) , bold_Σ start_POSTSUBSCRIPT italic_I end_POSTSUBSCRIPT = bold_JW bold_Σ start_POSTSUBSCRIPT italic_W end_POSTSUBSCRIPT bold_W start_POSTSUPERSCRIPT ⊤ end_POSTSUPERSCRIPT bold_J start_POSTSUPERSCRIPT ⊤ end_POSTSUPERSCRIPT ,
+
+(11)
+
+where π𝜋\piitalic_π is the perspective projection, 𝐖𝐖\mathbf{W}bold_W is the rotational component of 𝑻C⁢Wsubscript𝑻𝐶𝑊\boldsymbol{T}_{CW}bold_italic_T start_POSTSUBSCRIPT italic_C italic_W end_POSTSUBSCRIPT, and 𝐉𝐉\mathbf{J}bold_J is the Jacobian of the projective approximation.
+
+Pixel colors 𝐂^^𝐂\hat{\mathbf{C}}over^ start_ARG bold_C end_ARG and depths D^^𝐷\hat{D}over^ start_ARG italic_D end_ARG are rendered via front-to-back αα\upalpharoman_α-blending:
+
+𝐂^=∑i∈𝒩ci⁢αi⁢∏j=1i−1(1−αj),^𝐂subscript𝑖𝒩subscript𝑐𝑖subscript𝛼𝑖superscriptsubscriptproduct𝑗1𝑖11subscript𝛼𝑗\hat{\mathbf{C}}=\sum_{i\in\mathcal{N}}c_{i}\alpha_{i}\prod_{j=1}^{i-1}(1-%
+\alpha_{j}),over^ start_ARG bold_C end_ARG = ∑ start_POSTSUBSCRIPT italic_i ∈ caligraphic_N end_POSTSUBSCRIPT italic_c start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT italic_α start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT ∏ start_POSTSUBSCRIPT italic_j = 1 end_POSTSUBSCRIPT start_POSTSUPERSCRIPT italic_i - 1 end_POSTSUPERSCRIPT ( 1 - italic_α start_POSTSUBSCRIPT italic_j end_POSTSUBSCRIPT ) ,
+
+(12)
+
+D^=∑i∈𝒩di⁢αi⁢∏j=1i−1(1−αj),^𝐷subscript𝑖𝒩subscript𝑑𝑖subscript𝛼𝑖superscriptsubscriptproduct𝑗1𝑖11subscript𝛼𝑗\hat{D}=\sum_{i\in\mathcal{N}}d_{i}\alpha_{i}\prod_{j=1}^{i-1}(1-\alpha_{j}),over^ start_ARG italic_D end_ARG = ∑ start_POSTSUBSCRIPT italic_i ∈ caligraphic_N end_POSTSUBSCRIPT italic_d start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT italic_α start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT ∏ start_POSTSUBSCRIPT italic_j = 1 end_POSTSUBSCRIPT start_POSTSUPERSCRIPT italic_i - 1 end_POSTSUPERSCRIPT ( 1 - italic_α start_POSTSUBSCRIPT italic_j end_POSTSUBSCRIPT ) ,
+
+(13)
+
+where αisubscript𝛼𝑖\alpha_{i}italic_α start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT is modulated by the projected 2D Gaussian’s density, and disubscript𝑑𝑖d_{i}italic_d start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT is the depth of Gisubscript𝐺𝑖G_{i}italic_G start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT’s centroid in the camera frame. Crucially, this rendering process is fully differentiable, enabling gradient-based optimization of Gaussian parameters.
+
+Map Update
+
+The 3D Gaussian scene representation is dynamically refined through a continuous cycle of initialization, adaptive density control, and gradient-driven optimization. Initial Gaussians are seeded from sparse geometric cues, such as keyframe-based triangulation or depth estimation, where their initial positions and covariances reflect the uncertainty of sensor observations. To ensure the scene is neither under- nor over-reconstructed, the system employs a density adaptation mechanism: Gaussians are cloned in regions with high photometric reconstruction errors (indicating missing geometry) and pruned if their opacity falls below a minimal threshold or their spatial extent becomes negligible (e.g., due to occlusion or excessive compression). This balance allows the map to grow in complex regions while eliminating redundant elements.
+
+The core of the update process lies in differentiable optimization. We formulate an L1 composite loss function ℒℒ\mathcal{L}caligraphic_L to align the rendered outputs with sensor observations, defined as:
+
+ℒ=‖𝐂^−𝐂gt‖1+λ⁢‖D^−Dgt‖1,ℒsubscriptnorm^𝐂subscript𝐂gt1𝜆subscriptnorm^𝐷subscript𝐷gt1\mathcal{L}=\|\hat{\mathbf{C}}-\mathbf{C}_{\text{gt}}\|_{1}+\lambda\|\hat{D}-D%
+_{\text{gt}}\|_{1},caligraphic_L = ∥ over^ start_ARG bold_C end_ARG - bold_C start_POSTSUBSCRIPT gt end_POSTSUBSCRIPT ∥ start_POSTSUBSCRIPT 1 end_POSTSUBSCRIPT + italic_λ ∥ over^ start_ARG italic_D end_ARG - italic_D start_POSTSUBSCRIPT gt end_POSTSUBSCRIPT ∥ start_POSTSUBSCRIPT 1 end_POSTSUBSCRIPT ,
+
+(14)
+
+where 𝐂^^𝐂\hat{\mathbf{C}}over^ start_ARG bold_C end_ARG and D^^𝐷\hat{D}over^ start_ARG italic_D end_ARG denote the rendered RGB image and depth map respectively, while 𝐂gtsubscript𝐂gt\mathbf{C}_{\text{gt}}bold_C start_POSTSUBSCRIPT gt end_POSTSUBSCRIPT and Dgtsubscript𝐷gtD_{\text{gt}}italic_D start_POSTSUBSCRIPT gt end_POSTSUBSCRIPT represent the corresponding ground-truth measurements captured by the sensors. The weighting coefficient λ𝜆\lambdaitalic_λ balances the photometric and geometric error terms. Through backpropagation of this differentiable loss function, we jointly optimize a set of 3D Gaussian scene representation parameters including positions 𝝁Wsubscript𝝁𝑊\boldsymbol{\mu}_{W}bold_italic_μ start_POSTSUBSCRIPT italic_W end_POSTSUBSCRIPT, covariance scales 𝐒𝐒\mathbf{S}bold_S, rotations 𝐑𝐑\mathbf{R}bold_R, colors c𝑐citalic_c, and opacities α𝛼\alphaitalic_α. The optimization adjusts Gaussians to better align their projected 2D contributions with observed colors and depths, while implicit regularization maintains physically plausible shapes. Through iterative updates, the Gaussian ensemble converges to a compact yet accurate representation of the scene’s geometry and appearance.
+
+3.3 Keyframing
+
+Jointly optimizing all video stream frames with 3D Gaussians and camera poses in real-time is computationally infeasible. Inspired by MonoGS[21], we maintain a compact keyframe window 𝒲ksubscript𝒲𝑘\mathcal{W}_{k}caligraphic_W start_POSTSUBSCRIPT italic_k end_POSTSUBSCRIPT, dynamically curated through inter-frame covisibility analysis. Ideal keyframe management balances two objectives: (1) selecting non-redundant and high-quality frames observing overlapping scene regions to ensure multiview constraints, and (2) maximizing baseline diversity between keyframes to strengthen geometric stability. This strategy minimizes redundancy while preserving reconstruction accuracy, as detailed in our supplementary material.
+
+Selection and Management
+
+Keyframe selection is governed by a unified scoring function that consolidates three critical criteria: covisibility, baseline span, and motion stability. For each tracked frame i𝑖iitalic_i, the keyframe score sisubscript𝑠𝑖s_{i}italic_s start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT is computed as:
+
+si=wcovis⋅(1−IoU𝒢)+wbase⋅‖𝒕i⁢j‖dmed−wmot⋅𝕀⁢(𝒗i>vmax∨𝝎i>ωmax),subscript𝑠𝑖⋅subscript𝑤covis1subscriptIoU𝒢⋅subscript𝑤basenormsubscript𝒕𝑖𝑗subscript𝑑med⋅subscript𝑤mot𝕀subscript𝒗𝑖subscript𝑣maxsubscript𝝎𝑖subscript𝜔max\begin{split}s_{i}&=w_{\text{covis}}\cdot\left(1-\text{IoU}_{\mathcal{G}}%
+\right)\\
+&+w_{\text{base}}\cdot\frac{\|\boldsymbol{t}_{ij}\|}{d_{\text{med}}}\\
+&-w_{\text{mot}}\cdot\mathbb{I}\left(\boldsymbol{v}_{i}>v_{\text{max}}\lor%
+\boldsymbol{\omega}_{i}>\omega_{\text{max}}\right),\end{split}start_ROW start_CELL italic_s start_POSTSUBSCRIPT italic_i end_POSTSUBSCRIPT end_CELL start_CELL = italic_w start_POSTSUBSCRIPT covis end_POSTSUBSCRIPT ⋅ ( 1 - IoU start_POSTSUBSCRIPT 
+
+[… truncated 26314 chars …]

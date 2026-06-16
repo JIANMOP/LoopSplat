@@ -1,0 +1,81 @@
+project_name: "LoopSplat_SLAM_azure_kinect"
+dataset_name: "azure_kinect"
+checkpoint_path: null
+use_wandb: false
+frame_limit: -1
+seed: 0
+mapping:
+  new_submap_every: 50
+  map_every: 1
+  iterations: 100
+  new_submap_iterations: 100
+  new_submap_points_num: 100000
+  new_submap_gradient_points_num: 50000
+  new_frame_sample_size: 30000
+  new_points_radius: 0.0001
+  current_view_opt_iterations: 0.4
+  alpha_thre: 0.6
+  pruning_thre: 0.5
+  submap_using_motion_heuristic: true
+tracking:
+  gt_camera: false
+  w_color_loss: 0.6
+  iterations: 200
+  cam_rot_lr: 0.002
+  cam_trans_lr: 0.01
+  odometry_type: odometer
+  help_camera_initialization: true
+  init_err_ratio: 3
+  odometer_method: hybrid
+  filter_alpha: false
+  filter_outlier_depth: false
+  alpha_thre: 0.98
+  soft_alpha: true
+  mask_invalid_depth: true
+  enable_exposure: false
+
+  # IMU loss function configuration (disabled by default)
+  use_imu: true
+  lambda_imu_trans: 0.01
+  lambda_imu_rot: 0.01
+cam:
+  crop_edge: 50
+  depth_scale: 1000.0
+  # Default resize strategy (can be overridden in scene-specific configs)
+  resize: "redepth"  # Options: "rergb", "redepth", "reall"
+
+  # K4A transformation configuration (disabled by default for safety)
+  use_k4a_transformation: false
+  k4a_transformation_mode: "depth_to_color"  # Options: "depth_to_color", "color_to_depth"
+  preprocessing_strategy: "resize_only"  # Options: "resize_only", "k4a_only", "k4a_then_resize"
+
+  # Default custom resolution for "reall" mode
+  Re_resolution:
+    H: 480
+    W: 640
+lc:
+  min_similarity: 0.5
+  pgo_edge_prune_thres: 0.25
+  voxel_size: 0.02
+  pgo_max_iterations: 500
+  registration:
+    method: gs_reg
+    base_lr: 0.005
+    min_overlap_ratio: 0.2
+    use_render: false
+  min_interval: 3
+  final: false
+keyframing:
+  enable_gi_slam: False       # Set True for GI-SLAM content-aware keyframe selection
+  w_covis: 1.0                # Covisibility weight
+  w_base: 1.0                 # Baseline distance weight
+  w_mot: 2.0                  # Motion blur penalty weight
+  score_threshold: 0.5        # Minimum score to select a keyframe
+  v_max: 0.8                  # Max linear velocity (m/s) before motion blur penalty
+  omega_max: 50.0             # Max angular velocity (deg/s) before motion blur penalty
+  min_keyframe_interval: 1    # Minimum frames between keyframes
+  fps: 30.0                   # Fallback FPS
+gaussian_pyramid:
+  enabled: False              # Set True for Photo-SLAM coarse-to-fine pyramid training
+  num_sub_levels: 2           # Number of sub-resolution levels (2 → 0.25x + 0.5x + full)
+  uses_per_level: 8           # Training iterations at each sub-level before advancing

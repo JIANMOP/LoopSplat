@@ -1,0 +1,64 @@
+project_name: "LoopSplat_SLAM_tumrgbd"
+dataset_name: "tum_rgbd"
+checkpoint_path: null
+use_wandb: false
+frame_limit: -1 # for debugging, set to -1 to disable
+seed: 0
+mapping:
+  new_submap_every: 50
+  map_every: 1
+  iterations: 100
+  new_submap_iterations: 100
+  new_submap_points_num: 100000 
+  new_submap_gradient_points_num: 50000 
+  new_frame_sample_size: 30000 
+  new_points_radius: 0.0001
+  current_view_opt_iterations: 0.4 # What portion of iterations to spend on the current view
+  alpha_thre: 0.6
+  pruning_thre: 0.5
+  submap_using_motion_heuristic: True
+tracking:
+  gt_camera: False
+  w_color_loss: 0.6
+  iterations: 200
+  cam_rot_lr: 0.002
+  cam_trans_lr: 0.01
+  odometry_type: "const_speed"  # gt, const_speed, odometer
+  help_camera_initialization: False # temp option to help const_init
+  init_err_ratio: 5
+  odometer_method: "hybrid" # hybrid or point_to_plane
+  filter_alpha: False
+  filter_outlier_depth: False
+  alpha_thre: 0.98
+  soft_alpha: True
+  mask_invalid_depth: True
+  enable_exposure: False
+cam:
+  crop_edge: 16
+  depth_scale: 5000.0
+lc: 
+  min_similarity: 0.5
+  pgo_edge_prune_thres: 0.25
+  voxel_size: 0.02
+  pgo_max_iterations: 500
+  registration:
+    method: "gs_reg"
+    base_lr: 5.e-3
+    min_overlap_ratio: 0.2
+    use_render: False
+  min_interval: 3
+  final: False
+keyframing:
+  enable_gi_slam: False       # Set True for GI-SLAM content-aware keyframe selection
+  w_covis: 1.0                # Covisibility weight
+  w_base: 1.0                 # Baseline distance weight
+  w_mot: 2.0                  # Motion blur penalty weight
+  score_threshold: 0.5        # Minimum score to select a keyframe
+  v_max: 0.8                  # Max linear velocity (m/s) before motion blur penalty
+  omega_max: 50.0             # Max angular velocity (deg/s) before motion blur penalty
+  min_keyframe_interval: 1    # Minimum frames between keyframes
+  fps: 30.0                   # Fallback FPS (TUM provides timestamps at 30Hz)
+gaussian_pyramid:
+  enabled: False              # Set True for Photo-SLAM coarse-to-fine pyramid training
+  num_sub_levels: 2           # Number of sub-resolution levels (2 → 0.25x + 0.5x + full)
+  uses_per_level: 8           # Training iterations at each sub-level before advancing

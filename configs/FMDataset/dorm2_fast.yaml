@@ -1,0 +1,5 @@
+inherit_from: configs/FMDataset/fm_base.yaml
+data:
+  scene_name: dorm2_fast
+  input_path: data/FMDataset/dorm2/dorm2_fast
+  output_path: output/FMDataset/dorm2_fast/

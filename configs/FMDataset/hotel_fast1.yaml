@@ -1,0 +1,5 @@
+inherit_from: configs/FMDataset/fm_base.yaml
+data:
+  scene_name: hotel_fast1
+  input_path: data/FMDataset/hotel/hotel_fast1
+  output_path: output/FMDataset/hotel_fast1/

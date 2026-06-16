@@ -1,0 +1,81 @@
+project_name: "LoopSplat_SLAM_fm"
+dataset_name: "fm_dataset"
+checkpoint_path: null
+use_wandb: false
+frame_limit: -1
+seed: 0
+
+mapping:
+  new_submap_every: 50
+  map_every: 1
+  iterations: 100
+  new_submap_iterations: 100
+  new_submap_points_num: 100000
+  new_submap_gradient_points_num: 50000
+  new_frame_sample_size: 30000
+  new_points_radius: 0.0001
+  current_view_opt_iterations: 0.4
+  alpha_thre: 0.6
+  pruning_thre: 0.5
+  submap_using_motion_heuristic: true
+
+tracking:
+  gt_camera: false
+  w_color_loss: 0.6
+  iterations: 200
+  cam_rot_lr: 0.002
+  cam_trans_lr: 0.01
+  odometry_type: "odometer"       # FM has no GT — use odometer for init
+  help_camera_initialization: true
+  init_err_ratio: 3
+  odometer_method: "hybrid"
+  filter_alpha: false
+  filter_outlier_depth: false
+  alpha_thre: 0.98
+  soft_alpha: true
+  mask_invalid_depth: true
+  enable_exposure: false
+
+  # IMU loss (FM dataset has IMU — enable for IMU ablation)
+  use_imu: false
+  lambda_imu_trans: 0.01
+  lambda_imu_rot: 0.01
+
+cam:
+  H: 480
+  W: 640
+  fx: 608.446
+  fy: 607.847
+  cx: 331.332
+  cy: 245.549
+  depth_scale: 1000.0            # 0.001m per unit → /1000 = meters
+  use_filtered_depth: false      # set true to use filtered/ depth
+
+keyframing:
+  enable_gi_slam: false
+  w_covis: 1.0
+  w_base: 1.0
+  w_mot: 2.0
+  score_threshold: 0.5
+  v_max: 0.8
+  omega_max: 50.0
+  min_keyframe_interval: 1
+  fps: 30.0
+
+gaussian_pyramid:
+  enabled: false
+  num_sub_levels: 2
+  uses_per_level: 8
+
+lc:
+  min_similarity: 0.5
+  pgo_edge_prune_thres: 0.25
+  voxel_size: 0.02
+  pgo_max_iterations: 500
+  registration:
+    method: "gs_reg"
+    base_lr: 0.005
+    min_overlap_ratio: 0.2
+    use_render: false
+  min_interval: 3
+  final: false

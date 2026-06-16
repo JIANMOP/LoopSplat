@@ -1,0 +1,69 @@
+project_name: "LoopSplat_SLAM_replica"
+dataset_name: "replica"
+checkpoint_path: null
+use_wandb: True
+frame_limit: -1 # for debugging, set to -1 to disable
+seed: 1
+mapping:
+  new_submap_every: 50
+  map_every: 5
+  iterations: 100
+  new_submap_iterations: 1000
+  new_submap_points_num: 600000 
+  new_submap_gradient_points_num: 50000 
+  new_frame_sample_size: -1 
+  new_points_radius: 0.0000001
+  current_view_opt_iterations: 0.4 # What portion of iterations to spend on the current view
+  alpha_thre: 0.6
+  pruning_thre: 0.1 
+  submap_using_motion_heuristic: True
+tracking:
+  gt_camera: False
+  w_color_loss: 0.95
+  iterations: 60
+  cam_rot_lr: 0.0002
+  cam_trans_lr: 0.002
+  odometry_type: "const_speed"  # gt, const_speed, odometer
+  help_camera_initialization: False # temp option to help const_init
+  init_err_ratio: 5
+  odometer_method: "point_to_plane" # hybrid or point_to_plane 
+  filter_alpha: False
+  filter_outlier_depth: True
+  alpha_thre: 0.98
+  soft_alpha: True
+  mask_invalid_depth: False
+  enable_exposure: False
+cam:
+  H: 680
+  W: 1200
+  fx: 600.0
+  fy: 600.0
+  cx: 599.5
+  cy: 339.5
+  depth_scale: 6553.5
+lc: 
+  min_similarity: 0.5
+  pgo_edge_prune_thres: 0.25
+  voxel_size: 0.02
+  pgo_max_iterations: 500
+  registration:
+    method: "gs_reg"
+    base_lr: 1.e-3
+    min_overlap_ratio: 0.1
+    use_render: False
+  min_interval: 2
+  final: False
+keyframing:
+  enable_gi_slam: False       # Set True for GI-SLAM content-aware keyframe selection
+  w_covis: 1.0                # Covisibility weight
+  w_base: 1.0                 # Baseline distance weight
+  w_mot: 2.0                  # Motion blur penalty weight
+  score_threshold: 0.5        # Minimum score to select a keyframe
+  v_max: 0.8                  # Max linear velocity (m/s) before motion blur penalty
+  omega_max: 50.0             # Max angular velocity (deg/s) before motion blur penalty
+  min_keyframe_interval: 1    # Minimum frames between keyframes
+  fps: 30.0                   # Fallback FPS (Replica has no timestamps)
+gaussian_pyramid:
+  enabled: False              # Set True for Photo-SLAM coarse-to-fine pyramid training
+  num_sub_levels: 2           # Number of sub-resolution levels (2 → 0.25x + 0.5x + full)
+  uses_per_level: 8           # Training iterations at each sub-level before advancing
