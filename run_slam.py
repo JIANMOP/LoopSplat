@@ -1,5 +1,9 @@
 import argparse
 import os
+
+# Force non-interactive matplotlib before any other imports
+os.environ.setdefault('MPLBACKEND', 'Agg')
+
 import time
 import uuid
 

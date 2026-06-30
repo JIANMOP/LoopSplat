@@ -1,3 +1,7 @@
+# ── Must be first: force non-interactive backend before ANY import touches mpl ──
+import matplotlib
+matplotlib.use('Agg')
+
 import json
 import os
 import evo
@@ -12,8 +16,6 @@ from evo.core.trajectory import PosePath3D, PoseTrajectory3D
 from evo.tools import plot
 from evo.tools.plot import PlotMode
 from evo.tools.settings import SETTINGS
-import matplotlib
-matplotlib.use('Agg')  # Set non-GUI backend before importing pyplot
 from matplotlib import pyplot as plt
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 
