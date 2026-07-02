@@ -62,6 +62,9 @@ class Loop_closure(object):
         self.submap_path = None
         self.pgo_count = 0
         self.n_loop_edges = 0
+        # Cache for submap data to avoid reloading from disk on every LC trigger.
+        # Key = submap_id, value = {gaussians, kf_ids, images, depths}
+        self._sm_cache = {}
         self.opt = OptimizationParams(ArgumentParser(description="Training script parameters"))
         # Use actual dataset dimensions (account for crop_edge etc.)
         W_actual = self.dataset.width
@@ -119,58 +122,60 @@ class Loop_closure(object):
         Args:
             id (int): submap id to load
         """
+        # ── Cache hit: reuse pre-loaded images, rebuild Cameras with current poses ──
+        if id in self._sm_cache:
+            entry = self._sm_cache[id]
+            gaussians = GaussianModel(sh_degree=0)
+            gaussians.restore_from_params(entry['gaussian_params'], self.opt)
+            submap_cams = []
+            for i, kf_id in enumerate(entry['kf_ids']):
+                c2w_est = self.c2ws_est[kf_id]
+                cam_i = self._make_camera(kf_id, entry['c2w_gts'][i], c2w_est,
+                                          entry['depths'][i], entry['rgbs'][i],
+                                          preloaded=True)
+                submap_cams.append(cam_i)
+            return {
+                "submap_id": id, "gaussians": gaussians,
+                "kf_ids": entry['kf_ids'], "cameras": submap_cams,
+                "kf_desc": self.submap_lc_info[id]['kf_desc'],
+            }
+        # ── Cache miss: load from disk ──────────────────────────────────
         submap_dict = torch.load(self.submap_paths[id], map_location=torch.device(self.device))
         gaussians = GaussianModel(sh_degree=0)
         gaussians.restore_from_params(submap_dict['gaussian_params'], self.opt)
         submap_cams = []
+
+        # Prepare cache entry
+        cached_rgbs = []
+        cached_depths = []
+        cached_c2w_gts = []
         
         for kf_id in submap_dict['submap_keyframes']:
             _, rgb, depth, c2w_gt = self.dataset[kf_id]
             c2w_est = self.c2ws_est[kf_id]
-            T_gt = torch.from_numpy(c2w_gt).to(self.device).inverse()
-            T_est = torch.linalg.inv(c2w_est).to(self.device)
+            cam_i = self._make_camera(kf_id, c2w_gt, c2w_est, depth, rgb)
 
-            # Use actual dataset dimensions (accounting for crop_edge)
-            W_actual = self.dataset.width
-            H_actual = self.dataset.height
-            fx_actual = self.dataset.intrinsics[0, 0]
-            fy_actual = self.dataset.intrinsics[1, 1]
-            cx_actual = self.dataset.intrinsics[0, 2]
-            cy_actual = self.dataset.intrinsics[1, 2]
-            fovx_actual = self.dataset.fovx
-            fovy_actual = self.dataset.fovy
+            # ── Populate cache ─────────────────────────────────
+            if not hasattr(self.dataset, 'get_processed_image_paths'):
+                cached_rgbs.append(cam_i.original_image.cpu())
+                cached_depths.append(torch.as_tensor(depth).cpu())
+                cached_c2w_gts.append(c2w_gt)
 
-            cam_i = Camera(kf_id, None, None,
-                   T_gt,
-                   self.proj_matrix,
-                   fx_actual,
-                   fy_actual,
-                   cx_actual,
-                   cy_actual,
-                   fovx_actual,
-                   fovy_actual,
-                   H_actual,
-                   W_actual)
-            cam_i.R = T_est[:3, :3]
-            cam_i.T = T_est[:3, 3]
-            # Load depth: use processed images when available (AzureKinect),
-            # otherwise fall back to the depth already loaded from dataset
-            if hasattr(self.dataset, 'get_processed_image_paths'):
-                rgb_path, depth_path = self.dataset.get_processed_image_paths(kf_id)
-                depth_data = np.array(Image.open(depth_path)) / self.config['cam']['depth_scale']
-                cam_i.depth = depth_data
-                cam_i.rgb_path = rgb_path
-                cam_i.depth_path = depth_path
-            else:
-                # Standard datasets: use cropped images from dataset[kf_id]
-                # (do NOT set rgb_path — would trigger load_rgb() re-load
-                #  the raw uncropped file, overwriting the cropped image)
-                cam_i.depth = depth
-                cam_i.original_image = (torch.from_numpy(rgb).float().cuda() / 255.0).permute(2, 0, 1)
-                cam_i.compute_grad_mask(self.config)
-            cam_i.config = self.config
             submap_cams.append(cam_i)
-        
+
+        # ── Store in cache for future construct_pose_graph calls ──
+        if not hasattr(self.dataset, 'get_processed_image_paths'):
+            # Move Gaussian params to CPU to keep GPU memory free
+            cpu_params = {k: v.cpu() if hasattr(v, 'cpu') else v
+                          for k, v in submap_dict['gaussian_params'].items()}
+            self._sm_cache[id] = {
+                'gaussian_params': cpu_params,
+                'kf_ids': submap_dict['submap_keyframes'],
+                'rgbs': cached_rgbs,
+                'depths': cached_depths,
+                'c2w_gts': cached_c2w_gts,
+            }
+
         data_dict = {
             "submap_id": id,
             "gaussians": gaussians,
@@ -181,6 +186,45 @@ class Loop_closure(object):
         
         return data_dict
     
+    def _make_camera(self, kf_id, c2w_gt, c2w_est, depth, rgb, preloaded=False):
+        """Create a Camera object. ``preloaded=True`` means rgb is already a
+        (C,H,W) GPU tensor and depth is a numpy array (used from cache)."""
+        T_gt = torch.from_numpy(c2w_gt).to(self.device).inverse()
+        T_est = torch.linalg.inv(c2w_est).to(self.device)
+
+        cam_i = Camera(kf_id, None, None,
+               T_gt,
+               self.proj_matrix,
+               self.dataset.intrinsics[0, 0],
+               self.dataset.intrinsics[1, 1],
+               self.dataset.intrinsics[0, 2],
+               self.dataset.intrinsics[1, 2],
+               self.dataset.fovx,
+               self.dataset.fovy,
+               self.dataset.height,
+               self.dataset.width)
+        cam_i.R = T_est[:3, :3]
+        cam_i.T = T_est[:3, 3]
+
+        if hasattr(self.dataset, 'get_processed_image_paths'):
+            rgb_path, depth_path = self.dataset.get_processed_image_paths(kf_id)
+            depth_data = np.array(Image.open(depth_path)) / self.config['cam']['depth_scale']
+            cam_i.depth = depth_data
+            cam_i.rgb_path = rgb_path
+            cam_i.depth_path = depth_path
+        elif preloaded:
+            # rgb is already a (C,H,W) GPU tensor from cache
+            cam_i.depth = depth
+            cam_i.original_image = rgb.cuda()
+            cam_i.compute_grad_mask(self.config)
+        else:
+            # rgb is a numpy (H,W,3) uint8 from dataset[kf_id]
+            cam_i.depth = depth
+            cam_i.original_image = (torch.from_numpy(rgb).float().cuda() / 255.0).permute(2, 0, 1)
+            cam_i.compute_grad_mask(self.config)
+        cam_i.config = self.config
+        return cam_i
+
     def detect_closure(self, query_id: int, final=False):
         """detect closure given a submap_id, we only match it to the submaps before it
 
