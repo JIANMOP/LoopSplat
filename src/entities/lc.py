@@ -126,7 +126,10 @@ class Loop_closure(object):
         if id in self._sm_cache:
             entry = self._sm_cache[id]
             gaussians = GaussianModel(sh_degree=0)
-            gaussians.restore_from_params(entry['gaussian_params'], self.opt)
+            # Move cached CPU params to GPU before restore
+            gpu_params = {k: v.cuda() if hasattr(v, 'cuda') else v
+                          for k, v in entry['gaussian_params'].items()}
+            gaussians.restore_from_params(gpu_params, self.opt)
             submap_cams = []
             for i, kf_id in enumerate(entry['kf_ids']):
                 c2w_est = self.c2ws_est[kf_id]
