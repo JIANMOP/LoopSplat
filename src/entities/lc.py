@@ -133,8 +133,10 @@ class Loop_closure(object):
             submap_cams = []
             for i, kf_id in enumerate(entry['kf_ids']):
                 c2w_est = self.c2ws_est[kf_id]
+                # depth stored as CPU tensor in cache; convert to numpy
+                depth_np = entry['depths'][i].numpy()
                 cam_i = self._make_camera(kf_id, entry['c2w_gts'][i], c2w_est,
-                                          entry['depths'][i], entry['rgbs'][i],
+                                          depth_np, entry['rgbs'][i],
                                           preloaded=True)
                 submap_cams.append(cam_i)
             return {
