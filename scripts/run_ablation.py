@@ -291,7 +291,7 @@ def main():
         try:
             result = subprocess.run(
                 [sys.executable, runner, str(tmp_config)],
-                cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=14400)
+                cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=21600)
             elapsed = time.time() - t0
             if result.returncode == 0:
                 print(f"      ✅ Completed in {elapsed:.0f}s")

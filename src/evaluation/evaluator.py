@@ -236,7 +236,7 @@ class Evaluator(object):
 
         intrinsic = o3d.camera.PinholeCameraIntrinsic(
             self.width, self.height, self.fx, self.fy, self.cx, self.cy)
-        refined_merged_gaussian_model = refine_global_map(merged_cloud, training_frames, 30000, export_refine_mesh=False,
+        refined_merged_gaussian_model = refine_global_map(merged_cloud, training_frames, 10000, export_refine_mesh=False,
                                                           output_dir=self.checkpoint_path, len_frames=len_frames, 
                                                           o3d_intrinsic=intrinsic)
         ply_path = self.checkpoint_path / \

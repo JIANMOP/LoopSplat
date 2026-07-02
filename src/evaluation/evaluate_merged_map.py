@@ -63,18 +63,16 @@ def merge_submaps(submaps_paths: list, radius: float = 0.0001, device: str = "cu
     Returns:
         o3d.geometry.PointCloud: merged point cloud
     """
+    # Free residual GPU memory from SLAM before allocating FAISS index
+    if device == "cuda":
+        torch.cuda.empty_cache()
     pts_index = faiss.IndexFlatL2(3)
     if device == "cuda":
-        try:
-            pts_index = faiss.index_cpu_to_gpu(
-                faiss.StandardGpuResources(),
-                0,
-                faiss.IndexIVFFlat(faiss.IndexFlatL2(3), 3, 500, faiss.METRIC_L2))
-            pts_index.nprobe = 5
-        except RuntimeError as e:
-            print(f"GPU FAISS OOM, falling back to CPU: {e}")
-            device = "cpu"
-            pts_index = faiss.IndexFlatL2(3)
+        pts_index = faiss.index_cpu_to_gpu(
+            faiss.StandardGpuResources(),
+            0,
+            faiss.IndexIVFFlat(faiss.IndexFlatL2(3), 3, 500, faiss.METRIC_L2))
+        pts_index.nprobe = 5
     merged_pts = []
     for submap_path in tqdm(submaps_paths, desc="Merging submaps"):
         gaussian_params = torch.load(submap_path)["gaussian_params"]
