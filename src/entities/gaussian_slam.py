@@ -206,6 +206,21 @@ class GaussianSLAM(object):
             if frame_id - last_kf < self._gi_min_interval:
                 return False
 
+        # ── Safety: force keyframe if gap is too large ───────────────
+        # Prevents model starvation when GI-KF score is consistently below
+        # threshold (e.g. fast motion + odometer noise = perpetual motion
+        # penalty).  The default map_every=1 would map every frame; this
+        # safety net ensures we map at least every 30 frames.
+        _max_gap = max(30, self._gi_min_interval * 10)
+        if len(self.mapping_frame_ids) > 0:
+            last_kf = self.mapping_frame_ids[-1]
+            if frame_id - last_kf > _max_gap:
+                print(f"\n⚠️  GI-SLAM SAFETY: frame {frame_id} forced as keyframe "
+                      f"(gap={frame_id - last_kf} > {_max_gap}, last_kf={last_kf}). "
+                      f"GI-KF threshold too strict for this dataset.")
+                return True
+        # ──────────────────────────────────────────────────────────────
+
         # ── Velocity estimation ──────────────────────────────────────
         linear_vel, angular_vel = 0.0, 0.0
 
