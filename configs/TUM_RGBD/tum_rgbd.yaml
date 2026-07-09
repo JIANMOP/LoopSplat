@@ -46,6 +46,7 @@ lc:
     base_lr: 5.e-3
     min_overlap_ratio: 0.2
     use_render: False
+    gsr_max_iters: 100
   min_interval: 3
   final: False
 keyframing:

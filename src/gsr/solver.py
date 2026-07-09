@@ -13,7 +13,8 @@ class CustomPipeline:
     compute_cov3D_python = False
     debug = False
 
-def viewpoint_localizer(viewpoint, gaussians, base_lr: float=1e-3):
+def viewpoint_localizer(viewpoint, gaussians, base_lr: float=1e-3,
+                        max_iters: int = 100):
     """Localize a single viewpoint in a 3DGS
 
     Args:
@@ -68,7 +69,7 @@ def viewpoint_localizer(viewpoint, gaussians, base_lr: float=1e-3):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", factor=0.98, patience=5, verbose=False)
     
     loss_log = []
-    opt_iterations = 100
+    opt_iterations = max_iters
     for tracking_itr in range(opt_iterations):
         optimizer.zero_grad()
         render_pkg = render(
@@ -152,6 +153,7 @@ def gaussian_registration(src_dict, tgt_dict, config: dict, visualize=False):
     
     pipe = CustomPipeline()
     bg_color = torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda", requires_grad=False)
+    max_iters = config.get("gsr_max_iters", 100)
     # per-cam
     for viewpoint in src_view_list:
         
@@ -162,7 +164,8 @@ def gaussian_registration(src_dict, tgt_dict, config: dict, visualize=False):
             viewpoint.depth = render_pkg['depth'].squeeze().detach().cpu().numpy()
         else:
             viewpoint.load_rgb()
-        converged, pred_tsfm, residual, loss_log = viewpoint_localizer(viewpoint, tgt_3dgs, config["base_lr"])
+        converged, pred_tsfm, residual, loss_log = viewpoint_localizer(
+            viewpoint, tgt_3dgs, config["base_lr"], max_iters)
         pred_list.append(pred_tsfm)
         residual_list.append(residual)
         converged_list.append(converged)
@@ -175,7 +178,8 @@ def gaussian_registration(src_dict, tgt_dict, config: dict, visualize=False):
             viewpoint.depth = render_pkg['depth'].squeeze().detach().cpu().numpy()
         else:
             viewpoint.load_rgb()
-        converged, pred_tsfm, residual, loss_log = viewpoint_localizer(viewpoint, src_3dgs, config["base_lr"])
+        converged, pred_tsfm, residual, loss_log = viewpoint_localizer(
+            viewpoint, src_3dgs, config["base_lr"], max_iters)
         pred_list.append(pred_tsfm.inverse())
         residual_list.append(residual)
         converged_list.append(converged)
