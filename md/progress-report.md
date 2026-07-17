@@ -60,14 +60,10 @@ C1_2（FM dorm1_fast1 场景，单独使用 GI-KF）出现了预期之外的现�
 
 ---
 
-## 附录：代码修改概要
-
-本次项目在 LoopSplat 原始代码基础上共修改和新增了约二十个文件，涉及策略实现、数据集适配、实验管理和故障修复四方面。
 
 策略实现方面，GI-KF 关键帧选择在 mapper_utils.py 中新增了五个计算高斯可见性的工具函数，并在 gaussian_slam.py 中新增了两个方法（评分函数和关键帧注册函数）并修改了主循环流程，配置文件新增了 keyframing 配置段。Pyramid 多尺度训练在 mapper_utils.py 中新增了四个金字塔构建工具函数，在 mapper.py 中修改了 map 和 optimize_submap 两个方法实现按分辨率级别逐步训练的逻辑，配置文件新增了 gaussian_pyramid 配置段。
 
 数据集适配方面，新增了整个 datasets_fm.py 实现了 FM 数据集的加载，包括时间戳解析、IMU 数据读取和图像关联。在 datasets.py 中注册了 fm_dataset 分支。新建了四个 FM 场景配置文件。
 
-实验管理方面，编写了 run_ablation.py 自动化运行全部四十四组实验，支持断点续跑、单实验运行和分组运行。编写了 aggregate_results.py 自动扫描输出目录并生成 Markdown 对比表格。编写了三份文档：GI-SLAM 策略集成指南、Photo-SLAM 策略集成指南和完整消融实验运行指南。
 
 故障修复方面，修复了 TUM RGB-D 数据集在 loop closure 的 submap_loader 中因缺少 get_processed_image_paths 方法导致的崩溃，以及后续的 Camera 尺寸不匹配和图片加载格式不一致问题。修复了评估器在无 submaps 目录或无真值位姿时的空值保护。修复了 FAISS 在 GPU 显存不足时的降级处理。修复了 evo 库在无图形界面的服务器上因 Qt5Agg 后端导致的启动崩溃。优化了 loop closure 中 construct_pose_graph 重复从磁盘加载全部子图的问题，通过加入子图数据缓存机制将磁盘读取和图片加载从多次降到一次。
