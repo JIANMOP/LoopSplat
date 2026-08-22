@@ -25,7 +25,10 @@ from src.utils.experiment_utils import discover_completed_runs
 SCENE_LABELS = {
     "A1": "TUM fr1/desk", "A2": "TUM fr1/desk2", "A3": "TUM fr1/room",
     "A4": "TUM fr2/xyz", "A5": "TUM fr3/long",
-    "B1": "Azure 144_5FPS_720p_IMU",
+    "R1": "Replica office0", "R2": "Replica office1",
+    "R3": "Replica office2", "R4": "Replica office3",
+    "R5": "Replica office4", "R6": "Replica room0",
+    "R7": "Replica room1", "R8": "Replica room2",
     "C1": "FM dorm1_fast1", "C2": "FM dorm2_fast", "C3": "FM hotel_fast1",
 }
 
@@ -38,7 +41,11 @@ STRATEGY_LABELS_BC = {
 }
 
 # Which experiments belong to each scene (built from scene + strategy)
-SCENE_IDS = ["A1","A2","A3","A4","A5","B1","C1","C2","C3"]
+SCENE_IDS = [
+    "A1", "A2", "A3", "A4", "A5",
+    "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8",
+    "C1", "C2", "C3",
+]
 STRATEGY_SUFFIXES_A = ["_0","_1","_2","_3"]
 STRATEGY_SUFFIXES_BC = ["_0","_1","_2","_3","_4","_5"]
 FORMAL_SEEDS = {0, 1, 2}
@@ -83,7 +90,7 @@ def validate_formal_run_group(records, experiment_id):
 
 
 def strategy_spec(scene_id):
-    if scene_id.startswith(("A", "B")):
+    if scene_id.startswith(("A", "R")):
         return STRATEGY_SUFFIXES_A, STRATEGY_LABELS_A
     return STRATEGY_SUFFIXES_BC, STRATEGY_LABELS_BC
 
@@ -280,12 +287,11 @@ def render_markdown(results: dict) -> str:
         lines.append(scene_table(sid, show_ate=True))
         lines.append("")
 
-    # ── Group B: AzureKinect ──
-    lines.append(
-        "## Group B — AzureKinect (uncalibrated IMU, no GT poses)\n")
-    for sid in ["B1"]:
+    # ── Group R: Replica ──
+    lines.append("## Group R — Replica (no IMU)\n")
+    for sid in ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"]:
         lines.append(f"### {sid}: {SCENE_LABELS[sid]}\n")
-        lines.append(scene_table(sid, show_ate=False))
+        lines.append(scene_table(sid, show_ate=True))
         lines.append("")
 
     # ── Group C: FMDataset ──

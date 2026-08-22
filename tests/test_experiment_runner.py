@@ -312,12 +312,17 @@ def test_formal_matrix_replaces_azure_with_eight_replica_scenes():
         assert merged["evaluation"]["run_reconstruction"] is False
 
 
-def test_azure_report_uses_rgbd_only_matrix_without_trajectory_columns():
+def test_replica_report_uses_four_strategy_matrix_with_trajectory_columns():
     results = {
-        f"B1_{suffix}": {"error": "no results"}
-        for suffix in range(6)
+        f"R{scene}_{suffix}": {"error": "no results"}
+        for scene in range(1, 9)
+        for suffix in range(4)
     }
-    results["B1_0"] = {
+    results["R1_0"] = {
+        "seed_count": 3,
+        "ate_rmse_cm": 1.2,
+        "rpe_translation_cm": 0.8,
+        "rpe_rotation_deg": 0.3,
         "psnr": 20.0,
         "ssim": 0.8,
         "lpips": 0.2,
@@ -329,19 +334,24 @@ def test_azure_report_uses_rgbd_only_matrix_without_trajectory_columns():
     }
 
     report = render_markdown(results)
-    azure_section = report.split("## Group B", 1)[1].split(
+    replica_section = report.split("## Group R", 1)[1].split(
         "## Group C", 1)[0]
 
-    assert "+IMU" not in azure_section
-    assert "+ALL" not in azure_section
-    assert "ATE↓" not in azure_section
-    assert "RPE-t↓" not in azure_section
-    assert "KF↓" in azure_section
-    assert "Submaps↓" in azure_section
-    assert "SLAM s↓" in azure_section
-    assert "Peak GiB↓" in azure_section
-    assert "12" in azure_section
-    assert "2.50" in azure_section
+    assert "AzureKinect" not in report
+    assert all(
+        f"### R{scene}: Replica " in replica_section
+        for scene in range(1, 9))
+    assert "+IMU" not in replica_section
+    assert "+ALL" not in replica_section
+    assert "ATE↓" in replica_section
+    assert "RPE-t↓" in replica_section
+    assert "RPE-R↓" in replica_section
+    assert "KF↓" in replica_section
+    assert "Submaps↓" in replica_section
+    assert "SLAM s↓" in replica_section
+    assert "Peak GiB↓" in replica_section
+    assert "1.20" in replica_section
+    assert "2.50" in replica_section
 
 
 def test_run_statistics_count_unique_keyframes_and_submaps():
