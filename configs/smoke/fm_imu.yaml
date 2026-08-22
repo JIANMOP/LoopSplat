@@ -20,4 +20,3 @@ gaussian_pyramid:
   enabled: false
 evaluation:
   observed_view_stride: 2
-

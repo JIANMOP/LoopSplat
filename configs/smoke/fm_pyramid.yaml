@@ -22,4 +22,3 @@ gaussian_pyramid:
   uses_per_level: 2
 evaluation:
   observed_view_stride: 2
-
