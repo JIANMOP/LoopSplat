@@ -262,7 +262,7 @@ def main():
     parser.add_argument("--experiment", type=str, default=None,
                         help="Run single experiment, e.g. A1_0")
     parser.add_argument("--group", type=str, default=None,
-                        help="Run all experiments in group A/B/C")
+                        help="Run all experiments in group A/R/C")
     args = parser.parse_args()
 
     experiments = EXPERIMENTS

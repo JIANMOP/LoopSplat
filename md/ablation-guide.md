@@ -1,264 +1,358 @@
-# 消融实验指南
+# LoopSplat 实验与消融指南
 
-> LoopSplat — GI-SLAM + Photo-SLAM 消融实验完整运行流程
+本文档对应当前代码中的三项增量策略：IMU 跟踪约束、Gaussian Pyramid（高斯金字塔）和 GI-KF（关键帧选择）。正式实验只使用 TUM RGB-D、Replica 和 FMDataset；自采 Azure Kinect 序列只用于定性展示和工程验证，不进入消融表。
 
----
+## 1. 投稿实验边界
 
-## 1. 环境准备
+### 1.1 正式实验矩阵
+
+| 组 | 数据集 | 场景数 | 策略数 | 随机种子 | 正式运行数 | 轨迹 GT |
+|---|---:|---:|---:|---:|---:|---:|
+| A | TUM RGB-D | 5 | 4 | 3 | 60 | 有 |
+| R | Replica | 8 | 4 | 3 | 96 | 有 |
+| C | FMDataset | 3 | 6 | 3 | 54 | 无 |
+| 合计 | 3 个数据集 | 16 | 70 个配置 | 3 | 210 | — |
+
+每个配置固定运行 `seed=0,1,2`，结果报告均值和样本标准差。不要用单次运行替代三随机种子正式结果。
+
+### 1.2 策略编号
+
+TUM 和 Replica 没有 IMU，使用相同的四策略：
+
+| 后缀 | 名称 | GI-KF | Pyramid | IMU |
+|---|---|---:|---:|---:|
+| `_0` | Baseline | 关 | 关 | 关 |
+| `_1` | +GI-KF | 开 | 关 | 关 |
+| `_2` | +Pyramid | 关 | 开 | 关 |
+| `_3` | +KF+Pyramid | 开 | 开 | 关 |
+
+FMDataset 有相机—IMU标定，使用六策略：
+
+| 后缀 | 名称 | GI-KF | Pyramid | IMU |
+|---|---|---:|---:|---:|
+| `_0` | Baseline | 关 | 关 | 关 |
+| `_1` | +IMU | 关 | 关 | 开 |
+| `_2` | +GI-KF | 开 | 关 | 关 |
+| `_3` | +Pyramid | 关 | 开 | 关 |
+| `_4` | +KF+Pyramid | 开 | 开 | 关 |
+| `_5` | +ALL | 开 | 开 | 开 |
+
+### 1.3 场景编号
+
+| 组 | 编号与场景 |
+|---|---|
+| A | A1 `fr1/desk`；A2 `fr1/desk2`；A3 `fr1/room`；A4 `fr2/xyz`；A5 `fr3/long_office_household` |
+| R | R1–R5 `office0`–`office4`；R6–R8 `room0`–`room2` |
+| C | C1 `dorm1_fast1`；C2 `dorm2_fast`；C3 `hotel_fast1` |
+
+### 1.4 Azure 的定位
+
+Azure Kinect 序列是自采数据，可在论文实验设置或定性结果中简要说明，用于证明系统能够处理真实传感器数据。它不参与正式消融，原因如下：
+
+- 没有真值位姿，不能报告 ATE/RPE；
+- 当前 IMU 约为 5 Hz，且数据中没有可靠的相机—IMU外参，不能把它当作 IMU 策略的严谨验证；
+- RGB 与 depth 来自不同相机，必须先用双相机内参、畸变和 `T_color_depth` 做几何注册，不能只缩放图像。
+
+正式的 IMU 消融仅在 FMDataset 上完成。旧的 `rergb` 单场景配置因路径失效且不满足几何配准要求已移除；论文与冒烟统一使用经过标定配准的 `configs/AzureKinect/144_5FPS_720p_IMU.yaml`。
+
+## 2. 数据与环境检查
+
+从仓库根目录执行：
 
 ```bash
 conda activate loop_splat
-cd /data/p/.pfy/LoopSplat
-python -c "import torch; print(torch.cuda.is_available())"
+cd /root/autodl-tmp/LoopSplat
+python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+git status --short
+git rev-parse HEAD
 ```
 
----
+正式运行要求：CUDA 可用、Git 工作区为空、所有实验使用同一个提交、同一 GPU/CUDA 环境。运行器会把这些信息写入 `manifest.json`，工作区不干净时会拒绝正式运行。
 
-## 2. 实验设计
+数据应位于：
 
-### 三个数据集组
+```text
+data/TUM_RGBD-SLAM/rgbd_dataset_freiburg1_desk/
+data/Replica/office0/results/             # frame*.jpg + depth*.png
+data/Replica/office0/traj.txt
+data/FMDataset/dorm1/dorm1_fast1/
+data/AzureKinect/144_5FPS_720p_IMU/
+```
 
-| 组 | 数据集 | IMU | GT 位姿 | 评估指标 |
-|---|--------|-----|---------|---------|
-| **A** | TUM RGB-D（5个场景） | ❌ | ✅ | ATE + PSNR + SSIM + LPIPS + Depth L1 |
-| **B** | AzureKinect（1个场景） | ✅ | ✅ | ATE + PSNR + SSIM + LPIPS + Depth L1 |
-| **C** | FMDataset（3个场景） | ✅ | ❌ | PSNR + SSIM + LPIPS + Depth L1 |
+Replica 八个场景均应有 2000 对 RGB-D 图像和 2000 行轨迹：
 
-### 策略编号
+```bash
+for scene in office0 office1 office2 office3 office4 room0 room1 room2; do
+  printf '%-8s rgb=%s depth=%s traj=%s\n' "$scene" \
+    "$(find "data/Replica/$scene/results" -maxdepth 1 -name 'frame*.jpg' | wc -l)" \
+    "$(find "data/Replica/$scene/results" -maxdepth 1 -name 'depth*.png' | wc -l)" \
+    "$(wc -l < "data/Replica/$scene/traj.txt")"
+done
+```
 
-**A 组（无 IMU，2 策略 → 4 组合）：**
+Azure 应包含 `color/`、`depth/`、`frame_info.json`、`imu.txt` 和 `camera_parameters.json`。第一次运行会创建 `processed_images/redepth/`；其中 `processing_metadata.json` 记录配准所用标定，标定或预处理方式变化时缓存会自动重建。
 
-| 编号 | 名称 | GI-KF | Pyramid |
-|------|------|-------|---------|
-| `_0` | Baseline | ❌ | ❌ |
-| `_1` | +GI-KF | ✅ | ❌ |
-| `_2` | +Pyramid | ❌ | ✅ |
-| `_3` | +KF+Pyramid | ✅ | ✅ |
+先验证代码：
 
-**B / C 组（有 IMU，3 策略 → 6 组合）：**
+```bash
+python -m pytest -q
+python -m compileall -q src scripts run_slam.py run_slam_azure.py
+```
 
-| 编号 | 名称 | IMU | GI-KF | Pyramid |
-|------|------|-----|-------|---------|
-| `_0` | Baseline | ❌ | ❌ | ❌ |
-| `_1` | +IMU | ✅ | ❌ | ❌ |
-| `_2` | +GI-KF | ❌ | ✅ | ❌ |
-| `_3` | +Pyramid | ❌ | ❌ | ✅ |
-| `_4` | +KF+Pyramid | ❌ | ✅ | ✅ |
-| `_5` | +ALL | ✅ | ✅ | ✅ |
+## 3. 正式运行前的 GPU 冒烟
 
-### 场景清单
+冒烟配置只处理 6–8 帧，用来验证代码路径和输出契约，不能用于论文表格。
 
-**A 组 — TUM RGB-D（5 场景 × 4 策略 = 20 实验）：**
+```bash
+export DISABLE_WANDB=true
 
-| 编号 | 场景 | 帧数 | 描述 |
-|------|------|------|------|
-| A1 | freiburg1_desk | ~592 | 桌面场景 |
-| A2 | freiburg1_desk2 | ~600 | 桌面场景2 |
-| A3 | freiburg1_room | ~1300 | 房间 |
-| A4 | freiburg2_xyz | ~3600 | 大范围运动 |
-| A5 | freiburg3_long | ~2500 | 长走廊 |
+# FM：分别验证基线、IMU、Pyramid 和 GI-KF
+python run_slam.py configs/smoke/fm_baseline.yaml
+python run_slam.py configs/smoke/fm_imu.yaml
+python run_slam.py configs/smoke/fm_pyramid.yaml
+python run_slam.py configs/smoke/fm_keyframing.yaml
 
-**B 组 — AzureKinect（1 场景 × 6 策略 = 6 实验）：**
+# 有 GT 的公开数据
+python run_slam.py configs/smoke/tum_baseline.yaml
+python run_slam.py configs/smoke/replica_baseline.yaml
 
-| 编号 | 场景 | 描述 |
-|------|------|------|
-| B1 | 144_5FPS_720p_IMU | 自采集，含 IMU |
+# 自采 Azure：只验证标定 RGB-D 链路，不开 IMU
+python run_slam_azure.py configs/smoke/azure_baseline.yaml
+```
 
-**C 组 — FMDataset（3 场景 × 6 策略 = 18 实验）：**
+一次合格的冒烟至少应满足：
 
-FMDataset 是 RGB-D + IMU 数据集，由 Azure Kinect DK 在真实室内环境中采集。**无真值位姿**，因此 C 组评估仅基于渲染指标（PSNR / SSIM / LPIPS / Depth L1），不计算 ATE。
+- 进程退出码为 0，`status.json` 的 `state` 为 `succeeded`；
+- `rendering_metrics_observed_view.json` 中 PSNR/SSIM/LPIPS/Depth-L1 均为有限值；
+- TUM/Replica 的 `trajectory_status.json` 为 `available`，并生成 ATE/RPE；
+- Azure 的轨迹状态应为 `skipped_no_ground_truth`，这是预期结果；
+- IMU 冒烟的 `imu_tracking_summary.yaml` 至少有一个 `valid: true` 的预测；
+- Pyramid 冒烟的 `gaussian_pyramid_summary.yaml` 中 `enabled: true` 且 `optimizer_step_count > 0`；
+- GI-KF 冒烟生成非空的 `keyframe_decisions.jsonl`。
 
-| 编号 | 场景 | 帧数 | IMU 样本 | 时长 | 场景特征 |
-|------|------|------|---------|------|---------|
-| C1 | dorm1_fast1 | 869 | 5961 | ~29s | 学生宿舍，快速移动，桌椅/床铺/杂物，纹理丰富 |
-| C2 | dorm2_fast | 823 | 5658 | ~27s | 学生宿舍 2 号，快速移动，布局不同，纹理丰富 |
-| C3 | hotel_fast1 | 648 | 4488 | ~22s | 酒店房间，快速移动，家具/窗帘/地毯，纹理中等 |
+冒烟结果位于：
 
-FM 数据集的三场景均选择 **fast 速度**（相机移动较快），这样：
-- 更能体现 **IMU 损失**在快速运动下的跟踪鲁棒性优势（视觉跟踪在快速运动时容易丢失）
-- 更能体现 **GI-KF 关键帧选择**的运动模糊过滤效果
-- **Pyramid** 在纹理丰富的宿舍场景可能提升 PSNR
+```text
+output/smoke/<scene_name>/seed_<seed>/<UTC时间>_<随机后缀>/
+```
 
-**C 组完整实验清单：**
+## 4. 生成和运行正式矩阵
 
-| 实验 ID | 场景 | 策略 | IMU | GI-KF | Pyramid | 验证目标 |
-|---------|------|------|-----|-------|---------|---------|
-| **C1_0** | dorm1_fast1 | Baseline | ❌ | ❌ | ❌ | 快速运动下的视觉跟踪基线 |
-| **C1_1** | dorm1_fast1 | +IMU | ✅ | ❌ | ❌ | **IMU 单独贡献（快速运动下最关键）** |
-| **C1_2** | dorm1_fast1 | +GI-KF | ❌ | ✅ | ❌ | GI-KF 在富纹理场景的关键帧效率 |
-| **C1_3** | dorm1_fast1 | +Pyramid | ❌ | ❌ | ✅ | Pyramid 在富纹理场景的渲染提升 |
-| **C1_4** | dorm1_fast1 | +KF+Pyramid | ❌ | ✅ | ✅ | 两个非 IMU 策略的组合 |
-| **C1_5** | dorm1_fast1 | +ALL | ✅ | ✅ | ✅ | 三策略全开，与 B1_5 跨数据集对比 |
-| **C2_0** | dorm2_fast | Baseline | ❌ | ❌ | ❌ | 不同宿舍场景的基线 |
-| **C2_1** | dorm2_fast | +IMU | ✅ | ❌ | ❌ | IMU 在不同场景的一致性 |
-| **C2_2** | dorm2_fast | +GI-KF | ❌ | ✅ | ❌ | GI-KF 跨场景泛化 |
-| **C2_3** | dorm2_fast | +Pyramid | ❌ | ❌ | ✅ | Pyramid 跨场景泛化 |
-| **C2_4** | dorm2_fast | +KF+Pyramid | ❌ | ✅ | ✅ | 组合策略跨场景 |
-| **C2_5** | dorm2_fast | +ALL | ✅ | ✅ | ✅ | 全策略跨场景 |
-| **C3_0** | hotel_fast1 | Baseline | ❌ | ❌ | ❌ | 酒店场景基线（纹理中等，挑战不同） |
-| **C3_1** | hotel_fast1 | +IMU | ✅ | ❌ | ❌ | IMU 在中等纹理场景的效果 |
-| **C3_2** | hotel_fast1 | +GI-KF | ❌ | ✅ | ❌ | GI-KF 在酒店布局下的表现 |
-| **C3_3** | hotel_fast1 | +Pyramid | ❌ | ❌ | ✅ | Pyramid 在中等纹理的提升 |
-| **C3_4** | hotel_fast1 | +KF+Pyramid | ❌ | ✅ | ✅ | 组合策略酒店场景 |
-| **C3_5** | hotel_fast1 | +ALL | ✅ | ✅ | ✅ | 全策略酒店场景 |
-
-**总计：44 个实验**
-
----
-
-## 3. 快速开始
-
-### 3.1 预览实验计划
+### 4.1 预览，不启动 SLAM
 
 ```bash
 python scripts/run_ablation.py --dry-run
 ```
 
-### 3.2 先跑一个基线验证
+正确输出应为 `210` 个作业，即 `70 configurations × 3 seeds`。分组预览：
 
 ```bash
-# A组基线（TUM fr1/desk，最快跑完）
+python scripts/run_ablation.py --dry-run --group A   # 20×3 = 60
+python scripts/run_ablation.py --dry-run --group R   # 32×3 = 96
+python scripts/run_ablation.py --dry-run --group C   # 18×3 = 54
+```
+
+### 4.2 先完成代表性单配置
+
+每条命令默认运行三个种子：
+
+```bash
 python scripts/run_ablation.py --experiment A1_0
+python scripts/run_ablation.py --experiment R1_0
+python scripts/run_ablation.py --experiment C1_5
 ```
 
-跑完检查输出：
+如果只想诊断某个种子，可以临时使用 `--seeds 0`，但该结果不能被正式汇总器当成完整实验：
 
 ```bash
-ls output/ablation/A1_0/*/
-cat output/ablation/A1_0/*/ate_aligned.json
+python scripts/run_ablation.py --experiment C1_1 --seeds 0
 ```
 
-### 3.3 按场景跑
+### 4.3 分组或全量运行
+
+推荐按组运行，便于发现数据或显存问题：
 
 ```bash
-# 跑 A1 的全部 4 个策略
-python scripts/run_ablation.py --experiment A1_0
-python scripts/run_ablation.py --experiment A1_1
-python scripts/run_ablation.py --experiment A1_2
-python scripts/run_ablation.py --experiment A1_3
-
-# 跑 B1 的全部 6 个策略
-python scripts/run_ablation.py --experiment B1_0
-python scripts/run_ablation.py --experiment B1_1
-# ... B1_2 ~ B1_5
+python scripts/run_ablation.py --group A --seeds 0 1 2
+python scripts/run_ablation.py --group R --seeds 0 1 2
+python scripts/run_ablation.py --group C --seeds 0 1 2
 ```
 
-### 3.4 批量跑
+也可以一次提交全部 210 次：
 
 ```bash
-# 跑全部 44 个实验（估计 8-12 小时）
-python scripts/run_ablation.py
-
-# 只跑 A 组（20 个，~5 小时）
-python scripts/run_ablation.py --group A
-
-# 中断后继续（自动跳过已完成）
-python scripts/run_ablation.py
+python scripts/run_ablation.py --seeds 0 1 2
 ```
 
-### 3.5 汇总结果
+后台运行示例：
 
 ```bash
-# Markdown 表格
-python scripts/aggregate_results.py --format markdown
+mkdir -p logs
+nohup python scripts/run_ablation.py --group R --seeds 0 1 2 \
+  > logs/ablation-replica.log 2>&1 &
+tail -f logs/ablation-replica.log
+```
 
-# 终端快速查看
+不要预估固定“几小时跑完”。先记录一个完整场景各策略三个种子的实测时间，再按剩余配置数估算；场景帧数、关键帧数量和闭环注册都会显著影响耗时。
+
+### 4.4 中断续跑与强制重跑
+
+重复执行同一命令会自动跳过“种子、完整配置哈希、Git 提交均一致”的成功结果：
+
+```bash
+python scripts/run_ablation.py --group R --seeds 0 1 2
+```
+
+`--force` 会创建新的带时间戳目录，不会覆盖旧结果：
+
+```bash
+python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
+```
+
+如果代码提交、配置或随机种子发生变化，运行器不会把旧结果误认为可续跑结果。正式矩阵开始后不要中途改配置；如必须修复代码，应重新冻结提交并重跑所有受影响的对比项。
+
+## 5. 输出文件与真实性审计
+
+正式输出目录结构为：
+
+```text
+output/ablation/<experiment_id>/seed_<seed>/<UTC时间>_<随机后缀>/
+```
+
+核心文件：
+
+| 文件 | 用途 |
+|---|---|
+| `config.input.yaml` | 消融运行器生成的输入配置 |
+| `config.yaml` | SLAM 实际保存的最终配置 |
+| `manifest.json` | 提交、配置哈希、命令、GPU/CUDA、请求/生效策略 |
+| `status.json` | 成功/失败、帧数、关键帧数、子图数、耗时、显存峰值 |
+| `run.log` | 完整标准输出和错误日志 |
+| `effective_features.yaml` | 实际启用的 IMU/Pyramid/GI-KF |
+| `imu_tracking_summary.yaml` | IMU 样本、预测有效性和提交次数 |
+| `gaussian_pyramid_summary.yaml` | Pyramid 是否生效及优化步数 |
+| `keyframe_decisions.jsonl` | GI-KF 每帧的选择记录，仅 GI-KF 开启时要求 |
+| `evaluation_protocol.json` | 固定评估帧、地图来源、是否全局细化 |
+| `evaluation_frame_ids.json` | 固定观测视角帧号 |
+| `rendering_metrics_observed_view.json` | PSNR/SSIM/LPIPS/Depth-L1 |
+| `trajectory_status.json` | 轨迹指标可用或无 GT 跳过 |
+| `ate_aligned.json`、`rpe.json`、`trajectory_metrics.json` | 有 GT 数据的 ATE/RPE |
+| `global_refinement_status.json` | 明确记录正式评估未做额外全局细化 |
+
+审计时不要只看 `effective_features.yaml`。正式运行的完整性检查还会验证：
+
+- `manifest.json` 中 `git_dirty=false`，提交、GPU、CUDA 和配置哈希存在；
+- 请求策略与实际策略完全一致；
+- 评估帧号非空、唯一、有序，manifest 与保存文件一致；
+- 正式地图统一来自未额外细化的全局高斯拼接；
+- IMU 开启时至少一条有效预测，且数据异常行没有超过阈值；
+- Pyramid 开启时确实执行了优化步；
+- GI-KF 开启时确实记录了关键帧决策；
+- 指标有限且深度有效像素数大于 0；
+- 有 GT 时 ATE/RPE 文件齐全，无 GT 时状态明确为跳过。
+
+检查单个运行目录：
+
+```bash
+python -c "from src.utils.experiment_utils import formal_outputs_complete; print(formal_outputs_complete('output/ablation/R1_0/seed_0/<run-dir>'))"
+```
+
+输出必须为 `True`。把 `<run-dir>` 替换为实际目录名。
+
+## 6. 汇总结果
+
+终端检查：
+
+```bash
 python scripts/aggregate_results.py --format terminal
 ```
 
----
-
-## 4. 实验策略解读
-
-### 4.1 A 组（TUM，无 IMU）— 回答 GI-KF 和 Pyramid 各自的贡献
-
-| 对比 | 计算 | 回答的问题 |
-|------|------|-----------|
-| A1_1 vs A1_0 | +GI-KF - Baseline | GI-KF 单独有用吗？ |
-| A1_2 vs A1_0 | +Pyramid - Baseline | Pyramid 单独有用吗？ |
-| A1_3 vs A1_0 | +Both - Baseline | 两者叠加效果？ |
-| A1_3 vs A1_1+A1_2 | 实际 vs 单独贡献和 | 叠加还是互斥？ |
-
-**A2-A5 重复上述模式**，验证跨场景泛化。
-
-### 4.2 B 组（AzureKinect，有 IMU）— 回答 IMU 的贡献
-
-| 对比 | 计算 | 回答的问题 |
-|------|------|-----------|
-| B1_1 vs B1_0 | +IMU - Baseline | IMU 单独有用吗？ |
-| B1_2 vs B1_0 | +GI-KF - Baseline | GI-KF 单独有用吗？ |
-| B1_3 vs B1_0 | +Pyramid - Baseline | Pyramid 单独有用吗？ |
-| B1_4 vs B1_0 | +KF+Pyr - Baseline | 非 IMU 策略的组合贡献 |
-| B1_5 vs B1_4 | +ALL - +KF+Pyr | **在 KF+Pyr 基础上加 IMU 的增量** |
-| B1_5 vs B1_1 | +ALL - +IMU | 在 IMU 基础上加 KF+Pyr 的增量 |
-
-关键对比是 **B1_5 vs B1_4**——这直接回答了 IMU 在已有 KF+Pyramid 的基础上是否还有额外收益。
-
-### 4.3 C 组（FM，有 IMU，无 GT）— 独立验证 + IMU 泛化 + 快速运动
-
-C 组与 B 组结构完全一致（6 策略），但 FM 数据集有两个关键不同：
-
-1. **无真值位姿** → 无法计算 ATE，评估仅基于渲染指标
-2. **快速运动** → 所有场景选择 fast 速度，帧间位移大
-
-**为什么 FM 数据集对论文重要：**
-
-| 角度 | 说明 |
-|------|------|
-| **IMU 泛化验证** | B 组是自采集 AzureKinect，C 组是公开 FM 数据集。在完全不同采集条件下验证 IMU 策略是否仍然有效，排除"只在自家数据上有效"的质疑 |
-| **快速运动压力测试** | 帧间位移大时纯视觉跟踪容易丢失，IMU 的物理先验在这里最值钱。C1_1 vs C1_0 的 PSNR 差距应该比慢速场景更大 |
-| **GI-KF 运动模糊过滤** | 快速运动更容易产生模糊帧，C1_2 (+GI-KF) 的关键帧数量应明显少于 C1_0 (Baseline 每帧都做)，且不损失渲染质量 |
-| **跨场景一致性** | C1/C2/C3 三个不同室内布局，验证策略提升是否稳定（而非只在某个特定房间生效） |
-
-**C 组核心对比（每个场景内）：**
-
-| 对比 | 计算 | 回答的问题 | 预期结果 |
-|------|------|-----------|---------|
-| C1_1 vs C1_0 | +IMU - Baseline | **IMU 在快速运动下有用吗？** | PSNR ↑ 明显，因为视觉跟踪在快速运动下容易漂移 |
-| C1_2 vs C1_0 | +GI-KF - Baseline | GI-KF 在富纹理场景的关键帧效率 | 关键帧数 ↓ 70-90%，PSNR ≈ |
-| C1_3 vs C1_0 | +Pyramid - Baseline | Pyramid 在快速运动下的渲染质量 | PSNR ↑ 2-5% |
-| C1_4 vs C1_0 | +KF+Pyr - Baseline | 两非 IMU 策略的组合贡献 | PSNR ↑，关键帧 ↓ |
-| C1_5 vs C1_4 | +ALL - +KF+Pyr | **IMU 在已有 KF+Pyr 上的增量** | PSNR ↑ （核心对比） |
-| C1_5 vs C1_1 | +ALL - +IMU | KF+Pyr 在已有 IMU 上的增量 | PSNR ↑ |
-| C1_5 vs B1_5 | C 全开 vs B 全开 | **跨数据集一致性** | 趋势一致即可，绝对值可能不同 |
-
-**跨场景验证（C1 vs C2 vs C3）：**
-
-对每个策略编号 `_i`，比较 C1_i / C2_i / C3_i 的 PSNR 相对提升幅度。如果三个场景的趋势一致（比如 +IMU 在三个场景都提升 PSNR），说明策略泛化性好。如果某个场景反常（比如 hotel 场景 +IMU 下降），需要分析原因（纹理不足导致深度噪声被 IMU 放大？）。
-
----
-
-## 5. 评估指标
-
-| 指标 | 来源文件 | 方向 | 含义 |
-|------|---------|------|------|
-| ATE RMSE | `ate_aligned.json` | ↓ cm | 轨迹精度（A/B 组有，C 组无） |
-| PSNR | `rendering_metrics.json` | ↑ dB | 渲染峰值信噪比 |
-| SSIM | `rendering_metrics.json` | ↑ [0,1] | 结构相似性 |
-| LPIPS | `rendering_metrics.json` | ↓ | 感知损失 |
-| Depth L1 | `rendering_metrics.json` | ↓ m | 深度误差 |
-
----
-
-## 7. 常见问题
-
-### 后台运行
+生成论文表格草稿和机器可读结果：
 
 ```bash
-nohup python scripts/run_ablation.py > logs/ablation.log 2>&1 &
-tail -f logs/ablation.log
+python scripts/aggregate_results.py --format markdown > output/ablation/results.md
+python scripts/aggregate_results.py --format json > output/ablation/results.json
 ```
 
-### 单场景快速测试
+汇总器只接受每个配置恰好包含 `seed=0,1,2` 的成功结果，并检查三个种子的提交、GSR 预算、GPU/CUDA一致；同一场景的所有策略还必须使用兼容的评估协议。若某配置完全未运行，会显示缺失；若只有 1–2 个种子或混入不同环境，会直接报错，不能静默生成不严谨表格。
 
-在场景 YAML 中临时加 `frame_limit: 100` 加速验证：
+## 7. 消融比较方法
+
+### 7.1 TUM 与 Replica
+
+每个场景分别计算：
+
+| 对比 | 结论范围 |
+|---|---|
+| `_1 - _0` | GI-KF 的独立贡献 |
+| `_2 - _0` | Pyramid 的独立贡献 |
+| `_3 - _0` | 两策略联合效果 |
+| `_3 - _1` | 在 GI-KF 上增加 Pyramid 的增量 |
+| `_3 - _2` | 在 Pyramid 上增加 GI-KF 的增量 |
+
+TUM 与 Replica 都有 GT，主表应包含 ATE、平移/旋转 RPE，以及固定观测视角的 PSNR、SSIM、LPIPS、Depth-L1。还要同时报告关键帧数、子图数、SLAM 时间和峰值显存，避免只论质量、不论代价。
+
+Replica 当前数据没有 Co-SLAM 风格的 `gt_mesh_cull_virt_cams.ply` 和 `gt_pc_unseen.npy`，因此不要伪造或套用依赖这些文件的 mesh reconstruction 指标。当前严谨可报告的是轨迹、固定观测视角渲染/深度和效率指标。
+
+### 7.2 FMDataset
+
+每个场景分别计算：
+
+| 对比 | 结论范围 |
+|---|---|
+| `_1 - _0` | IMU 的独立贡献 |
+| `_2 - _0` | GI-KF 的独立贡献 |
+| `_3 - _0` | Pyramid 的独立贡献 |
+| `_4 - _0` | GI-KF + Pyramid 的联合效果 |
+| `_5 - _4` | 在 GI-KF + Pyramid 基础上增加 IMU 的边际贡献，核心对比 |
+| `_5 - _1` | 在 IMU 基础上增加 GI-KF + Pyramid 的边际贡献 |
+
+FMDataset 没有轨迹 GT，所以不能报告 ATE/RPE，也不能把同帧固定观测视角指标称为 novel-view synthesis。它用于验证快速运动下三种策略对渲染/深度质量和效率的影响，并提供 IMU 策略的公开数据证据。
+
+### 7.3 统计和表述原则
+
+- 表格使用 `mean ± std`，明确 `n=3`；
+- 同一场景内比较策略，不直接用不同场景的绝对指标证明策略优劣；
+- 同时报告提升和退化，不筛选“最好看的”种子；
+- 不预先写“应提升 2–5%”之类结果，结论必须由正式数据决定；
+- 若某策略只在部分场景有效，应表述为条件性收益并分析失败场景；
+- 冒烟结果、自采 Azure 和正式三种子结果必须分开存放和描述。
+
+## 8. 论文建议表格
+
+最低限度建议准备：
+
+1. TUM：5 场景 × 4 策略，轨迹、固定观测视角和效率；
+2. Replica：8 场景 × 4 策略，同上；
+3. FMDataset：3 场景 × 6 策略，固定观测视角和效率；
+4. 三张单因素/增量对比图：IMU、Pyramid、GI-KF；
+5. Azure 自采序列的一组轨迹/重建可视化，仅作定性展示；
+6. 失败案例或退化场景分析。
+
+以毕业所需的较低档期刊为目标，这套数据体量足以开始写方法、相关工作和实验设置，但“可以投稿”仍以 210 次正式运行全部完成、审计通过、趋势可解释为前提。代码冒烟通过不等于实验结论已经成立。
+
+## 9. 服务器同步流程
+
+本机修改提交并推送后，在服务器执行：
 
 ```bash
-# 创建测试配置
-echo "frame_limit: 100" >> /tmp/test.yaml
-# 或用命令行传（不支持 frame_limit 命令行参数，需改 YAML）
+cd /root/autodl-tmp/LoopSplat
+source /etc/network_turbo
+git pull
+conda activate loop_splat
+git rev-parse HEAD
+git status --short
+python -m pytest -q
 ```
 
-### 添加新场景
+确认服务器提交号与本机一致、工作区为空、数据路径存在后，先重复第 3 节 GPU 冒烟，再启动正式矩阵。不要在服务器上直接编辑正式配置，否则本机、GitHub 与实验 manifest 会失去一致性。
 
-编辑 `scripts/run_ablation.py` 中的 `SCENES_A` / `SCENES_B` / `SCENES_C` 列表。
+## 10. 故障处理
+
+- `formal runs require a clean Git worktree`：提交或明确处理本地修改后再运行，不要绕过检查；
+- 汇总报 seeds 错误：补齐同一提交下的 0、1、2 三个种子；
+- 汇总报 mixed commit/hardware/protocol：不能把这些结果放进同一统计组，应统一环境重跑受影响配置；
+- IMU 完整性失败：检查 `imu_tracking_summary.yaml` 的时间覆盖、丢弃行和 `valid_prediction_count`；
+- Pyramid 完整性失败：检查 `enabled` 与 `optimizer_step_count`，不能只看 YAML 开关；
+- Azure 缓存异常：检查 `processed_images/redepth/processing_metadata.json`；标定或预处理配置变化后，加载器应自动重建缓存；
+- CUDA OOM：先记录失败配置与峰值，降低并发而不是单独降低该策略的优化预算；所有策略必须保持相同预算才可公平比较。
