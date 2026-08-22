@@ -1,6 +1,7 @@
 from argparse import Namespace
 from datetime import datetime, timezone
 import json
+import yaml
 
 from run_slam import update_config_with_args
 from scripts.aggregate_results import render_markdown
@@ -10,9 +11,58 @@ from src.utils.experiment_utils import (
     create_run_directory,
     discover_completed_runs,
     prepare_run_directory,
+    formal_outputs_complete,
     write_manifest,
     write_status,
 )
+
+
+def write_valid_formal_outputs(run_dir):
+    (run_dir / "manifest.json").write_text(json.dumps({
+        "git_commit": "a" * 40,
+        "git_dirty": False,
+        "evaluation_frame_ids": [0],
+        "requested_features": {
+            "imu": False,
+            "gaussian_pyramid": False,
+            "gi_keyframing": False,
+            "gi_keyframing_imu_gyro": False,
+        },
+        "effective_features": {
+            "imu": False,
+            "gaussian_pyramid": {"enabled": False},
+            "gi_keyframing": False,
+            "gi_keyframing_imu_gyro": False,
+        },
+    }))
+    (run_dir / "rendering_metrics_observed_view.json").write_text(
+        json.dumps({
+            "psnr": 20.0,
+            "ssim": 0.8,
+            "lpips": 0.2,
+            "depth_l1_observed_view": 0.1,
+            "depth_valid_pixels": 100,
+            "num_renders": 1,
+        }))
+    (run_dir / "evaluation_protocol.json").write_text(json.dumps({
+        "frame_ids": [0],
+        "formal_map_source": "unrefined_global_gaussian_concatenation",
+        "global_refinement_enabled": False,
+        "global_refinement_iterations": 0,
+    }))
+    (run_dir / "trajectory_status.json").write_text(
+        '{"status": "skipped_no_ground_truth"}')
+    (run_dir / "imu_tracking_summary.yaml").write_text(
+        yaml.safe_dump({"enabled": False, "commit_count": 0}))
+    (run_dir / "gaussian_pyramid_summary.yaml").write_text(
+        yaml.safe_dump({"enabled": False, "optimizer_step_count": 0}))
+    (run_dir / "run_statistics.yaml").write_text(yaml.safe_dump({
+        "frame_count": 1,
+        "keyframe_count": 1,
+        "submap_count": 1,
+        "slam_elapsed_seconds": 1.0,
+        "slam_peak_gpu_memory_bytes": 100,
+    }))
 
 
 def test_two_runs_never_share_a_directory(tmp_path):
@@ -34,15 +84,8 @@ def test_only_succeeded_complete_run_is_discovered(tmp_path):
     failed = create_run_directory(
         tmp_path, "C1_0", 0, suffix="failed")
     write_manifest(
-        complete, {"seed": 0}, ["run_slam.py"], {"imu": False})
-    write_manifest(
         failed, {"seed": 0}, ["run_slam.py"], {"imu": False})
-    for filename in (
-            "rendering_metrics_observed_view.json",
-            "evaluation_protocol.json"):
-        (complete / filename).write_text("{}")
-    (complete / "trajectory_status.json").write_text(
-        '{"status": "skipped_no_ground_truth"}')
+    write_valid_formal_outputs(complete)
     write_status(complete, "succeeded")
     write_status(failed, "failed")
 
@@ -51,6 +94,27 @@ def test_only_succeeded_complete_run_is_discovered(tmp_path):
     assert [record.path for record in records] == [complete]
     assert records[0].experiment_id == "C1_0"
     assert records[0].seed == 0
+
+
+def test_formal_outputs_reject_empty_metrics_and_dirty_manifest(tmp_path):
+    write_valid_formal_outputs(tmp_path)
+    (tmp_path / "rendering_metrics_observed_view.json").write_text("{}")
+    assert formal_outputs_complete(tmp_path) is False
+
+    write_valid_formal_outputs(tmp_path)
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["git_dirty"] = True
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    assert formal_outputs_complete(tmp_path) is False
+
+
+def test_formal_outputs_reject_requested_effective_feature_mismatch(tmp_path):
+    write_valid_formal_outputs(tmp_path)
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["effective_features"]["gaussian_pyramid"]["enabled"] = True
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+
+    assert formal_outputs_complete(tmp_path) is False
 
 
 def test_manifest_records_config_hash_command_and_effective_features(tmp_path):

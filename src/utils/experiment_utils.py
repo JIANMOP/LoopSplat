@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 from pathlib import Path
 import platform
 import re
@@ -172,12 +173,133 @@ def formal_outputs_complete(run_dir):
     run_dir = Path(run_dir)
     if not all((run_dir / name).exists() for name in REQUIRED_FORMAL_OUTPUTS):
         return False
-    trajectory = json.loads(
-        (run_dir / "trajectory_status.json").read_text())
-    if trajectory.get("status") == "available":
-        return all((run_dir / name).exists() for name in (
-            "ate_aligned.json", "rpe.json", "trajectory_metrics.json"))
-    return trajectory.get("status") == "skipped_no_ground_truth"
+    try:
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        metrics = json.loads(
+            (run_dir / "rendering_metrics_observed_view.json").read_text())
+        protocol = json.loads(
+            (run_dir / "evaluation_protocol.json").read_text())
+        trajectory = json.loads(
+            (run_dir / "trajectory_status.json").read_text())
+
+        frame_ids = protocol.get("frame_ids")
+        if (not isinstance(frame_ids, list) or not frame_ids
+                or any(type(frame_id) is not int or frame_id < 0
+                       for frame_id in frame_ids)
+                or frame_ids != sorted(set(frame_ids))):
+            return False
+        if protocol.get(
+                "formal_map_source"
+        ) != "unrefined_global_gaussian_concatenation":
+            return False
+        if protocol.get("global_refinement_enabled") is not False:
+            return False
+        if protocol.get("global_refinement_iterations") != 0:
+            return False
+
+        if manifest.get("git_dirty") is not False:
+            return False
+        if not manifest.get("git_commit"):
+            return False
+        if manifest.get("evaluation_frame_ids") != frame_ids:
+            return False
+
+        def feature_flags(features):
+            pyramid = features.get("gaussian_pyramid", False)
+            if isinstance(pyramid, dict):
+                pyramid = pyramid.get("enabled", False)
+            return {
+                "imu": bool(features.get("imu", False)),
+                "gaussian_pyramid": bool(pyramid),
+                "gi_keyframing": bool(features.get("gi_keyframing", False)),
+                "gi_keyframing_imu_gyro": bool(
+                    features.get("gi_keyframing_imu_gyro", False)),
+            }
+
+        requested = feature_flags(manifest.get("requested_features", {}))
+        effective = feature_flags(manifest.get("effective_features", {}))
+        if requested != effective:
+            return False
+        if effective["gi_keyframing_imu_gyro"] and not (
+                effective["gi_keyframing"] and effective["imu"]):
+            return False
+
+        finite_metric_keys = ("psnr", "ssim", "lpips")
+        if any(not isinstance(metrics.get(key), (int, float))
+               or not math.isfinite(metrics[key])
+               for key in finite_metric_keys):
+            return False
+        if metrics["lpips"] < 0 or not 0 <= metrics["ssim"] <= 1:
+            return False
+        if metrics.get("num_renders") != len(frame_ids):
+            return False
+        depth_value = metrics.get("depth_l1_observed_view")
+        if (not isinstance(depth_value, (int, float))
+                or not math.isfinite(depth_value) or depth_value < 0
+                or type(metrics.get("depth_valid_pixels")) is not int
+                or metrics["depth_valid_pixels"] <= 0):
+            return False
+
+        summary_paths = {
+            "imu": run_dir / "imu_tracking_summary.yaml",
+            "pyramid": run_dir / "gaussian_pyramid_summary.yaml",
+            "statistics": run_dir / "run_statistics.yaml",
+        }
+        if not all(path.exists() for path in summary_paths.values()):
+            return False
+        imu_summary = yaml.safe_load(summary_paths["imu"].read_text())
+        pyramid_summary = yaml.safe_load(summary_paths["pyramid"].read_text())
+        statistics = yaml.safe_load(summary_paths["statistics"].read_text())
+        if not all(isinstance(value, dict) for value in (
+                imu_summary, pyramid_summary, statistics)):
+            return False
+        if bool(imu_summary.get("enabled")) != effective["imu"]:
+            return False
+        if bool(pyramid_summary.get("enabled")) != effective[
+                "gaussian_pyramid"]:
+            return False
+        if (effective["imu"] and statistics.get("frame_count", 0) > 1
+                and imu_summary.get("commit_count", 0) <= 0):
+            return False
+        if (effective["gaussian_pyramid"]
+                and pyramid_summary.get("optimizer_step_count", 0) <= 0):
+            return False
+        for key in ("frame_count", "keyframe_count", "submap_count"):
+            if type(statistics.get(key)) is not int or statistics[key] <= 0:
+                return False
+        for key in ("slam_elapsed_seconds", "slam_peak_gpu_memory_bytes"):
+            value = statistics.get(key)
+            if (not isinstance(value, (int, float))
+                    or not math.isfinite(value) or value < 0):
+                return False
+        if effective["gi_keyframing"]:
+            decisions_path = run_dir / "keyframe_decisions.jsonl"
+            if not decisions_path.exists() or not decisions_path.read_text().strip():
+                return False
+            for line in decisions_path.read_text().splitlines():
+                decision = json.loads(line)
+                if "frame_id" not in decision or "selected" not in decision:
+                    return False
+
+        if trajectory.get("status") == "available":
+            trajectory_paths = (
+                run_dir / "ate_aligned.json",
+                run_dir / "rpe.json",
+                run_dir / "trajectory_metrics.json",
+            )
+            if not all(path.exists() for path in trajectory_paths):
+                return False
+            ate = json.loads(trajectory_paths[0].read_text())
+            rpe = json.loads(trajectory_paths[1].read_text())
+            return (
+                isinstance(ate.get("rmse"), (int, float))
+                and math.isfinite(ate["rmse"])
+                and type(rpe.get("valid_pairs")) is int
+                and rpe["valid_pairs"] > 0
+            )
+        return trajectory.get("status") == "skipped_no_ground_truth"
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError, yaml.YAMLError):
+        return False
 
 
 def discover_completed_runs(output_root) -> list[RunRecord]:

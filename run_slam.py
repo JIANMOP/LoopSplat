@@ -131,9 +131,9 @@ if __name__ == "__main__":
         evaluator = Evaluator(
             gslam.output_path, gslam.output_path / "config.yaml")
         evaluator.run()
+        write_manifest(run_dir, config, command, features)
         if not formal_outputs_complete(run_dir):
             raise RuntimeError("formal evaluation outputs are incomplete")
-        write_manifest(run_dir, config, command, features)
         write_status(
             run_dir, "succeeded",
             elapsed_seconds=time.time() - started_at)
