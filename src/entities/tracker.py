@@ -269,6 +269,8 @@ class Tracker(object):
             + self.lambda_imu_rot * rotation_loss)
 
     def commit_imu_state(self, frame_id, final_c2w, prediction):
+        if not self.use_imu:
+            return
         previous_id = self.imu_state.last_committed_frame_id
         if previous_id is not None and frame_id <= previous_id:
             raise RuntimeError(

@@ -120,6 +120,19 @@ def test_commit_advances_state_once(cuda_device):
     assert tracker.imu_committed_frame_ids == [3]
 
 
+def test_commit_is_noop_when_imu_is_disabled(cuda_device):
+    tracker = make_tracker(cuda_device)
+    tracker.use_imu = False
+    prediction = make_prediction(cuda_device)
+    before = snapshot(tracker.imu_state)
+
+    tracker.commit_imu_state(
+        3, torch.eye(4, dtype=torch.float64, device=cuda_device), prediction)
+
+    assert_snapshot_equal(tracker.imu_state, before)
+    assert tracker.imu_committed_frame_ids == []
+
+
 def test_prepare_prediction_uses_full_interval_and_initializes_gravity(
         cuda_device):
     tracker = make_tracker(cuda_device)
