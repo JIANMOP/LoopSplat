@@ -157,6 +157,14 @@ def test_selector_reprojects_same_current_gaussian_set_for_both_views(
     assert decision.components["frustum_center_iou"] == pytest.approx(1.0)
 
 
+def test_frustum_visibility_is_empty_for_all_invalid_depth():
+    visible = compute_gaussian_visibility(
+        torch.tensor([[0.0, 0.0, 1.0]], device="cuda"),
+        np.eye(4), np.eye(3), np.zeros((4, 4), dtype=np.float32))
+
+    assert visible.size == 0
+
+
 def test_gyro_assistance_is_controlled_by_separate_switch():
     class Dataset(DatasetWhoseImuAccessRaises):
         def get_imu_data_for_frame(self, frame_id):

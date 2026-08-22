@@ -281,6 +281,9 @@ class Mapper(object):
             int: The number of points added to the submap
         """
         gaussian_points = gaussian_model.get_xyz()
+        if not np.any(np.isfinite(gt_depth) & (gt_depth > 0)):
+            print("Skipping Gaussian growth: no valid depth")
+            return 0
         camera_frustum_corners = compute_camera_frustum_corners(gt_depth, estimate_c2w, self.dataset.intrinsics)
         reused_pts_ids = compute_frustum_point_ids(
             gaussian_points, np2torch(camera_frustum_corners), device="cuda")

@@ -27,7 +27,7 @@ class IMUInterval:
 
 
 def build_imu_interval(frame_timestamps, imu_data, start_frame_id,
-                       end_frame_id) -> IMUInterval:
+                       end_frame_id, time_offset_s=0.0) -> IMUInterval:
     if end_frame_id <= start_frame_id:
         return IMUInterval.invalid("frame_order")
     if start_frame_id < 0 or end_frame_id >= len(frame_timestamps):
@@ -35,8 +35,10 @@ def build_imu_interval(frame_timestamps, imu_data, start_frame_id,
     if len(imu_data) < 2:
         return IMUInterval.invalid("insufficient_samples")
 
-    start_s = frame_timestamps[start_frame_id]
-    end_s = frame_timestamps[end_frame_id]
+    if not np.isfinite(time_offset_s):
+        return IMUInterval.invalid("non_finite_time_offset")
+    start_s = frame_timestamps[start_frame_id] + time_offset_s
+    end_s = frame_timestamps[end_frame_id] + time_offset_s
     imu_times = np.asarray(
         [sample["timestamp"] for sample in imu_data], dtype=np.float64)
     if start_s < imu_times[0] or end_s > imu_times[-1]:

@@ -17,7 +17,8 @@ class IntervalDataset:
     def __init__(self):
         self.timestamps = np.array([0.0, 0.1], dtype=np.float64)
 
-    def get_imu_measurements(self, start_frame_id, end_frame_id):
+    def get_imu_measurements(self, start_frame_id, end_frame_id,
+                             time_offset_s=0.0):
         assert (start_frame_id, end_frame_id) == (0, 1)
         return IMUInterval(
             timestamps_s=np.array([0.0, 0.05, 0.1]),

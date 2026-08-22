@@ -140,6 +140,7 @@ def evaluate_trajectory(estimated_poses: np.ndarray, gt_poses: np.ndarray, outpu
     num_poses = min(gt_poses.shape[0], estimated_poses.shape[0])
     gt_poses = gt_poses[:num_poses]
     estimated_poses = estimated_poses[:num_poses]
+    rpe = compute_relative_pose_errors(estimated_poses, gt_poses)
     valid = (
         np.isfinite(gt_poses).all(axis=(1, 2))
         & np.isfinite(estimated_poses).all(axis=(1, 2)))
@@ -151,7 +152,6 @@ def evaluate_trajectory(estimated_poses: np.ndarray, gt_poses: np.ndarray, outpu
     estimated_t_aligned = align_trajectories(estimated_t, gt_t)
     ate = pose_error(estimated_t, gt_t)
     ate_aligned = pose_error(estimated_t_aligned, gt_t)
-    rpe = compute_relative_pose_errors(estimated_poses, gt_poses)
 
     with open(str(output_path / "ate.json"), "w") as f:
         f.write(json.dumps(ate, cls=NumpyFloatValuesEncoder))

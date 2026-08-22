@@ -78,7 +78,8 @@ def so3_log(rotation_matrix):
 
 
 def preintegrate_imu(interval, bias_accel, bias_gyro, gravity_cam,
-                     t_cam_imu=None):
+                     t_cam_imu=None, max_interval_s=None,
+                     max_accel_norm_mps2=None, max_gyro_norm_rps=None):
     device = bias_accel.device
     dtype = bias_accel.dtype
     sample_count = len(interval.timestamps_s)
@@ -110,6 +111,23 @@ def preintegrate_imu(interval, bias_accel, bias_gyro, gravity_cam,
         return IMUPrediction(
             identity, zero_vector, zero_vector.clone(), 0.0, sample_count,
             False, False, "non_monotonic_time")
+    total_dt = float(time_steps.sum().item())
+    if max_interval_s is not None and total_dt > max_interval_s:
+        return IMUPrediction(
+            identity, zero_vector, zero_vector.clone(), total_dt,
+            sample_count, False, False, "interval_too_long")
+    if (max_accel_norm_mps2 is not None
+            and torch.linalg.vector_norm(
+                accelerations, dim=1).max().item() > max_accel_norm_mps2):
+        return IMUPrediction(
+            identity, zero_vector, zero_vector.clone(), total_dt,
+            sample_count, False, False, "acceleration_limit")
+    if (max_gyro_norm_rps is not None
+            and torch.linalg.vector_norm(
+                angular_velocities, dim=1).max().item() > max_gyro_norm_rps):
+        return IMUPrediction(
+            identity, zero_vector, zero_vector.clone(), total_dt,
+            sample_count, False, False, "angular_velocity_limit")
 
     if t_cam_imu is None:
         rotation_cam_imu = identity
@@ -162,7 +180,7 @@ def preintegrate_imu(interval, bias_accel, bias_gyro, gravity_cam,
         delta_R=delta_rotation,
         delta_v=delta_velocity,
         delta_p=delta_position,
-        total_dt=float(time_steps.sum().item()),
+        total_dt=total_dt,
         sample_count=sample_count,
         valid=True,
         translation_valid=translation_valid,

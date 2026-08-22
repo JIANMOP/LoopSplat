@@ -500,6 +500,7 @@ class GaussianSLAM(object):
                     self.tracker.imu_translation_residual_scale_m),
                 "rotation_residual_scale_rad": (
                     self.tracker.imu_rotation_residual_scale_rad),
+                "prediction_records": self.tracker.imu_prediction_records,
                 "loss_records": self.tracker.tracking_loss_records,
             },
             "imu_tracking_summary.yaml",

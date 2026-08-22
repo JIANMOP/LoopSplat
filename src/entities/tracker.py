@@ -126,6 +126,7 @@ class Tracker(object):
                 "tracking.imu.rotation_residual_scale_rad must be positive")
         self.imu_state = IMUTrackingState.create("cuda")
         self.imu_committed_frame_ids = []
+        self.imu_prediction_records = []
         self.tracking_loss_records = []
 
     def compute_losses(self, gaussian_model: GaussianModel, render_settings: dict,
@@ -226,7 +227,9 @@ class Tracker(object):
         if not hasattr(self.dataset, "get_imu_measurements"):
             return self._invalid_imu_prediction("dataset_has_no_imu_interval")
 
-        interval = self.dataset.get_imu_measurements(frame_id - 1, frame_id)
+        interval = self.dataset.get_imu_measurements(
+            frame_id - 1, frame_id,
+            time_offset_s=self.imu_config.get("time_offset_s", 0.0))
         device = self.imu_state.velocity.device
         dtype = self.imu_state.velocity.dtype
         transform = self.imu_config.get("T_cam_imu")
@@ -254,6 +257,11 @@ class Tracker(object):
                 dtype=dtype, device=device),
             gravity_cam=self.imu_state.gravity_cam,
             t_cam_imu=transform,
+            max_interval_s=self.imu_config.get("max_interval_s", 0.2),
+            max_accel_norm_mps2=self.imu_config.get(
+                "max_accel_norm_mps2", 50.0),
+            max_gyro_norm_rps=self.imu_config.get(
+                "max_gyro_norm_rps", 20.0),
         )
         if not prediction.valid or not prediction.translation_valid:
             return prediction
@@ -363,6 +371,15 @@ class Tracker(object):
 
         imu_prediction = self.prepare_imu_prediction(frame_id)
         if self.use_imu:
+            self.imu_prediction_records.append({
+                "frame_id": int(frame_id),
+                "valid": bool(imu_prediction.valid),
+                "translation_valid": bool(
+                    imu_prediction.translation_valid),
+                "sample_count": int(imu_prediction.sample_count),
+                "total_dt_s": float(imu_prediction.total_dt),
+                "reason": imu_prediction.reason,
+            })
             self.logger.log_imu_prediction(frame_id, imu_prediction)
 
         if (self.help_camera_initialization or self.odometry_type == "odometer") and self.odometer.last_rgbd is None:

@@ -142,9 +142,11 @@ class FMDataset(BaseDataset):
         closest = min(self.imu_data, key=lambda x: abs(x['timestamp'] - frame_ts))
         return closest
 
-    def get_imu_measurements(self, start_frame_id: int, end_frame_id: int):
+    def get_imu_measurements(self, start_frame_id: int, end_frame_id: int,
+                             time_offset_s=0.0):
         return build_imu_interval(
-            self.timestamps, self.imu_data, start_frame_id, end_frame_id)
+            self.timestamps, self.imu_data, start_frame_id, end_frame_id,
+            time_offset_s=time_offset_s)
 
     # ── Dataset interface ───────────────────────────────────────────
 

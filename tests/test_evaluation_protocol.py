@@ -6,7 +6,10 @@ import torch
 
 from scripts.aggregate_results import read_trajectory_metrics
 from src.evaluation.evaluator import Evaluator
-from src.evaluation.evaluate_trajectory import compute_relative_pose_errors
+from src.evaluation.evaluate_trajectory import (
+    compute_relative_pose_errors,
+    evaluate_trajectory,
+)
 from src.evaluation.protocol import (
     aggregate_weighted_depth_l1,
     assert_compatible_protocols,
@@ -111,6 +114,17 @@ def test_relative_pose_errors_report_translation_rotation_and_pairs():
     assert metrics["valid_pairs"] == 2
     assert metrics["translation_rmse_m"] == pytest.approx(0.1)
     assert metrics["rotation_rmse_deg"] == pytest.approx(0.0)
+
+
+def test_trajectory_evaluation_does_not_bridge_invalid_pose_gaps(tmp_path):
+    ground_truth = np.repeat(np.eye(4)[None], 3, axis=0)
+    estimated = ground_truth.copy()
+    estimated[1] = np.nan
+
+    evaluate_trajectory(estimated, ground_truth, tmp_path)
+
+    rpe = json.loads((tmp_path / "rpe.json").read_text())
+    assert rpe["valid_pairs"] == 0
 
 
 def test_aggregator_extracts_ate_and_rpe_for_gt_dataset():

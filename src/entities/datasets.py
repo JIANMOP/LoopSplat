@@ -55,6 +55,7 @@ class Replica(BaseDataset):
         self.depth_paths = sorted(
             list((self.dataset_path / "results").glob("depth*.png")))
         self.load_poses(self.dataset_path / "traj.txt")
+        self.has_ground_truth = True
         print(f"Loaded {len(self.color_paths)} frames")
 
     def load_poses(self, path):
@@ -181,6 +182,7 @@ class ScanNet(BaseDataset):
             (self.dataset_path / "depth").glob("*.TIFF")), key=lambda x: int(os.path.basename(x)[-10:-5]))
         self.n_img = len(self.color_paths)
         self.load_poses(self.dataset_path / "gt_pose.txt")
+        self.has_ground_truth = True
 
     def load_poses(self, path):
         self.poses = []
@@ -223,6 +225,7 @@ class ScanNetPP(BaseDataset):
         else:
             self.image_names = self.train_test_split["test"]
         self.load_data()
+        self.has_ground_truth = True
 
     def load_data(self):
         self.poses = []

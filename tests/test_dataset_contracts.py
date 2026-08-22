@@ -9,6 +9,7 @@ from src.entities.datasets import TUM_RGBD
 from src.entities.datasets_azure import AzureKinect
 from src.entities.datasets_fm import FMDataset
 from src.entities.gaussian_slam import build_dataset_config
+from src.entities.imu_types import build_imu_interval
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +91,22 @@ def test_fm_rejects_reversed_frame_interval(fm_dataset):
 
     assert interval.valid is False
     assert interval.reason == "frame_order"
+
+
+def test_imu_time_offset_shifts_camera_query_window():
+    samples = [
+        {"timestamp": timestamp,
+         "acceleration": [timestamp, 0.0, 0.0],
+         "angular_velocity": [0.0, 0.0, 0.0]}
+        for timestamp in (0.0, 0.5, 1.0, 1.5)
+    ]
+
+    interval = build_imu_interval(
+        [0.0, 1.0], samples, 0, 1, time_offset_s=0.25)
+
+    assert interval.timestamps_s[0] == pytest.approx(0.25)
+    assert interval.timestamps_s[-1] == pytest.approx(1.25)
+    assert interval.dt_s == pytest.approx(1.0)
 
 
 def test_datasets_declare_ground_truth_capability(fm_dataset, tum_dataset):

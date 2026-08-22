@@ -33,7 +33,9 @@ def compute_camera_frustum_corners(depth_map: np.ndarray, pose: np.ndarray, intr
         An array of 3D coordinates for the frustum corners.
     """
     height, width = depth_map.shape
-    depth_map = depth_map[depth_map > 0]
+    depth_map = depth_map[np.isfinite(depth_map) & (depth_map > 0)]
+    if depth_map.size == 0:
+        raise ValueError("depth map has no finite positive values")
     min_depth, max_depth = depth_map.min(), depth_map.max()
     corners = np.array(
         [
@@ -350,6 +352,8 @@ def compute_gaussian_visibility(gaussian_xyz: torch.Tensor, estimate_c2w: np.nda
         Numpy array of visible point indices (can be empty).
     """
     if gaussian_xyz.shape[0] == 0:
+        return np.array([], dtype=np.int64)
+    if not np.any(np.isfinite(depth_map) & (depth_map > 0)):
         return np.array([], dtype=np.int64)
 
     frustum_corners = compute_camera_frustum_corners(

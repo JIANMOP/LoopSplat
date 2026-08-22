@@ -89,6 +89,25 @@ def test_camera_imu_lever_arm_affects_rotational_translation(cuda_device):
     assert torch.linalg.vector_norm(prediction.delta_p).item() > 0.0
 
 
+def test_preintegration_rejects_excessive_interval_and_sensor_magnitude(
+        cuda_device):
+    interval = make_interval(
+        (0.0, 0.0, 9.81), (0.0, 0.0, 0.0))
+    too_long = preintegrate_imu(
+        interval, zeros(cuda_device), zeros(cuda_device), None,
+        max_interval_s=0.005)
+    assert too_long.valid is False
+    assert too_long.reason == "interval_too_long"
+
+    extreme = make_interval(
+        (100.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+    too_fast = preintegrate_imu(
+        extreme, zeros(cuda_device), zeros(cuda_device), None,
+        max_accel_norm_mps2=50.0)
+    assert too_fast.valid is False
+    assert too_fast.reason == "acceleration_limit"
+
+
 def test_so3_residual_has_finite_nonzero_rotation_gradient(cuda_device):
     target_vector = torch.tensor(
         [0.02, -0.01, 0.03], dtype=torch.float64, device=cuda_device)

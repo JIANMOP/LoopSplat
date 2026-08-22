@@ -185,9 +185,11 @@ class AzureKinect(BaseDataset):
 
         return closest_imu
 
-    def get_imu_measurements(self, start_frame_id, end_frame_id):
+    def get_imu_measurements(self, start_frame_id, end_frame_id,
+                             time_offset_s=0.0):
         return build_imu_interval(
-            self.timestamps, self.imu_data, start_frame_id, end_frame_id)
+            self.timestamps, self.imu_data, start_frame_id, end_frame_id,
+            time_offset_s=time_offset_s)
 
     def apply_k4a_transformation(self, color_data, depth_data):
         """
