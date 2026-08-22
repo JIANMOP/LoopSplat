@@ -76,6 +76,8 @@ keyframing:
   v_max: 0.8                  # Max linear velocity (m/s) before motion blur penalty
   omega_max: 50.0             # Max angular velocity (deg/s) before motion blur penalty
   min_keyframe_interval: 1    # Minimum frames between keyframes
+  max_keyframe_gap: 30        # Force a keyframe after this many frames
+  use_imu_gyro: False         # Independent from tracking.use_imu
   fps: 30.0                   # Fallback FPS
 gaussian_pyramid:
   enabled: False              # Set True for Photo-SLAM coarse-to-fine pyramid training
