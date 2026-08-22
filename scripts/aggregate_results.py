@@ -15,6 +15,9 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.evaluation.protocol import assert_compatible_protocols
 
 # Scene labels for display
 SCENE_LABELS = {
@@ -54,6 +57,7 @@ def read_json(path: Path) -> dict | None:
 
 def collect_results() -> dict:
     results = {}
+    protocols_by_scene = {scene_id: [] for scene_id in SCENE_IDS}
     base = PROJECT_ROOT / "output" / "ablation"
 
     for sid in SCENE_IDS:
@@ -70,19 +74,30 @@ def collect_results() -> dict:
             m = {"scene": SCENE_LABELS.get(sid, sid),
                  "strategy": labels.get(suffix, suffix)}
 
+            protocol = read_json(rd / "evaluation_protocol.json")
+            if protocol is None:
+                results[eid] = {"error": "missing formal evaluation protocol"}
+                continue
+            protocols_by_scene[sid].append(protocol)
+
             ate = read_json(rd / "ate_aligned.json")
-            if ate:
+            trajectory = read_json(rd / "trajectory_status.json")
+            if trajectory and trajectory.get("status") == "available" and ate:
                 m["ate_rmse_cm"] = round(ate.get("rmse", 0) * 100, 2)
 
-            render = read_json(rd / "rendering_metrics.json")
+            render = read_json(rd / "rendering_metrics_observed_view.json")
             if render:
                 m["psnr"] = round(render.get("psnr", 0), 2)
                 m["ssim"] = round(render.get("ssim", 0), 4)
                 m["lpips"] = round(render.get("lpips", 0), 4)
-                m["depth_l1"] = round(render.get("depth_l1_train_view", 0), 4)
+                depth_l1 = render.get("depth_l1_observed_view")
+                if depth_l1 is not None:
+                    m["depth_l1"] = round(depth_l1, 4)
 
             results[eid] = m
 
+    for protocols in protocols_by_scene.values():
+        assert_compatible_protocols(protocols)
     return results
 
 

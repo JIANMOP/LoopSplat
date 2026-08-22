@@ -229,8 +229,7 @@ def config_has_results(output_dir: Path) -> bool:
     )
     if not subdirs:
         return False
-    return (subdirs[0] / "ate_aligned.json").exists() or \
-           (subdirs[0] / "rendering_metrics.json").exists()
+    return (subdirs[0] / "rendering_metrics_observed_view.json").exists()
 
 
 # ── Main ───────────────────────────────────────────────────────────────

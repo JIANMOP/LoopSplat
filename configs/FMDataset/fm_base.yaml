@@ -5,6 +5,14 @@ use_wandb: false
 frame_limit: -1
 seed: 0
 
+evaluation:
+  observed_view_stride: 10
+  run_keyframe_diagnostic: false
+  run_reconstruction: false
+  global_refinement:
+    enabled: false
+    iterations: 0
+
 mapping:
   new_submap_every: 50
   map_every: 1

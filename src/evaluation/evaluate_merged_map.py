@@ -18,7 +18,9 @@ from src.utils.gaussian_model_utils import BasicPointCloud
 
 class RenderFrames(Dataset):
     """A dataset class for loading keyframes along with their estimated camera poses and render settings."""
-    def __init__(self, dataset, render_poses: np.ndarray, height: int, width: int, fx: float, fy: float, exposures_ab=None):
+    def __init__(self, dataset, render_poses: np.ndarray, height: int,
+                 width: int, fx: float, fy: float, exposures_ab=None,
+                 frame_ids=None):
         self.dataset = dataset
         self.render_poses = render_poses
         self.height = height
@@ -26,16 +28,15 @@ class RenderFrames(Dataset):
         self.fx = fx
         self.fy = fy
         self.device = "cuda"
-        self.stride = 1
+        self.frame_ids = (
+            list(range(len(dataset))) if frame_ids is None else list(frame_ids))
         self.exposures_ab = exposures_ab
-        if len(dataset) > 1000:
-            self.stride = len(dataset) // 1000
 
     def __len__(self) -> int:
-        return len(self.dataset) // self.stride
+        return len(self.frame_ids)
 
     def __getitem__(self, idx):
-        idx = idx * self.stride
+        idx = self.frame_ids[idx]
         color = (torch.from_numpy(
             self.dataset[idx][1]) / 255.0).float().to(self.device)
         depth = torch.from_numpy(self.dataset[idx][2]).float().to(self.device)

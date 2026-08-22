@@ -26,6 +26,12 @@ from src.evaluation.evaluate_merged_map import (RenderFrames, merge_submaps,
                                                 refine_global_map)
 from src.evaluation.evaluate_reconstruction import evaluate_reconstruction, clean_mesh
 from src.evaluation.evaluate_trajectory import evaluate_trajectory
+from src.evaluation.protocol import (
+    assign_frames_to_submaps,
+    build_evaluation_frame_ids,
+    masked_depth_l1,
+    trajectory_status,
+)
 from src.utils.io_utils import load_config, save_dict_to_json, log_metrics_to_wandb
 from src.utils.mapper_utils import calc_psnr
 from src.utils.utils import (get_render_settings, np2torch,
@@ -48,7 +54,10 @@ class Evaluator(object):
         self.dataset = get_dataset(self.config["dataset_name"])({**self.config["data"], **self.config["cam"]})
         self.scene_name = self.config["data"]["scene_name"]
         self.dataset_name = self.config["dataset_name"]
-        self.gt_poses = np.array(self.dataset.poses)
+        self.gt_poses = (
+            np.array(self.dataset.poses)
+            if self.dataset.has_ground_truth else None)
+        self.evaluation_config = self.config.get("evaluation", {})
         self.fx, self.fy = self.dataset.intrinsics[0, 0], self.dataset.intrinsics[1, 1]
         self.cx, self.cy = self.dataset.intrinsics[0,
                                                    2], self.dataset.intrinsics[1, 2]
@@ -73,9 +82,128 @@ class Evaluator(object):
     def run_trajectory_eval(self):
         """ Evaluates the estimated trajectory """
         print("Running trajectory evaluation...")
+        status = trajectory_status(self.dataset)
+        save_dict_to_json(
+            {"status": status}, "trajectory_status.json",
+            directory=self.checkpoint_path)
+        if status != "available":
+            print("Skipping trajectory evaluation: dataset has no ground truth")
+            return
         evaluate_trajectory(self.estimated_c2w, self.gt_poses, self.checkpoint_path)
 
     def run_rendering_eval(self):
+        """Evaluate fixed observed frames, independent of keyframe selection."""
+        print("Running fixed observed-view rendering evaluation...")
+        stride = self.evaluation_config.get("observed_view_stride", 10)
+        frame_ids = build_evaluation_frame_ids(len(self.dataset), stride)
+        save_dict_to_json(
+            frame_ids, "evaluation_frame_ids.json",
+            directory=self.checkpoint_path)
+
+        refinement = self.evaluation_config.get("global_refinement", {})
+        protocol = {
+            "frame_ids": frame_ids,
+            "observed_view_stride": stride,
+            "formal_map_source": "submap_checkpoint",
+            "global_refinement_enabled": False,
+            "global_refinement_iterations": 0,
+            "optional_global_refinement_enabled": bool(
+                refinement.get("enabled", False)),
+            "optional_global_refinement_iterations": int(
+                refinement.get("iterations", 0)),
+        }
+        save_dict_to_json(
+            protocol, "evaluation_protocol.json",
+            directory=self.checkpoint_path)
+
+        submap_paths = sorted(
+            (self.checkpoint_path / "submaps").glob("*.ckpt"))
+        if not submap_paths:
+            raise RuntimeError("no submap checkpoints available for evaluation")
+        submap_keyframe_ids = []
+        for submap_path in submap_paths:
+            submap = torch.load(submap_path, map_location="cpu")
+            submap_keyframe_ids.append(submap["submap_keyframes"])
+        assignments = assign_frames_to_submaps(
+            frame_ids, submap_keyframe_ids)
+
+        color_transform = torchvision.transforms.ToTensor()
+        lpips_model = LearnedPerceptualImagePatchSimilarity(
+            net_type="alex", normalize=True).to(self.device)
+        opt_settings = OptimizationParams(ArgumentParser(
+            description="Training script parameters"))
+        psnr_values, lpips_values, ssim_values, depth_values = [], [], [], []
+        depth_valid_pixels = 0
+
+        for submap_index, submap_path in enumerate(submap_paths):
+            assigned_ids = assignments[submap_index]
+            if not assigned_ids:
+                continue
+            submap = torch.load(submap_path, map_location=self.device)
+            gaussian_model = GaussianModel()
+            gaussian_model.training_setup(opt_settings)
+            gaussian_model.restore_from_params(
+                submap["gaussian_params"], opt_settings)
+
+            for frame_id in assigned_ids:
+                _, gt_color, gt_depth, _ = self.dataset[frame_id]
+                gt_color = color_transform(gt_color).to(self.device)
+                gt_depth = np2torch(gt_depth).to(self.device)
+                estimate_w2c = np.linalg.inv(self.estimated_c2w[frame_id])
+                render_dict = render_gaussian_model(
+                    gaussian_model,
+                    get_render_settings(
+                        self.width, self.height, self.dataset.intrinsics,
+                        estimate_w2c),
+                )
+                rendered_color = torch.clamp(
+                    render_dict["color"].detach(), 0.0, 1.0)
+                rendered_depth = render_dict["depth"][0].detach()
+                if self.exposures_ab is not None:
+                    exposure = self.exposures_ab[frame_id]
+                    rendered_color = torch.clamp(
+                        torch.exp(torch.as_tensor(
+                            exposure[0], device=self.device))
+                        * rendered_color + exposure[1], 0.0, 1.0)
+                if self.save_render:
+                    torchvision.utils.save_image(
+                        rendered_color,
+                        self.render_path / f"{frame_id:05d}.png")
+
+                mse = torch.nn.functional.mse_loss(
+                    rendered_color, gt_color)
+                psnr_values.append((-10.0 * torch.log10(mse)).item())
+                lpips_values.append(lpips_model(
+                    rendered_color[None], gt_color[None]).item())
+                ssim_values.append(ms_ssim(
+                    rendered_color[None], gt_color[None],
+                    data_range=1.0, size_average=True).item())
+                depth_l1, valid_count = masked_depth_l1(
+                    rendered_depth, gt_depth)
+                if valid_count:
+                    depth_values.append(depth_l1.item())
+                    depth_valid_pixels += valid_count
+
+            del gaussian_model, submap
+            torch.cuda.empty_cache()
+
+        if len(psnr_values) != len(frame_ids):
+            raise RuntimeError("not every formal evaluation frame was rendered")
+        metrics = {
+            "psnr": float(np.mean(psnr_values)),
+            "lpips": float(np.mean(lpips_values)),
+            "ssim": float(np.mean(ssim_values)),
+            "depth_l1_observed_view": (
+                float(np.mean(depth_values)) if depth_values else None),
+            "depth_valid_pixels": depth_valid_pixels,
+            "num_renders": len(frame_ids),
+        }
+        save_dict_to_json(
+            metrics, "rendering_metrics_observed_view.json",
+            directory=self.checkpoint_path)
+        print(metrics)
+
+    def run_keyframe_rendering_diagnostic(self):
         """ Renders the submaps and global splats and evaluates the PSNR, LPIPS, SSIM and depth L1 metrics."""
         print("Running rendering evaluation...")
         psnr, lpips, ssim, depth_l1 = [], [], [], []
@@ -134,7 +262,7 @@ class Evaluator(object):
             "depth_l1_train_view": sum(depth_l1) / num_frames,
             "num_renders": num_frames
         }
-        save_dict_to_json(metrics, "rendering_metrics.json",
+        save_dict_to_json(metrics, "rendering_metrics_keyframe_diagnostic.json",
                           directory=self.checkpoint_path)
 
         x = list(range(len(psnr)))
@@ -221,7 +349,11 @@ class Evaluator(object):
         print("Running global map evaluation...")
 
         training_frames = RenderFrames(
-            self.dataset, self.estimated_c2w, self.height, self.width, self.fx, self.fy, self.exposures_ab)
+            self.dataset, self.estimated_c2w, self.height, self.width,
+            self.fx, self.fy, self.exposures_ab,
+            frame_ids=build_evaluation_frame_ids(
+                len(self.dataset),
+                self.evaluation_config.get("observed_view_stride", 10)))
         training_frames = DataLoader(
             training_frames, batch_size=1, shuffle=True)
         len_frames = len(training_frames)
@@ -236,7 +368,13 @@ class Evaluator(object):
 
         intrinsic = o3d.camera.PinholeCameraIntrinsic(
             self.width, self.height, self.fx, self.fy, self.cx, self.cy)
-        refined_merged_gaussian_model = refine_global_map(merged_cloud, training_frames, 30000, export_refine_mesh=False,
+        refinement_config = self.evaluation_config.get(
+            "global_refinement", {})
+        refinement_iterations = refinement_config.get("iterations", 0)
+        if type(refinement_iterations) is not int or refinement_iterations < 1:
+            raise ValueError(
+                "enabled global refinement requires positive iterations")
+        refined_merged_gaussian_model = refine_global_map(merged_cloud, training_frames, refinement_iterations, export_refine_mesh=False,
                                                           output_dir=self.checkpoint_path, len_frames=len_frames, 
                                                           o3d_intrinsic=intrinsic)
         ply_path = self.checkpoint_path / \
@@ -355,17 +493,41 @@ class Evaluator(object):
             traceback.print_exc()
 
         try:
-            self.run_reconstruction_eval()
+            self.run_rendering_eval()
         except Exception:
-            print("Could not run reconstruction eval")
-            traceback.print_exc()
-            
-        try:
-            self.run_global_map_eval()
-        except Exception:
-            print("Could not run global map eval")
+            print("Could not run fixed observed-view rendering eval")
             traceback.print_exc()
 
+        if self.evaluation_config.get("run_keyframe_diagnostic", False):
+            try:
+                self.run_keyframe_rendering_diagnostic()
+            except Exception:
+                print("Could not run keyframe rendering diagnostic")
+                traceback.print_exc()
+
+        if self.evaluation_config.get("run_reconstruction", False):
+            try:
+                self.run_reconstruction_eval()
+            except Exception:
+                print("Could not run reconstruction eval")
+                traceback.print_exc()
+
+        refinement = self.evaluation_config.get("global_refinement", {})
+        refinement_enabled = bool(refinement.get("enabled", False))
+        save_dict_to_json(
+            {
+                "enabled": refinement_enabled,
+                "iterations": int(refinement.get("iterations", 0)),
+            },
+            "global_refinement_status.json",
+            directory=self.checkpoint_path)
+        if refinement_enabled:
+            try:
+                self.run_global_map_eval()
+            except Exception:
+                print("Could not run global map eval")
+                traceback.print_exc()
+
         if self.use_wandb: 
-            evals = ["rendering_metrics.json", "reconstruction_metrics.json", "ate_aligned.json", "nvs_eval/results.json"]
+            evals = ["rendering_metrics_observed_view.json", "reconstruction_metrics.json", "ate_aligned.json", "nvs_eval/results.json"]
             log_metrics_to_wandb(evals, self.checkpoint_path, "Evaluation")

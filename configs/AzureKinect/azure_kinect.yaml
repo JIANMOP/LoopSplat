@@ -4,6 +4,13 @@ checkpoint_path: null
 use_wandb: false
 frame_limit: -1
 seed: 0
+evaluation:
+  observed_view_stride: 10
+  run_keyframe_diagnostic: False
+  run_reconstruction: False
+  global_refinement:
+    enabled: False
+    iterations: 0
 mapping:
   new_submap_every: 50
   map_every: 1
