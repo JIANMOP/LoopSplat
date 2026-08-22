@@ -4,7 +4,9 @@ import numpy as np
 import pytest
 import torch
 
+from scripts.aggregate_results import read_trajectory_metrics
 from src.evaluation.evaluator import Evaluator
+from src.evaluation.evaluate_trajectory import compute_relative_pose_errors
 from src.evaluation.protocol import (
     assert_compatible_protocols,
     assign_frames_to_submaps,
@@ -67,3 +69,39 @@ def test_aggregator_rejects_mixed_formal_protocols():
             {"frame_ids": [0, 5, 9], "global_refinement_iterations": 0},
             {"frame_ids": [0, 5, 9], "global_refinement_iterations": 100},
         ])
+
+
+def test_relative_pose_errors_report_translation_rotation_and_pairs():
+    ground_truth = np.repeat(np.eye(4)[None], 3, axis=0)
+    estimated = ground_truth.copy()
+    ground_truth[:, 0, 3] = [0.0, 1.0, 2.0]
+    estimated[:, 0, 3] = [0.0, 1.1, 2.2]
+
+    metrics = compute_relative_pose_errors(estimated, ground_truth)
+
+    assert metrics["valid_pairs"] == 2
+    assert metrics["translation_rmse_m"] == pytest.approx(0.1)
+    assert metrics["rotation_rmse_deg"] == pytest.approx(0.0)
+
+
+def test_aggregator_extracts_ate_and_rpe_for_gt_dataset():
+    extracted = read_trajectory_metrics(
+        {"status": "available"},
+        {"rmse": 0.031},
+        {
+            "alignment_mode": "se3_horn_translation_no_scale",
+            "rpe_consecutive": {
+                "translation_rmse_m": 0.012,
+                "rotation_rmse_deg": 0.7,
+                "valid_pairs": 42,
+            },
+        },
+    )
+
+    assert extracted == {
+        "ate_rmse_cm": 3.1,
+        "rpe_translation_cm": 1.2,
+        "rpe_rotation_deg": 0.7,
+        "rpe_valid_pairs": 42,
+        "trajectory_alignment": "se3_horn_translation_no_scale",
+    }

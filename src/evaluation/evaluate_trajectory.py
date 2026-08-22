@@ -85,6 +85,46 @@ def pose_error(t_pred: np.ndarray, t_gt: np.ndarray, align=False):
     }
 
 
+def compute_relative_pose_errors(estimated_poses: np.ndarray,
+                                 gt_poses: np.ndarray) -> dict:
+    num_poses = min(len(estimated_poses), len(gt_poses))
+    translation_errors = []
+    rotation_errors_rad = []
+    for index in range(num_poses - 1):
+        pose_group = (
+            estimated_poses[index], estimated_poses[index + 1],
+            gt_poses[index], gt_poses[index + 1])
+        if not all(np.isfinite(pose).all() for pose in pose_group):
+            continue
+        estimated_relative = (
+            np.linalg.inv(estimated_poses[index])
+            @ estimated_poses[index + 1])
+        gt_relative = (
+            np.linalg.inv(gt_poses[index]) @ gt_poses[index + 1])
+        error = np.linalg.inv(gt_relative) @ estimated_relative
+        translation_errors.append(np.linalg.norm(error[:3, 3]))
+        cosine = np.clip(
+            (np.trace(error[:3, :3]) - 1.0) / 2.0, -1.0, 1.0)
+        rotation_errors_rad.append(np.arccos(cosine))
+
+    valid_pairs = len(translation_errors)
+    if valid_pairs == 0:
+        return {
+            "valid_pairs": 0,
+            "translation_rmse_m": None,
+            "rotation_rmse_deg": None,
+        }
+    translation_errors = np.asarray(translation_errors)
+    rotation_errors_rad = np.asarray(rotation_errors_rad)
+    return {
+        "valid_pairs": valid_pairs,
+        "translation_rmse_m": float(np.sqrt(np.mean(
+            translation_errors ** 2))),
+        "rotation_rmse_deg": float(np.degrees(np.sqrt(np.mean(
+            rotation_errors_rad ** 2)))),
+    }
+
+
 def plot_2d(pts, ax=None, color="green", label="None", title="3D Trajectory in 2D"):
     if ax is None:
         _, ax = plt.subplots()
@@ -97,11 +137,12 @@ def plot_2d(pts, ax=None, color="green", label="None", title="3D Trajectory in 2
 
 def evaluate_trajectory(estimated_poses: np.ndarray, gt_poses: np.ndarray, output_path: Path):
     output_path.mkdir(exist_ok=True, parents=True)
-    # Truncate the ground truth trajectory if needed
-    if gt_poses.shape[0] > estimated_poses.shape[0]:
-        gt_poses = gt_poses[:estimated_poses.shape[0]]
-    valid = ~np.any(np.isnan(gt_poses) |
-                    np.isinf(gt_poses), axis=(1, 2))
+    num_poses = min(gt_poses.shape[0], estimated_poses.shape[0])
+    gt_poses = gt_poses[:num_poses]
+    estimated_poses = estimated_poses[:num_poses]
+    valid = (
+        np.isfinite(gt_poses).all(axis=(1, 2))
+        & np.isfinite(estimated_poses).all(axis=(1, 2)))
     gt_poses = gt_poses[valid]
     estimated_poses = estimated_poses[valid]
 
@@ -110,12 +151,27 @@ def evaluate_trajectory(estimated_poses: np.ndarray, gt_poses: np.ndarray, outpu
     estimated_t_aligned = align_trajectories(estimated_t, gt_t)
     ate = pose_error(estimated_t, gt_t)
     ate_aligned = pose_error(estimated_t_aligned, gt_t)
+    rpe = compute_relative_pose_errors(estimated_poses, gt_poses)
 
     with open(str(output_path / "ate.json"), "w") as f:
         f.write(json.dumps(ate, cls=NumpyFloatValuesEncoder))
 
     with open(str(output_path / "ate_aligned.json"), "w") as f:
         f.write(json.dumps(ate_aligned, cls=NumpyFloatValuesEncoder))
+
+    with open(str(output_path / "rpe.json"), "w") as f:
+        f.write(json.dumps(rpe, cls=NumpyFloatValuesEncoder))
+
+    trajectory_metrics = {
+        "alignment_mode": "se3_horn_translation_no_scale",
+        "valid_poses": int(len(gt_poses)),
+        "ate_unaligned": ate,
+        "ate_aligned": ate_aligned,
+        "rpe_consecutive": rpe,
+    }
+    with open(str(output_path / "trajectory_metrics.json"), "w") as f:
+        f.write(json.dumps(
+            trajectory_metrics, cls=NumpyFloatValuesEncoder))
 
     ate_rmse, ate_rmse_aligned = ate["rmse"], ate_aligned["rmse"]
     ax = plot_2d(

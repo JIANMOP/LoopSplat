@@ -55,6 +55,26 @@ def read_json(path: Path) -> dict | None:
         return json.load(f)
 
 
+def read_trajectory_metrics(status, ate_aligned, trajectory_metrics):
+    if not status or status.get("status") != "available":
+        return {}
+    if not ate_aligned or not trajectory_metrics:
+        return {}
+    rpe = trajectory_metrics.get("rpe_consecutive", {})
+    result = {
+        "ate_rmse_cm": round(ate_aligned["rmse"] * 100, 2),
+        "trajectory_alignment": trajectory_metrics.get("alignment_mode"),
+    }
+    if rpe.get("translation_rmse_m") is not None:
+        result["rpe_translation_cm"] = round(
+            rpe["translation_rmse_m"] * 100, 2)
+    if rpe.get("rotation_rmse_deg") is not None:
+        result["rpe_rotation_deg"] = round(
+            rpe["rotation_rmse_deg"], 3)
+    result["rpe_valid_pairs"] = rpe.get("valid_pairs", 0)
+    return result
+
+
 def collect_results() -> dict:
     results = {}
     protocols_by_scene = {scene_id: [] for scene_id in SCENE_IDS}
@@ -82,8 +102,9 @@ def collect_results() -> dict:
 
             ate = read_json(rd / "ate_aligned.json")
             trajectory = read_json(rd / "trajectory_status.json")
-            if trajectory and trajectory.get("status") == "available" and ate:
-                m["ate_rmse_cm"] = round(ate.get("rmse", 0) * 100, 2)
+            trajectory_metrics = read_json(rd / "trajectory_metrics.json")
+            m.update(read_trajectory_metrics(
+                trajectory, ate, trajectory_metrics))
 
             render = read_json(rd / "rendering_metrics_observed_view.json")
             if render:
@@ -117,7 +138,7 @@ def render_markdown(results: dict) -> str:
         slabels = STRATEGY_LABELS_A if sid.startswith("A") else STRATEGY_LABELS_BC
         cols = ["Exp"]
         if show_ate:
-            cols.append("ATE↓")
+            cols += ["ATE↓", "RPE-t↓", "RPE-R↓"]
         cols += ["PSNR↑", "SSIM↑", "LPIPS↓", "Depth L1↓"]
         header = "| " + " | ".join(cols) + " |"
         sep = "|" + "|".join(["---"] * len(cols)) + "|"
@@ -131,7 +152,11 @@ def render_markdown(results: dict) -> str:
             else:
                 row = [label]
                 if show_ate:
-                    row.append(_fmt(r.get("ate_rmse_cm", "—")))
+                    row += [
+                        _fmt(r.get("ate_rmse_cm", "—")),
+                        _fmt(r.get("rpe_translation_cm", "—")),
+                        _fmt(r.get("rpe_rotation_deg", "—"), 3),
+                    ]
                 row += [_fmt(r.get("psnr", "—")),
                         _fmt(r.get("ssim", "—"), 4),
                         _fmt(r.get("lpips", "—"), 4),
