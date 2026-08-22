@@ -5,9 +5,9 @@ LoopSplat Ablation Experiment Runner
 Three dataset groups × all strategy combinations.
 
 Group A  TUM RGB-D (no IMU)     5 scenes × 4 combos = 20 experiments
-Group B  AzureKinect (has IMU)   1 scene  × 6 combos =  6 experiments
+Group B  AzureKinect (uncalibrated IMU) 1 scene × 4 combos = 4 experiments
 Group C  FMDataset (has IMU)     3 scenes × 6 combos = 18 experiments
-                                                  Total = 44 experiments
+                                                  Total = 42 experiments
 
 Strategy codes per experiment:
   _0 = Baseline (all off)
@@ -67,7 +67,7 @@ STRATEGIES_A = [
                            "num_sub_levels": 2, "uses_per_level": 8}}),
 ]
 
-# Group B/C: has IMU — all three strategies available
+# Group C: calibrated IMU — all three strategies available
 STRATEGIES_BC = [
     ("_0", "Baseline",              "All OFF",
      {"keyframing": {"enable_gi_slam": False},
@@ -157,7 +157,7 @@ def build_experiments():
             })
 
     for scene_id, scene_name, config_path in SCENES_B:
-        for suffix, sname, sdesc, overrides in STRATEGIES_BC:
+        for suffix, sname, sdesc, overrides in STRATEGIES_A:
             eid = scene_id + suffix
             exps.append({
                 "id": eid,
@@ -169,6 +169,7 @@ def build_experiments():
                     "data": {"output_path": f"output/ablation/{eid}/"},
                     "lc": {"registration": {
                         "gsr_max_iters": GSR_MAX_ITERS}},
+                    "tracking": {"use_imu": False},
                     **deepcopy(overrides),
                 },
             })

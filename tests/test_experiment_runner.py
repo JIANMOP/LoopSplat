@@ -2,6 +2,7 @@ from argparse import Namespace
 from datetime import datetime, timezone
 
 from run_slam import update_config_with_args
+from scripts.run_ablation import EXPERIMENTS
 from src.utils.experiment_utils import (
     create_run_directory,
     discover_completed_runs,
@@ -99,3 +100,16 @@ def test_missing_output_path_fails_before_slam_initialization():
         assert "data.output_path" in str(error)
     else:
         raise AssertionError("missing output path must fail")
+
+
+def test_azure_matrix_excludes_imu_without_camera_imu_calibration():
+    azure_experiments = [
+        experiment for experiment in EXPERIMENTS
+        if experiment["group"] == "B"
+    ]
+
+    assert azure_experiments
+    assert all(
+        experiment["overrides"]["tracking"]["use_imu"] is False
+        for experiment in azure_experiments
+    )
