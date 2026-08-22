@@ -21,6 +21,8 @@ import numpy as np
 
 
 from src.entities.datasets import BaseDataset
+from src.entities.imu_types import build_imu_interval
+from src.utils.rgbd_registration import register_depth_to_color
 
 
 class FMDataset(BaseDataset):
@@ -29,9 +31,22 @@ class FMDataset(BaseDataset):
     def __init__(self, dataset_config: dict):
         # Call BaseDataset first (sets up width/height/intrinsics/fov)
         super().__init__(dataset_config)
+        self.has_ground_truth = False
 
         self.dataset_path = Path(dataset_config["input_path"])
         self.use_filtered_depth = dataset_config.get("use_filtered_depth", False)
+        self.register_depth_to_color = dataset_config.get(
+            "register_depth_to_color", False)
+        if self.register_depth_to_color:
+            try:
+                self.depth_intrinsics = np.asarray(
+                    dataset_config["depth_intrinsics"], dtype=np.float64)
+                self.t_color_depth = np.asarray(
+                    dataset_config["T_color_depth"], dtype=np.float64)
+            except KeyError as error:
+                raise ValueError(
+                    "registered FM depth requires depth_intrinsics and "
+                    "T_color_depth") from error
 
         # Load timestamp → image mapping
         self.timestamps = []
@@ -64,7 +79,7 @@ class FMDataset(BaseDataset):
         if not ts_path.exists():
             raise FileNotFoundError(f"TIMESTAMP.txt not found at {ts_path}")
 
-        self._ts_mapping = []  # (timestamp_us, color_name, depth_name)
+        self._ts_mapping = []  # (timestamp_s, color_name, depth_name)
         with open(ts_path) as f:
             for line in f:
                 line = line.strip()
@@ -72,7 +87,7 @@ class FMDataset(BaseDataset):
                     continue
                 parts = line.split(',')
                 if len(parts) >= 3:
-                    ts = float(parts[0])  # microseconds
+                    ts = float(parts[0]) * 1e-6
                     color_name = parts[1].strip()
                     depth_name = parts[2].strip()
                     self._ts_mapping.append((ts, color_name, depth_name))
@@ -101,7 +116,7 @@ class FMDataset(BaseDataset):
                         parts = line.split()
                     if len(parts) < 7:
                         continue
-                    ts = float(parts[0])          # microseconds
+                    ts = float(parts[0]) * 1e-6
                     gyro = [float(parts[1]), float(parts[2]), float(parts[3])]
                     accel = [float(parts[4]), float(parts[5]), float(parts[6])]
 
@@ -127,6 +142,10 @@ class FMDataset(BaseDataset):
         closest = min(self.imu_data, key=lambda x: abs(x['timestamp'] - frame_ts))
         return closest
 
+    def get_imu_measurements(self, start_frame_id: int, end_frame_id: int):
+        return build_imu_interval(
+            self.timestamps, self.imu_data, start_frame_id, end_frame_id)
+
     # ── Dataset interface ───────────────────────────────────────────
 
     def __len__(self):
@@ -142,6 +161,15 @@ class FMDataset(BaseDataset):
         depth_data = cv2.imread(
             str(self.depth_paths[index]), cv2.IMREAD_UNCHANGED)
         depth_data = depth_data.astype(np.float32) / self.depth_scale
+
+        if self.register_depth_to_color:
+            depth_data = register_depth_to_color(
+                depth_m=depth_data,
+                depth_intrinsics=self.depth_intrinsics,
+                color_intrinsics=self.intrinsics,
+                t_color_depth=self.t_color_depth,
+                output_shape=color_data.shape[:2],
+            )
 
         # No distortion / crop for FM dataset
         return index, color_data, depth_data, self.poses[index]

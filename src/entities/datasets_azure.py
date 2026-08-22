@@ -7,6 +7,7 @@ import numpy as np
 from tqdm import tqdm
 
 from .datasets import BaseDataset
+from .imu_types import build_imu_interval
 
 
 class AzureKinect(BaseDataset):
@@ -21,6 +22,7 @@ class AzureKinect(BaseDataset):
     
     def __init__(self, dataset_config: dict):
         self.dataset_path = Path(dataset_config["input_path"])
+        self.timestamp_scale = self._timestamp_scale(dataset_config)
 
         # Extract resize strategy and camera parameters from config
         self.resize_mode = dataset_config.get("resize", "redepth")
@@ -52,6 +54,7 @@ class AzureKinect(BaseDataset):
             self.k4a_available = False
 
         super().__init__(dataset_config)
+        self.has_ground_truth = False
 
         # Load frame information
         self.load_frame_info()
@@ -76,6 +79,15 @@ class AzureKinect(BaseDataset):
         print(f"Depth camera: {self.depth_camera['W']}x{self.depth_camera['H']}")
         print(f"IMU data: {'Available' if self.has_imu else 'Not available'}")
         print(f"Processed images directory: {self.processed_dir}")
+
+    @staticmethod
+    def _timestamp_scale(dataset_config):
+        unit = dataset_config.get("timestamp_unit")
+        scales = {"s": 1.0, "ms": 1e-3, "us": 1e-6, "ns": 1e-9}
+        if unit not in scales:
+            raise ValueError(
+                "Azure Kinect timestamp_unit must be one of s, ms, us, ns")
+        return scales[unit]
     
 
     def load_frame_info(self):
@@ -109,7 +121,8 @@ class AzureKinect(BaseDataset):
             if full_color_path.exists() and full_depth_path.exists():
                 self.color_paths.append(str(full_color_path))
                 self.depth_paths.append(str(full_depth_path))
-                self.timestamps.append(frame["timestamp"])
+                self.timestamps.append(
+                    float(frame["timestamp"]) * self.timestamp_scale)
         
         # Generate dummy poses (identity matrices) since Azure Kinect data doesn't include poses
         # In real SLAM, these will be estimated
@@ -138,7 +151,7 @@ class AzureKinect(BaseDataset):
 
                     parts = line.split()
                     if len(parts) == 7:
-                        timestamp = float(parts[0])
+                        timestamp = float(parts[0]) * self.timestamp_scale
                         acc = [float(parts[1]), float(parts[2]), float(parts[3])]
                         gyro = [float(parts[4]), float(parts[5]), float(parts[6])]
 
@@ -171,6 +184,10 @@ class AzureKinect(BaseDataset):
                          key=lambda x: abs(x['timestamp'] - frame_timestamp))
 
         return closest_imu
+
+    def get_imu_measurements(self, start_frame_id, end_frame_id):
+        return build_imu_interval(
+            self.timestamps, self.imu_data, start_frame_id, end_frame_id)
 
     def apply_k4a_transformation(self, color_data, depth_data):
         """

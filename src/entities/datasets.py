@@ -14,6 +14,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
     def __init__(self, dataset_config: dict):
         self.dataset_path = Path(dataset_config["input_path"])
+        self.has_ground_truth = False
         self.frame_limit = dataset_config.get("frame_limit", -1)
         self.dataset_config = dataset_config
         self.height = dataset_config["H"]
@@ -76,8 +77,9 @@ class Replica(BaseDataset):
 class TUM_RGBD(BaseDataset):
     def __init__(self, dataset_config: dict):
         super().__init__(dataset_config)
-        self.color_paths, self.depth_paths, self.poses = self.loadtum(
-            self.dataset_path, frame_rate=32)
+        (self.color_paths, self.depth_paths, self.poses,
+         self.timestamps) = self.loadtum(self.dataset_path, frame_rate=32)
+        self.has_ground_truth = True
 
     def parse_list(self, filepath, skiprows=0):
         """ read list data """
@@ -126,12 +128,13 @@ class TUM_RGBD(BaseDataset):
             if t1 - t0 > 1.0 / frame_rate:
                 indicies += [i]
 
-        images, poses, depths = [], [], []
+        images, poses, depths, timestamps = [], [], [], []
         inv_pose = None
         for ix in indicies:
             (i, j, k) = associations[ix]
             images += [os.path.join(datapath, image_data[i, 1])]
             depths += [os.path.join(datapath, depth_data[j, 1])]
+            timestamps += [tstamp_image[i]]
             c2w = self.pose_matrix_from_quaternion(pose_vecs[k])
             if inv_pose is None:
                 inv_pose = np.linalg.inv(c2w)
@@ -140,7 +143,7 @@ class TUM_RGBD(BaseDataset):
                 c2w = inv_pose@c2w
             poses += [c2w.astype(np.float32)]
 
-        return images, depths, poses
+        return images, depths, poses, np.asarray(timestamps, dtype=np.float64)
 
     def pose_matrix_from_quaternion(self, pvec):
         """ convert 4x4 pose matrix to (t, q) """

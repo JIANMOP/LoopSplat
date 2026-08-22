@@ -40,6 +40,20 @@ tracking:
   use_imu: false
   lambda_imu_trans: 0.01
   lambda_imu_rot: 0.01
+  imu:
+    T_cam_imu:
+      - [0.999834482, -0.014281001, 0.011232117, -0.093735308]
+      - [0.014512037, 0.999679666, -0.020760474, -0.004530765]
+      - [-0.010931932, 0.020920576, 0.999721705, -0.000971498]
+      - [0.0, 0.0, 0.0, 1.0]
+    accel_bias: [0.0, 0.0, 0.0]
+    gyro_bias: [0.0, 0.0, 0.0]
+    accel_bias_variance: 4.0e-7
+    accel_noise_variance: 5.88e-4
+    gyro_bias_variance: 2.5e-9
+    gyro_noise_variance: 1.22e-6
+    gravity_mps2: 9.81
+    time_offset_s: 0.0
 
 cam:
   H: 480
@@ -50,6 +64,16 @@ cam:
   cy: 245.549
   depth_scale: 1000.0            # 0.001m per unit → /1000 = meters
   use_filtered_depth: false      # set true to use filtered/ depth
+  register_depth_to_color: true
+  depth_intrinsics:
+    - [583.980, 0.0, 325.103]
+    - [0.0, 583.980, 240.718]
+    - [0.0, 0.0, 1.0]
+  T_color_depth:
+    - [0.999980211, -0.00069964811, -0.0062491186, -0.057460]
+    - [0.000735448557, 0.999983311, 0.00572841847, -0.001073]
+    - [0.00624500681, -0.00573290139, 0.999964058, -0.002205]
+    - [0.0, 0.0, 0.0, 1.0]
 
 keyframing:
   enable_gi_slam: false

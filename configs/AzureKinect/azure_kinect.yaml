@@ -35,12 +35,13 @@ tracking:
   enable_exposure: false
 
   # IMU loss function configuration (disabled by default)
-  use_imu: true
+  use_imu: false
   lambda_imu_trans: 0.01
   lambda_imu_rot: 0.01
 cam:
   crop_edge: 50
   depth_scale: 1000.0
+  timestamp_unit: "us"  # Azure Kinect device timestamps are microseconds
   # Default resize strategy (can be overridden in scene-specific configs)
   resize: "redepth"  # Options: "rergb", "redepth", "reall"
 
