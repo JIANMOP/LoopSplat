@@ -10,3 +10,7 @@ debug
 wandb
 data
 thirdparty
+agent
+.agent
+.claude
+.reasonix
