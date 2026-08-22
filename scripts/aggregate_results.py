@@ -42,6 +42,12 @@ STRATEGY_SUFFIXES_A = ["_0","_1","_2","_3"]
 STRATEGY_SUFFIXES_BC = ["_0","_1","_2","_3","_4","_5"]
 
 
+def strategy_spec(scene_id):
+    if scene_id.startswith(("A", "B")):
+        return STRATEGY_SUFFIXES_A, STRATEGY_LABELS_A
+    return STRATEGY_SUFFIXES_BC, STRATEGY_LABELS_BC
+
+
 def find_result_dir(base: Path) -> Path | None:
     records = [
         record for record in discover_completed_runs(base.parent)
@@ -82,7 +88,7 @@ def collect_results() -> dict:
     base = PROJECT_ROOT / "output" / "ablation"
 
     for sid in SCENE_IDS:
-        suffixes = STRATEGY_SUFFIXES_A if sid.startswith("A") else STRATEGY_SUFFIXES_BC
+        suffixes, labels = strategy_spec(sid)
         for suffix in suffixes:
             eid = sid + suffix
             exp_dir = base / eid
@@ -91,7 +97,6 @@ def collect_results() -> dict:
                 results[eid] = {"error": "no results"}
                 continue
 
-            labels = STRATEGY_LABELS_A if sid.startswith("A") else STRATEGY_LABELS_BC
             m = {"scene": SCENE_LABELS.get(sid, sid),
                  "strategy": labels.get(suffix, suffix)}
 
@@ -135,8 +140,7 @@ def render_markdown(results: dict) -> str:
 
     # ── Helper: render one scene table ──
     def scene_table(sid, show_ate=True):
-        suffixes = STRATEGY_SUFFIXES_A if sid.startswith("A") else STRATEGY_SUFFIXES_BC
-        slabels = STRATEGY_LABELS_A if sid.startswith("A") else STRATEGY_LABELS_BC
+        suffixes, slabels = strategy_spec(sid)
         cols = ["Exp"]
         if show_ate:
             cols += ["ATE↓", "RPE-t↓", "RPE-R↓"]
@@ -173,10 +177,11 @@ def render_markdown(results: dict) -> str:
         lines.append("")
 
     # ── Group B: AzureKinect ──
-    lines.append("## Group B — AzureKinect (has IMU)\n")
+    lines.append(
+        "## Group B — AzureKinect (uncalibrated IMU, no GT poses)\n")
     for sid in ["B1"]:
         lines.append(f"### {sid}: {SCENE_LABELS[sid]}\n")
-        lines.append(scene_table(sid, show_ate=True))
+        lines.append(scene_table(sid, show_ate=False))
         lines.append("")
 
     # ── Group C: FMDataset ──
@@ -193,8 +198,7 @@ def render_terminal(results: dict) -> str:
     lines = []
     for sid in SCENE_IDS:
         lines.append(f"\n{sid} — {SCENE_LABELS.get(sid,sid)}")
-        suffixes = STRATEGY_SUFFIXES_A if sid.startswith("A") else STRATEGY_SUFFIXES_BC
-        slabels = STRATEGY_LABELS_A if sid.startswith("A") else STRATEGY_LABELS_BC
+        suffixes, slabels = strategy_spec(sid)
         for suffix in suffixes:
             eid = sid + suffix
             r = results.get(eid, {})

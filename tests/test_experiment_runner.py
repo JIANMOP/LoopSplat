@@ -2,6 +2,7 @@ from argparse import Namespace
 from datetime import datetime, timezone
 
 from run_slam import update_config_with_args
+from scripts.aggregate_results import render_markdown
 from scripts.run_ablation import EXPERIMENTS
 from src.utils.experiment_utils import (
     create_run_directory,
@@ -113,3 +114,19 @@ def test_azure_matrix_excludes_imu_without_camera_imu_calibration():
         experiment["overrides"]["tracking"]["use_imu"] is False
         for experiment in azure_experiments
     )
+
+
+def test_azure_report_uses_rgbd_only_matrix_without_trajectory_columns():
+    results = {
+        f"B1_{suffix}": {"error": "no results"}
+        for suffix in range(6)
+    }
+
+    report = render_markdown(results)
+    azure_section = report.split("## Group B", 1)[1].split(
+        "## Group C", 1)[0]
+
+    assert "+IMU" not in azure_section
+    assert "+ALL" not in azure_section
+    assert "ATE↓" not in azure_section
+    assert "RPE-t↓" not in azure_section
