@@ -239,6 +239,14 @@ def formal_outputs_complete(run_dir):
             saved_frame_ids = json.loads(formal_paths[2].read_text())
             if saved_frame_ids != frame_ids:
                 return False
+            saved_config = yaml.safe_load(formal_paths[0].read_text())
+            if (not isinstance(saved_config, dict)
+                    or config_sha256(saved_config)
+                    != manifest.get("config_sha256")
+                    or config_sha256(saved_config, exclude_seed=True)
+                    != manifest.get("experiment_config_sha256")
+                    or formal_paths[1].stat().st_size == 0):
+                return False
             seed_dir = run_dir.parent.name
             if (not seed_dir.startswith("seed_")
                     or manifest.get("seed") != int(
