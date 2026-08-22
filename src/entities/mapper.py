@@ -26,10 +26,12 @@ from src.utils.vis_utils import *  # noqa - needed for debugging
 
 
 class Mapper(object):
-    def __init__(self, config: dict, dataset: BaseDataset, logger: Logger) -> None:
+    def __init__(self, config: dict, pyramid_config: dict,
+                 dataset: BaseDataset, logger: Logger) -> None:
         """ Sets up the mapper parameters
         Args:
             config: configuration of the mapper
+            pyramid_config: Gaussian Pyramid configuration
             dataset: The dataset object used for extracting camera parameters and reading the data
             logger: The logger object used for logging the mapping process and saving visualizations
         """
@@ -49,12 +51,27 @@ class Mapper(object):
         self.keyframes = []
 
         # ── Photo-SLAM Gaussian Pyramid config ───────────────────────
-        pyr_cfg = config.get("gaussian_pyramid", {})
-        self._pyramid_enabled = pyr_cfg.get("enabled", False)
-        self._pyramid_num_sub_levels = pyr_cfg.get("num_sub_levels", 2)
-        self._pyramid_uses_per_level = pyr_cfg.get("uses_per_level", 8)
+        enabled = pyramid_config.get("enabled", False)
+        num_sub_levels = pyramid_config.get("num_sub_levels", 2)
+        uses_per_level = pyramid_config.get("uses_per_level", 8)
+        if not isinstance(enabled, bool):
+            raise TypeError("gaussian_pyramid.enabled must be bool")
+        if (not isinstance(num_sub_levels, int)
+                or not isinstance(uses_per_level, int)
+                or num_sub_levels < 1 or uses_per_level < 1):
+            raise ValueError("gaussian_pyramid levels and uses must be positive integers")
+        self._pyramid_enabled = enabled
+        self._pyramid_num_sub_levels = num_sub_levels
+        self._pyramid_uses_per_level = uses_per_level
         self._pyramid_usage_counters = {}  # frame_id → [remaining_uses_l0, ...]
         # ────────────────────────────────────────────────────────────────
+
+    def effective_pyramid_config(self) -> dict:
+        return {
+            "enabled": self._pyramid_enabled,
+            "num_sub_levels": self._pyramid_num_sub_levels,
+            "uses_per_level": self._pyramid_uses_per_level,
+        }
 
     def compute_seeding_mask(self, gaussian_model: GaussianModel, keyframe: dict, new_submap: bool) -> np.ndarray:
         """

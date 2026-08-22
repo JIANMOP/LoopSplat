@@ -87,7 +87,9 @@ class GaussianSLAM(object):
             self.new_submap_frame_ids.pop(0)
 
         self.logger = Logger(self.output_path, config["use_wandb"])
-        self.mapper = Mapper(config["mapping"], self.dataset, self.logger)
+        self.mapper = Mapper(
+            config["mapping"], config.get("gaussian_pyramid", {}),
+            self.dataset, self.logger)
         self.tracker = Tracker(config["tracking"], self.dataset, self.logger)
         self.enable_exposure = self.tracker.enable_exposure
         self.loop_closer = Loop_closure(config, self.dataset, self.logger)
