@@ -51,7 +51,11 @@ class Evaluator(object):
         self.checkpoint_path = Path(checkpoint_path)
         self.use_wandb = self.config["use_wandb"]
         self.device = "cuda"
-        self.dataset = get_dataset(self.config["dataset_name"])({**self.config["data"], **self.config["cam"]})
+        dataset_config = {**self.config["data"], **self.config["cam"]}
+        if "frame_limit" in self.config:
+            dataset_config["frame_limit"] = self.config["frame_limit"]
+        self.dataset = get_dataset(self.config["dataset_name"])(
+            dataset_config)
         self.scene_name = self.config["data"]["scene_name"]
         self.dataset_name = self.config["dataset_name"]
         self.gt_poses = (

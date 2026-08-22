@@ -8,9 +8,23 @@ import pytest
 from src.entities.datasets import TUM_RGBD
 from src.entities.datasets_azure import AzureKinect
 from src.entities.datasets_fm import FMDataset
+from src.entities.gaussian_slam import build_dataset_config
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_top_level_frame_limit_reaches_dataset_loader():
+    config = {
+        "frame_limit": 8,
+        "data": {"input_path": "data/example"},
+        "cam": {"H": 10, "W": 20},
+    }
+
+    dataset_config = build_dataset_config(config)
+
+    assert dataset_config["frame_limit"] == 8
+    assert dataset_config["input_path"] == "data/example"
 
 
 @pytest.fixture(scope="module")

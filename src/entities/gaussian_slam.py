@@ -35,6 +35,13 @@ def should_use_dataset_pose(frame_id, gt_camera, has_ground_truth):
     return frame_id == 0 or (gt_camera and has_ground_truth)
 
 
+def build_dataset_config(config):
+    dataset_config = {**config["data"], **config["cam"]}
+    if "frame_limit" in config:
+        dataset_config["frame_limit"] = config["frame_limit"]
+    return dataset_config
+
+
 def _record_keyframe_decision(slam, frame_id, decision):
     previous = slam._gi_decisions.get(frame_id)
     if previous is not None:
@@ -128,7 +135,8 @@ class GaussianSLAM(object):
 
         self.scene_name = config["data"]["scene_name"]
         self.dataset_name = config["dataset_name"]
-        self.dataset = get_dataset(config["dataset_name"])({**config["data"], **config["cam"]})
+        self.dataset = get_dataset(config["dataset_name"])(
+            build_dataset_config(config))
 
         n_frames = len(self.dataset)
         frame_ids = list(range(n_frames))
