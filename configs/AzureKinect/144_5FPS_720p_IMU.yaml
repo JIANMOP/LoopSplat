@@ -1,6 +1,6 @@
 inherit_from: configs/AzureKinect/azure_kinect.yaml
 data:
-  input_path: /data/p/.pfy/LoopSplat/data/capture_data/144_5FPS_720p_IMU
+  input_path: data/AzureKinect/144_5FPS_720p_IMU
   output_path: output/AzureKinect/144_5FPS_720p_IMU_redepth
   scene_name: 144_5FPS_720p_IMU
   frame_limit: 144
@@ -16,6 +16,13 @@ cam:
   cy: 367.495361328125
   depth_scale: 1000.0
   depth_trunc: 4.0
+  timestamp_unit: s
+  preprocessing_strategy: calibrated_depth_to_color
+  T_color_depth:
+  - [0.999998927116394, -0.0012292760657146573, 0.0008262777118943632, -0.031983896255493166]
+  - [0.0011513138888403773, 0.9960741996765137, 0.0885145366191864, -0.002160430908203125]
+  - [-0.0009318427764810622, -0.08851349353790283, 0.9960745573043823, 0.0040859971046447756]
+  - [0.0, 0.0, 0.0, 1.0]
   color_camera:
     H: 720
     W: 1280

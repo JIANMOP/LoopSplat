@@ -5,14 +5,54 @@ import cv2
 import numpy as np
 import pytest
 
-from src.entities.datasets import TUM_RGBD
+from src.entities.datasets import Replica, TUM_RGBD
 from src.entities.datasets_azure import AzureKinect
 from src.entities.datasets_fm import FMDataset
 from src.entities.gaussian_slam import build_dataset_config
 from src.entities.imu_types import build_imu_interval
+from src.utils.io_utils import load_config
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize(
+    "scene_name",
+    [
+        "office0", "office1", "office2", "office3", "office4",
+        "room0", "room1", "room2",
+    ],
+)
+def test_replica_scene_configs_match_local_dataset(scene_name):
+    config = load_config(f"configs/Replica/{scene_name}.yaml")
+    dataset = Replica({**config["data"], **config["cam"]})
+
+    expected_root = PROJECT_ROOT / "data" / "Replica" / scene_name
+    assert dataset.dataset_path.resolve() == expected_root.resolve()
+    assert len(dataset.color_paths) == 2000
+    assert len(dataset.depth_paths) == 2000
+    assert len(dataset.poses) == 2000
+    assert dataset.has_ground_truth is True
+
+
+def test_azure_scene_config_matches_seconds_and_calibrated_registration():
+    config = load_config("configs/AzureKinect/144_5FPS_720p_IMU.yaml")
+    dataset_path = PROJECT_ROOT / config["data"]["input_path"]
+    frame_info = json.loads((dataset_path / "frame_info.json").read_text())
+    timestamps = [frame["timestamp"] for frame in frame_info["frames"]]
+    transform = np.asarray(config["cam"]["T_color_depth"], dtype=np.float64)
+
+    assert dataset_path.resolve() == (
+        PROJECT_ROOT / "data/AzureKinect/144_5FPS_720p_IMU").resolve()
+    assert config["cam"]["timestamp_unit"] == "s"
+    assert config["cam"]["preprocessing_strategy"] == (
+        "calibrated_depth_to_color")
+    assert 0.18 < timestamps[1] - timestamps[0] < 0.22
+    assert transform.shape == (4, 4)
+    np.testing.assert_allclose(transform[3], [0.0, 0.0, 0.0, 1.0])
+    np.testing.assert_allclose(
+        transform[:3, :3].T @ transform[:3, :3], np.eye(3), atol=1e-5)
+    assert np.linalg.det(transform[:3, :3]) == pytest.approx(1.0, abs=1e-5)
 
 
 def test_top_level_frame_limit_reaches_dataset_loader():
