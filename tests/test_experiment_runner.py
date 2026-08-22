@@ -1,6 +1,7 @@
 from argparse import Namespace
 from datetime import datetime, timezone
 import json
+import subprocess
 import yaml
 import pytest
 
@@ -26,11 +27,13 @@ from src.utils.experiment_utils import (
     write_manifest,
     write_status,
 )
+import src.utils.experiment_utils as experiment_utils
 
 
 def write_valid_formal_outputs(run_dir):
     (run_dir / "manifest.json").write_text(json.dumps({
         "git_commit": "a" * 40,
+        "experiment_source_sha256": "1" * 64,
         "git_dirty": False,
         "evaluation_frame_ids": [0],
         "requested_features": {
@@ -128,6 +131,16 @@ def test_formal_outputs_reject_requested_effective_feature_mismatch(tmp_path):
     assert formal_outputs_complete(tmp_path) is False
 
 
+def test_formal_outputs_reject_missing_source_fingerprint(tmp_path):
+    write_valid_formal_outputs(tmp_path)
+    manifest_path = tmp_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    del manifest["experiment_source_sha256"]
+    manifest_path.write_text(json.dumps(manifest))
+
+    assert formal_outputs_complete(tmp_path) is False
+
+
 def test_formal_imu_run_requires_at_least_one_valid_prediction(tmp_path):
     write_valid_formal_outputs(tmp_path)
     manifest = json.loads((tmp_path / "manifest.json").read_text())
@@ -168,12 +181,13 @@ def test_formal_trajectory_rejects_nonfinite_rpe(tmp_path):
     assert formal_outputs_complete(tmp_path) is False
 
 
-def test_formal_group_requires_three_seeds_and_shared_commit():
-    def record(seed, commit="a"):
+def test_formal_group_requires_three_seeds_and_shared_source_fingerprint():
+    def record(seed, commit="a", source_fingerprint="1" * 64):
         return type("Record", (), {
             "seed": seed,
             "manifest": {
                 "git_commit": commit,
+                "experiment_source_sha256": source_fingerprint,
                 "gsr_max_iters": 100,
                 "environment": {"gpu": "GPU", "cuda_runtime": "12.1"},
             },
@@ -181,9 +195,12 @@ def test_formal_group_requires_three_seeds_and_shared_commit():
 
     with pytest.raises(ValueError, match="seeds"):
         validate_formal_run_group([record(0), record(1)], "C1_0")
-    with pytest.raises(ValueError, match="commit"):
+    validate_formal_run_group(
+        [record(0, "a"), record(1, "b"), record(2, "c")], "C1_0")
+    with pytest.raises(ValueError, match="source fingerprint"):
         validate_formal_run_group(
-            [record(0), record(1), record(2, "b")], "C1_0")
+            [record(0), record(1), record(2, source_fingerprint="2" * 64)],
+            "C1_0")
 
 
 def test_manifest_records_config_hash_command_and_effective_features(tmp_path):
@@ -200,6 +217,7 @@ def test_manifest_records_config_hash_command_and_effective_features(tmp_path):
     assert manifest["command"] == ["run_slam.py", "config.yaml"]
     assert manifest["effective_features"]["imu"] is False
     assert "git_commit" in manifest
+    assert len(manifest["experiment_source_sha256"]) == 64
     assert "pytorch" in manifest["environment"]
 
 
@@ -218,7 +236,7 @@ def test_config_hash_ignores_run_directory_but_not_seed():
     assert config_sha256(first) != config_sha256({**second, "seed": 1})
 
 
-def test_resume_requires_matching_seed_config_and_commit(tmp_path):
+def test_resume_requires_matching_seed_config_and_source_fingerprint(tmp_path):
     config = {"seed": 0, "data": {"output_path": str(tmp_path)}}
     run_dir = create_run_directory(
         tmp_path, "C1_0", 0, suffix="complete")
@@ -228,16 +246,75 @@ def test_resume_requires_matching_seed_config_and_commit(tmp_path):
     manifest.update({
         "config_sha256": config_sha256(config),
         "git_commit": "b" * 40,
+        "experiment_source_sha256": "1" * 64,
     })
     manifest_path.write_text(json.dumps(manifest))
     write_status(run_dir, "succeeded")
 
     output_dir = tmp_path / "C1_0"
-    assert config_has_results(output_dir, 0, config, "b" * 40)
-    assert not config_has_results(output_dir, 1, {**config, "seed": 1}, "b" * 40)
+    assert config_has_results(output_dir, 0, config, "1" * 64)
     assert not config_has_results(
-        output_dir, 0, {**config, "tracking": {"use_imu": True}}, "b" * 40)
-    assert not config_has_results(output_dir, 0, config, "c" * 40)
+        output_dir, 1, {**config, "seed": 1}, "1" * 64)
+    assert not config_has_results(
+        output_dir, 0, {**config, "tracking": {"use_imu": True}},
+        "1" * 64)
+    assert not config_has_results(output_dir, 0, config, "2" * 64)
+
+
+def test_experiment_source_fingerprint_ignores_docs_but_tracks_source(tmp_path):
+    for relative_path, content in {
+            "src/model.py": "MODEL = 1\n",
+            "scripts/runner.py": "RUNNER = 1\n",
+            "configs/base.yaml": "seed: 0\n",
+            "run_slam.py": "print('slam')\n",
+            "run_slam_azure.py": "print('azure')\n",
+            "md/guide.md": "first draft\n",
+    }.items():
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+
+    initial = experiment_utils.experiment_source_sha256(tmp_path)
+    (tmp_path / "md/guide.md").write_text("second draft\n")
+    after_docs = experiment_utils.experiment_source_sha256(tmp_path)
+    (tmp_path / "src/model.py").write_text("MODEL = 2\n")
+    after_source = experiment_utils.experiment_source_sha256(tmp_path)
+
+    assert after_docs == initial
+    assert after_source != initial
+
+
+def test_formal_source_guard_allows_doc_commit_but_rejects_source_commit(
+        tmp_path):
+    source_path = tmp_path / "src/model.py"
+    docs_path = tmp_path / "md/guide.md"
+    source_path.parent.mkdir(parents=True)
+    docs_path.parent.mkdir(parents=True)
+    source_path.write_text("MODEL = 1\n")
+    docs_path.write_text("first draft\n")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+
+    def commit_all(message):
+        subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+        subprocess.run([
+            "git", "-c", "user.name=Test", "-c",
+            "user.email=test@example.com", "commit", "-q", "-m", message,
+        ], cwd=tmp_path, check=True)
+
+    commit_all("initial")
+    frozen = experiment_utils.experiment_source_sha256(tmp_path)
+    docs_path.write_text("second draft\n")
+    commit_all("docs")
+
+    assert experiment_utils.verify_formal_source_state(
+        frozen, tmp_path) == frozen
+
+    source_path.write_text("MODEL = 2\n")
+    commit_all("source")
+    with pytest.raises(RuntimeError, match="source changed"):
+        experiment_utils.verify_formal_source_state(frozen, tmp_path)
 
 
 def test_seed_metrics_report_mean_sample_std_and_count():

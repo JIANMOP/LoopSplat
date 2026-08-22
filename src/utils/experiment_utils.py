@@ -16,6 +16,13 @@ import yaml
 
 
 VALID_STATES = {"running", "succeeded", "failed"}
+EXPERIMENT_SOURCE_PATHS = (
+    "src",
+    "scripts",
+    "configs",
+    "run_slam.py",
+    "run_slam_azure.py",
+)
 REQUIRED_FORMAL_OUTPUTS = (
     "manifest.json",
     "rendering_metrics_observed_view.json",
@@ -98,9 +105,48 @@ def current_git_commit():
     return _git_value(project_root, ["rev-parse", "HEAD"])
 
 
-def current_git_dirty():
-    project_root = Path(__file__).resolve().parents[2]
+def current_git_dirty(project_root=None):
+    project_root = Path(
+        project_root or Path(__file__).resolve().parents[2])
     return bool(_git_value(project_root, ["status", "--porcelain"]))
+
+
+def experiment_source_sha256(project_root=None):
+    project_root = Path(
+        project_root or Path(__file__).resolve().parents[2])
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--", *EXPERIMENT_SOURCE_PATHS],
+        cwd=project_root, capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError("cannot enumerate tracked experiment source files")
+    relative_paths = sorted(
+        path.decode("utf-8")
+        for path in result.stdout.split(b"\0") if path)
+    if not relative_paths:
+        raise RuntimeError("no tracked experiment source files found")
+    digest = hashlib.sha256()
+    for relative_path in relative_paths:
+        relative_bytes = relative_path.encode("utf-8")
+        file_digest = hashlib.sha256(
+            (project_root / relative_path).read_bytes()).digest()
+        digest.update(len(relative_bytes).to_bytes(8, "big"))
+        digest.update(relative_bytes)
+        digest.update(file_digest)
+    return digest.hexdigest()
+
+
+def verify_formal_source_state(frozen_source_fingerprint=None,
+                               project_root=None):
+    project_root = Path(
+        project_root or Path(__file__).resolve().parents[2])
+    if current_git_dirty(project_root):
+        raise RuntimeError(
+            "formal runs require a clean Git worktree; commit changes first")
+    current_source_fingerprint = experiment_source_sha256(project_root)
+    if (frozen_source_fingerprint is not None
+            and current_source_fingerprint != frozen_source_fingerprint):
+        raise RuntimeError("experiment source changed during formal run")
+    return current_source_fingerprint
 
 
 def config_sha256(config, exclude_seed=False):
@@ -135,6 +181,7 @@ def write_manifest(run_dir, config, argv, effective_features) -> dict:
         "updated_utc": datetime.now(timezone.utc).isoformat(),
         "git_commit": _git_value(project_root, ["rev-parse", "HEAD"]),
         "git_dirty": bool(_git_value(project_root, ["status", "--porcelain"])),
+        "experiment_source_sha256": experiment_source_sha256(project_root),
         "config_sha256": config_sha256(config),
         "experiment_config_sha256": config_sha256(
             config, exclude_seed=True),
@@ -225,6 +272,10 @@ def formal_outputs_complete(run_dir):
         if manifest.get("git_dirty") is not False:
             return False
         if not manifest.get("git_commit"):
+            return False
+        if not re.fullmatch(
+                r"[0-9a-f]{64}",
+                str(manifest.get("experiment_source_sha256", ""))):
             return False
         if manifest.get("evaluation_frame_ids") != frame_ids:
             return False

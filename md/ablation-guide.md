@@ -67,7 +67,7 @@ git status --short
 git rev-parse HEAD
 ```
 
-正式运行要求：CUDA 可用、Git 工作区为空、所有实验使用同一个提交、同一 GPU/CUDA 环境。运行器会把这些信息写入 `manifest.json`，工作区不干净时会拒绝正式运行。
+正式运行要求：CUDA 可用、Git 工作区为空、所有实验使用相同的实验代码指纹和 GPU/CUDA 环境。Git commit 仍写入 `manifest.json` 供追溯，但文档提交不同不会阻止续跑或汇总；工作区不干净时仍会拒绝正式运行。
 
 数据应位于：
 
@@ -197,7 +197,7 @@ tail -f logs/ablation-replica.log
 
 ### 4.4 中断续跑与强制重跑
 
-重复执行同一命令会自动跳过“种子、完整配置哈希、Git 提交均一致”的成功结果：
+重复执行同一命令会自动跳过“种子、完整配置哈希、实验代码指纹均一致”的成功结果：
 
 ```bash
 python scripts/run_ablation.py --group R --seeds 0 1 2
@@ -209,7 +209,7 @@ python scripts/run_ablation.py --group R --seeds 0 1 2
 python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 ```
 
-如果代码提交、配置或随机种子发生变化，运行器不会把旧结果误认为可续跑结果。正式矩阵开始后不要中途改配置；如必须修复代码，应重新冻结提交并重跑所有受影响的对比项。
+只修改并提交 `md/`、`docs/` 等文档不会改变实验代码指纹，已有成功结果仍会续用。修改 `src/`、`scripts/`、`configs/`、`run_slam.py`、`run_slam_azure.py`，或改变配置、随机种子时，运行器不会把旧结果误认为可续跑结果。正式矩阵开始后不要中途修改实验代码或配置；如必须修复，应重新运行所有受影响的对比项。
 
 ## 5. 输出文件与真实性审计
 
@@ -225,7 +225,7 @@ output/ablation/<experiment_id>/seed_<seed>/<UTC时间>_<随机后缀>/
 |---|---|
 | `config.input.yaml` | 消融运行器生成的输入配置 |
 | `config.yaml` | SLAM 实际保存的最终配置 |
-| `manifest.json` | 提交、配置哈希、命令、GPU/CUDA、请求/生效策略 |
+| `manifest.json` | Git 提交、实验代码指纹、配置哈希、命令、GPU/CUDA、请求/生效策略 |
 | `status.json` | 成功/失败、帧数、关键帧数、子图数、耗时、显存峰值 |
 | `run.log` | 完整标准输出和错误日志 |
 | `effective_features.yaml` | 实际启用的 IMU/Pyramid/GI-KF |
@@ -241,7 +241,7 @@ output/ablation/<experiment_id>/seed_<seed>/<UTC时间>_<随机后缀>/
 
 审计时不要只看 `effective_features.yaml`。正式运行的完整性检查还会验证：
 
-- `manifest.json` 中 `git_dirty=false`，提交、GPU、CUDA 和配置哈希存在；
+- `manifest.json` 中 `git_dirty=false`，Git 提交、实验代码指纹、GPU、CUDA 和配置哈希存在；
 - 请求策略与实际策略完全一致；
 - 评估帧号非空、唯一、有序，manifest 与保存文件一致；
 - 正式地图统一来自未额外细化的全局高斯拼接；
@@ -274,7 +274,7 @@ python scripts/aggregate_results.py --format markdown > output/ablation/results.
 python scripts/aggregate_results.py --format json > output/ablation/results.json
 ```
 
-汇总器只接受每个配置恰好包含 `seed=0,1,2` 的成功结果，并检查三个种子的提交、GSR 预算、GPU/CUDA一致；同一场景的所有策略还必须使用兼容的评估协议。若某配置完全未运行，会显示缺失；若只有 1–2 个种子或混入不同环境，会直接报错，不能静默生成不严谨表格。
+汇总器只接受每个配置恰好包含 `seed=0,1,2` 的成功结果，并检查三个种子的实验代码指纹、GSR 预算、GPU/CUDA一致；同一场景的所有策略还必须使用兼容的评估协议。Git commit 可以因纯文档提交而不同。若某配置完全未运行，会显示缺失；若只有 1–2 个种子，或混入不同实验代码/环境，会直接报错，不能静默生成不严谨表格。
 
 ## 7. 消融比较方法
 
@@ -345,13 +345,13 @@ git status --short
 python -m pytest -q
 ```
 
-确认服务器提交号与本机一致、工作区为空、数据路径存在后，先重复第 3 节 GPU 冒烟，再启动正式矩阵。不要在服务器上直接编辑正式配置，否则本机、GitHub 与实验 manifest 会失去一致性。
+确认服务器包含相同实验代码、工作区为空、数据路径存在后，先重复第 3 节 GPU 冒烟，再启动正式矩阵。纯文档提交不会影响续跑；不要在服务器上直接编辑正式配置或算法代码，否则实验代码指纹会变化。
 
 ## 10. 故障处理
 
 - `formal runs require a clean Git worktree`：提交或明确处理本地修改后再运行，不要绕过检查；
-- 汇总报 seeds 错误：补齐同一提交下的 0、1、2 三个种子；
-- 汇总报 mixed commit/hardware/protocol：不能把这些结果放进同一统计组，应统一环境重跑受影响配置；
+- 汇总报 seeds 错误：补齐同一实验代码指纹下的 0、1、2 三个种子；
+- 汇总报 mixed source fingerprint/hardware/protocol：不能把这些结果放进同一统计组，应统一实验代码与环境后重跑受影响配置；
 - IMU 完整性失败：检查 `imu_tracking_summary.yaml` 的时间覆盖、丢弃行和 `valid_prediction_count`；
 - Pyramid 完整性失败：检查 `enabled` 与 `optimizer_step_count`，不能只看 YAML 开关；
 - Azure 缓存异常：检查 `processed_images/redepth/processing_metadata.json`；标定或预处理配置变化后，加载器应自动重建缓存；

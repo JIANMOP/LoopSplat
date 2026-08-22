@@ -38,10 +38,10 @@ from src.utils.experiment_utils import (
     create_run_directory,
     config_sha256,
     current_git_commit,
-    current_git_dirty,
     discover_completed_runs,
     effective_features_from_config,
     formal_outputs_complete,
+    verify_formal_source_state,
     write_manifest,
     write_status,
 )
@@ -240,13 +240,14 @@ def load_yaml(path: str | Path) -> dict:
 
 
 def config_has_results(output_dir: Path, seed: int, config: dict,
-                       git_commit: str) -> bool:
+                       source_fingerprint: str) -> bool:
     records = discover_completed_runs(output_dir.parent)
     return any(
         record.experiment_id == output_dir.name
         and record.seed == seed
         and record.manifest.get("config_sha256") == config_sha256(config)
-        and record.manifest.get("git_commit") == git_commit
+        and record.manifest.get(
+            "experiment_source_sha256") == source_fingerprint
         for record in records)
 
 
@@ -292,9 +293,8 @@ def main():
     frozen_commit = current_git_commit()
     if not frozen_commit:
         raise RuntimeError("formal runs require a Git commit")
-    if not args.dry_run and current_git_dirty():
-        raise RuntimeError(
-            "formal runs require a clean Git worktree; commit changes first")
+    frozen_source_fingerprint = (
+        None if args.dry_run else verify_formal_source_state())
 
     for i, (exp, seed) in enumerate(jobs):
         eid = exp["id"]
@@ -318,8 +318,10 @@ def main():
         if args.dry_run:
             continue
 
+        verify_formal_source_state(frozen_source_fingerprint)
+
         if (not args.force and config_has_results(
-                requested_output, seed, merged, frozen_commit)):
+                requested_output, seed, merged, frozen_source_fingerprint)):
             print(f"      ⏭  Skipped (results exist)")
             skipped += 1
             continue

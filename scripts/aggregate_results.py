@@ -74,9 +74,11 @@ def validate_formal_run_group(records, experiment_id):
         raise ValueError(
             f"{experiment_id} requires seeds {sorted(FORMAL_SEEDS)}, "
             f"found {sorted(seeds)}")
-    commits = {record.manifest.get("git_commit") for record in records}
-    if None in commits or len(commits) != 1:
-        raise ValueError(f"mixed commit for {experiment_id}")
+    source_fingerprints = {
+        record.manifest.get("experiment_source_sha256")
+        for record in records}
+    if None in source_fingerprints or len(source_fingerprints) != 1:
+        raise ValueError(f"mixed source fingerprint for {experiment_id}")
     gsr_budgets = {
         record.manifest.get("gsr_max_iters") for record in records}
     if None in gsr_budgets or len(gsr_budgets) != 1:
@@ -148,15 +150,17 @@ def collect_results() -> dict:
             experiment_hashes = {
                 record.manifest.get("experiment_config_sha256")
                 for record in records}
-            commits = {
-                record.manifest.get("git_commit") for record in records}
+            source_fingerprints = {
+                record.manifest.get("experiment_source_sha256")
+                for record in records}
             gsr_budgets = {
                 record.manifest.get("gsr_max_iters") for record in records}
             if (None in experiment_hashes or len(experiment_hashes) != 1
-                    or None in commits or len(commits) != 1
+                    or None in source_fingerprints
+                    or len(source_fingerprints) != 1
                     or len(gsr_budgets) != 1):
                 raise ValueError(
-                    f"mixed config, commit, or GSR budget for {eid}")
+                    f"mixed config, source fingerprint, or GSR budget for {eid}")
 
             seed_metrics = []
             for record in records:
@@ -206,17 +210,19 @@ def collect_results() -> dict:
     for sid, records in records_by_scene.items():
         if not records:
             continue
-        commits = {record.manifest.get("git_commit") for record in records}
+        source_fingerprints = {
+            record.manifest.get("experiment_source_sha256")
+            for record in records}
         gsr_budgets = {
             record.manifest.get("gsr_max_iters") for record in records}
         hardware = {
             (record.manifest.get("environment", {}).get("gpu"),
              record.manifest.get("environment", {}).get("cuda_runtime"))
             for record in records}
-        if (len(commits) != 1 or len(gsr_budgets) != 1
+        if (len(source_fingerprints) != 1 or len(gsr_budgets) != 1
                 or len(hardware) != 1):
             raise ValueError(
-                f"mixed commit, GSR budget, or hardware across {sid}")
+                f"mixed source fingerprint, GSR budget, or hardware across {sid}")
     return results
 
 
