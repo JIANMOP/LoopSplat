@@ -19,7 +19,10 @@ from src.entities.arguments import OptimizationParams
 
 from src.gsr.descriptor import GlobalDesc
 from src.gsr.camera import Camera
-from src.gsr.solver import gaussian_registration as gs_reg
+from src.gsr.solver import (
+    gaussian_registration as gs_reg,
+    validate_gsr_max_iters,
+)
 from src.gsr.pcr import (preprocess_point_cloud, execute_global_registration)
 
 from src.utils.utils import np2torch, torch2np
@@ -87,6 +90,7 @@ class Loop_closure(object):
         self.fovx = focal2fov(fx_actual, W_actual)
         self.fovy = focal2fov(fy_actual, H_actual)
         self.min_interval = self.config['lc']['min_interval']
+        validate_gsr_max_iters(self.config['lc']['registration'])
         
         # TODO: rename below
         self.config["Training"] = {"edge_threshold": 4.0}
@@ -115,6 +119,10 @@ class Loop_closure(object):
                 "kf_desc": submap_desc,
                 "self_sim": score_min, # per image self similarity within the submap
             }
+
+    def invalidate_submap_cache(self, submap_ids) -> None:
+        for submap_id in submap_ids:
+            self._sm_cache.pop(int(submap_id), None)
     
     def submap_loader(self, id: int):
         """load submap data for loop closure
@@ -674,4 +682,3 @@ class Loop_closure(object):
         output['pc_src'] = cloud_source
         output['pc_tgt'] = cloud_target
         return output
-    

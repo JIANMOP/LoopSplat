@@ -107,6 +107,6 @@ lc:
     base_lr: 0.005
     min_overlap_ratio: 0.2
     use_render: false
-    gsr_max_iters: 60            # reduced from 100 for computational feasibility
+    gsr_max_iters: 100           # shared formal-experiment registration budget
   min_interval: 3
   final: false

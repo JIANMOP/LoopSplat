@@ -31,6 +31,7 @@ from copy import deepcopy
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 os.chdir(PROJECT_ROOT)
+GSR_MAX_ITERS = 100
 
 
 # ── Strategy definitions ─────────────────────────────────────────────
@@ -139,6 +140,8 @@ def build_experiments():
                 "group": "A",
                 "overrides": {
                     "data": {"output_path": f"output/ablation/{eid}/"},
+                    "lc": {"registration": {
+                        "gsr_max_iters": GSR_MAX_ITERS}},
                     **deepcopy(overrides),
                 },
             })
@@ -154,6 +157,8 @@ def build_experiments():
                 "group": "B",
                 "overrides": {
                     "data": {"output_path": f"output/ablation/{eid}/"},
+                    "lc": {"registration": {
+                        "gsr_max_iters": GSR_MAX_ITERS}},
                     **deepcopy(overrides),
                 },
             })
@@ -169,6 +174,8 @@ def build_experiments():
                 "group": "C",
                 "overrides": {
                     "data": {"output_path": f"output/ablation/{eid}/"},
+                    "lc": {"registration": {
+                        "gsr_max_iters": GSR_MAX_ITERS}},
                     **deepcopy(overrides),
                 },
             })

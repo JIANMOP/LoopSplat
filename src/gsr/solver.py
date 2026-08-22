@@ -13,6 +13,15 @@ class CustomPipeline:
     compute_cov3D_python = False
     debug = False
 
+
+def validate_gsr_max_iters(config: dict) -> int:
+    value = config["gsr_max_iters"]
+    if type(value) is not int:
+        raise TypeError("lc.registration.gsr_max_iters must be an integer")
+    if value < 1:
+        raise ValueError("lc.registration.gsr_max_iters must be positive")
+    return value
+
 def viewpoint_localizer(viewpoint, gaussians, base_lr: float=1e-3,
                         max_iters: int = 100):
     """Localize a single viewpoint in a 3DGS
@@ -153,7 +162,7 @@ def gaussian_registration(src_dict, tgt_dict, config: dict, visualize=False):
     
     pipe = CustomPipeline()
     bg_color = torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda", requires_grad=False)
-    max_iters = config.get("gsr_max_iters", 100)
+    max_iters = validate_gsr_max_iters(config)
     # per-cam
     for viewpoint in src_view_list:
         

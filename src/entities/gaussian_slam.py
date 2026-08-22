@@ -482,6 +482,7 @@ class GaussianSLAM(object):
 
             submap_ckpt["gaussian_params"] = updated_gaussian_params
             torch.save(submap_ckpt, self.output_path / "submaps" / submap_ckpt_name)
+            self.loop_closer.invalidate_submap_cache([submap_id])
         return submaps_kf_ids
     
     def run(self) -> None:
