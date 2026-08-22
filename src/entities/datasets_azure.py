@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from .datasets import BaseDataset
 from .imu_types import build_imu_interval
+from src.utils.rgbd_registration import register_depth_to_color
 
 
 class AzureKinect(BaseDataset):
@@ -66,6 +67,8 @@ class AzureKinect(BaseDataset):
         self.processed_dir = self.dataset_path / "processed_images" / self.resize_mode
         self.processed_color_dir = self.processed_dir / "color"
         self.processed_depth_dir = self.processed_dir / "depth"
+        self.processing_metadata_path = (
+            self.processed_dir / "processing_metadata.json")
 
         # Create processed images if they don't exist
         self.ensure_processed_images()
@@ -227,6 +230,8 @@ class AzureKinect(BaseDataset):
 
     def apply_preprocessing_strategy(self, color_data, depth_data):
         """Apply the configured preprocessing strategy"""
+        if self.preprocessing_strategy == "calibrated_depth_to_color":
+            return self.apply_calibrated_depth_to_color(color_data, depth_data)
         if self.preprocessing_strategy == "resize_only":
             return self.apply_resize_strategy(color_data, depth_data)
         elif self.preprocessing_strategy == "k4a_only":
@@ -249,6 +254,46 @@ class AzureKinect(BaseDataset):
             # Default to resize_only for unknown strategies
             print(f"Warning: Unknown preprocessing_strategy '{self.preprocessing_strategy}', using resize_only")
             return self.apply_resize_strategy(color_data, depth_data)
+
+    @staticmethod
+    def _camera_matrix(camera):
+        return np.array([
+            [camera["fx"], 0.0, camera["cx"]],
+            [0.0, camera["fy"], camera["cy"]],
+            [0.0, 0.0, 1.0],
+        ], dtype=np.float64)
+
+    def apply_calibrated_depth_to_color(self, color_data, depth_data):
+        if "T_color_depth" not in self.dataset_config:
+            raise ValueError(
+                "calibrated_depth_to_color requires T_color_depth")
+        color_intrinsics = self._camera_matrix(self.color_camera)
+        depth_intrinsics = self._camera_matrix(self.depth_camera)
+        color_distortion = np.asarray(
+            self.color_camera.get("distortion", []), dtype=np.float64)
+        depth_distortion = np.asarray(
+            self.depth_camera.get("distortion", []), dtype=np.float64)
+
+        if color_distortion.size and np.any(np.abs(color_distortion) > 1e-12):
+            color_data = cv2.undistort(
+                color_data, color_intrinsics, color_distortion)
+        if depth_distortion.size and np.any(np.abs(depth_distortion) > 1e-12):
+            height, width = depth_data.shape
+            map_x, map_y = cv2.initUndistortRectifyMap(
+                depth_intrinsics, depth_distortion, None, depth_intrinsics,
+                (width, height), cv2.CV_32FC1)
+            depth_data = cv2.remap(
+                depth_data, map_x, map_y, cv2.INTER_NEAREST,
+                borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+
+        registered_depth = register_depth_to_color(
+            depth_m=depth_data,
+            depth_intrinsics=depth_intrinsics,
+            color_intrinsics=color_intrinsics,
+            t_color_depth=self.dataset_config["T_color_depth"],
+            output_shape=color_data.shape[:2],
+        )
+        return color_data, registered_depth
     
     def apply_resize_strategy(self, color_data, depth_data):
         """Apply the configured resize strategy to color and depth images"""
@@ -313,6 +358,7 @@ class AzureKinect(BaseDataset):
 
     def ensure_processed_images(self):
         """Ensure processed images exist for the current resize mode"""
+        expected_metadata = self._processing_metadata()
         # Check if processed images already exist
         if self.processed_color_dir.exists() and self.processed_depth_dir.exists():
             # Check if all images are processed
@@ -320,12 +366,36 @@ class AzureKinect(BaseDataset):
             existing_color = len(list(self.processed_color_dir.glob("*.png")))
             existing_depth = len(list(self.processed_depth_dir.glob("*.png")))
 
-            if existing_color == expected_count and existing_depth == expected_count:
+            cached_metadata = None
+            if self.processing_metadata_path.exists():
+                try:
+                    with open(
+                            self.processing_metadata_path, "r",
+                            encoding="utf-8") as metadata_file:
+                        cached_metadata = json.load(metadata_file)
+                except (OSError, ValueError):
+                    cached_metadata = None
+
+            if (existing_color == expected_count
+                    and existing_depth == expected_count
+                    and cached_metadata == expected_metadata):
                 print(f"Processed images already exist for {self.resize_mode} mode")
                 return
 
         print(f"Creating processed images for {self.resize_mode} mode...")
         self.create_processed_images()
+
+    def _processing_metadata(self):
+        return {
+            "resize": self.resize_mode,
+            "preprocessing_strategy": self.preprocessing_strategy,
+            "color_camera": self.color_camera,
+            "depth_camera": self.depth_camera,
+            "T_color_depth": self.dataset_config.get("T_color_depth"),
+            "Re_resolution": self.dataset_config.get("Re_resolution"),
+            "depth_scale": self.depth_scale,
+            "depth_trunc": self.dataset_config.get("depth_trunc", 4.0),
+        }
 
     def create_processed_images(self):
         """Create and save processed images for the current resize mode"""
@@ -343,10 +413,14 @@ class AzureKinect(BaseDataset):
             depth_data = depth_data.astype(np.float32) / self.depth_scale
 
             # Apply preprocessing strategy (resize, K4A transformation, or hybrid)
-            color_resized, depth_resized = self.apply_preprocessing_strategy(color_data, depth_data)
+            color_resized, depth_resized = self.apply_preprocessing_strategy(
+                color_data, depth_data)
 
-            # Apply distortion correction
-            color_final, depth_final = self.apply_distortion_correction(color_resized, depth_resized)
+            if self.preprocessing_strategy == "calibrated_depth_to_color":
+                color_final, depth_final = color_resized, depth_resized
+            else:
+                color_final, depth_final = self.apply_distortion_correction(
+                    color_resized, depth_resized)
 
             # Apply depth truncation
             depth_trunc = self.dataset_config.get("depth_trunc", 4.0)
@@ -363,6 +437,9 @@ class AzureKinect(BaseDataset):
             # Save depth image (scale back and convert to uint16)
             depth_scaled = (depth_final * self.depth_scale).astype(np.uint16)
             cv2.imwrite(str(self.processed_depth_dir / depth_filename), depth_scaled)
+
+        with open(self.processing_metadata_path, "w", encoding="utf-8") as f:
+            json.dump(self._processing_metadata(), f, sort_keys=True, indent=2)
 
         print(f"Processed images saved to {self.processed_dir}")
 

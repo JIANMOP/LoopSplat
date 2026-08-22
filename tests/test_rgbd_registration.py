@@ -1,12 +1,69 @@
 import builtins
+import json
 
 import numpy as np
 import pytest
 import cv2
 
 from src.entities.datasets_fm import FMDataset
+from src.entities.datasets_azure import AzureKinect
 from src.utils.io_utils import load_config
 from src.utils.rgbd_registration import register_depth_to_color
+
+
+def test_azure_calibrated_registration_invalidates_resize_only_cache(tmp_path):
+    (tmp_path / "color").mkdir()
+    (tmp_path / "depth").mkdir()
+    cv2.imwrite(
+        str(tmp_path / "color/0.png"),
+        np.zeros((1, 2, 3), dtype=np.uint8),
+    )
+    cv2.imwrite(
+        str(tmp_path / "depth/0.png"),
+        np.array([[2000, 1000]], dtype=np.uint16),
+    )
+    (tmp_path / "frame_info.json").write_text(json.dumps({
+        "total_frames": 1,
+        "frames": [{
+            "color_path": "color/0.png",
+            "depth_path": "depth/0.png",
+            "timestamp": 1.0,
+        }],
+    }))
+    camera = {
+        "H": 1, "W": 2, "fx": 1.0, "fy": 1.0,
+        "cx": 0.0, "cy": 0.0, "distortion": [0.0] * 8,
+    }
+    base_config = {
+        "input_path": str(tmp_path),
+        "frame_limit": -1,
+        "H": 1, "W": 2, "fx": 1.0, "fy": 1.0,
+        "cx": 0.0, "cy": 0.0,
+        "depth_scale": 1000.0,
+        "depth_trunc": 4.0,
+        "crop_edge": 0,
+        "resize": "redepth",
+        "use_k4a_transformation": False,
+        "color_camera": camera,
+        "depth_camera": camera,
+        "timestamp_unit": "s",
+    }
+
+    resize_only = AzureKinect({
+        **base_config,
+        "preprocessing_strategy": "resize_only",
+    })
+    np.testing.assert_allclose(resize_only[0][2], [[2.0, 1.0]])
+
+    t_color_depth = np.eye(4)
+    t_color_depth[0, 3] = -0.6
+    calibrated = AzureKinect({
+        **base_config,
+        "preprocessing_strategy": "calibrated_depth_to_color",
+        "T_color_depth": t_color_depth.tolist(),
+    })
+
+    np.testing.assert_allclose(calibrated[0][2], [[1.0, 0.0]])
 
 
 def test_config_loader_opens_yaml_as_utf8(monkeypatch):
