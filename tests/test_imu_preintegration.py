@@ -163,3 +163,26 @@ def test_gravity_estimation_rejects_nonstationary_window(cuda_device):
 
     assert estimate.valid is False
     assert estimate.reason == "nonstationary_acceleration"
+
+
+def test_gravity_estimation_rejects_wrong_stationary_magnitude(cuda_device):
+    interval = make_interval((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+
+    estimate = estimate_gravity(
+        interval, device=cuda_device, gravity_magnitude=9.81,
+        max_accel_std=0.2, max_gyro_norm=0.1,
+        magnitude_tolerance=1.0)
+
+    assert estimate.valid is False
+    assert estimate.reason == "gravity_magnitude_mismatch"
+
+
+def test_preintegration_rejects_non_rigid_camera_imu_transform(cuda_device):
+    transform = np.eye(4)
+    transform[0, 0] = 2.0
+
+    with pytest.raises(ValueError, match="rigid"):
+        preintegrate_imu(
+            make_interval((0.0, 0.0, 9.81), (0.0, 0.0, 0.0)),
+            zeros(cuda_device), zeros(cuda_device), None,
+            t_cam_imu=transform)

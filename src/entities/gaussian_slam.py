@@ -492,6 +492,10 @@ class GaussianSLAM(object):
                 "enabled": self.tracker.use_imu,
                 "committed_frame_ids": self.tracker.imu_committed_frame_ids,
                 "commit_count": len(self.tracker.imu_committed_frame_ids),
+                "constraint_frame_ids": (
+                    self.tracker.imu_constraint_frame_ids),
+                "valid_prediction_count": len(
+                    self.tracker.imu_constraint_frame_ids),
                 "last_committed_frame_id": (
                     self.tracker.imu_state.last_committed_frame_id),
                 "translation_initialized": (
@@ -502,6 +506,12 @@ class GaussianSLAM(object):
                     self.tracker.imu_rotation_residual_scale_rad),
                 "prediction_records": self.tracker.imu_prediction_records,
                 "loss_records": self.tracker.tracking_loss_records,
+                "dataset_imu_samples": len(
+                    getattr(self.dataset, "imu_data", [])),
+                "dataset_imu_rows_dropped": getattr(
+                    self.dataset, "imu_rows_dropped", 0),
+                "dataset_max_malformed_imu_rows": getattr(
+                    self.dataset, "max_malformed_imu_rows", 0),
             },
             "imu_tracking_summary.yaml",
             directory=self.output_path,

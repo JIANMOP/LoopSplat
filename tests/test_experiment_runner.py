@@ -5,7 +5,11 @@ import yaml
 import pytest
 
 from run_slam import update_config_with_args
-from scripts.aggregate_results import render_markdown, summarize_seed_metrics
+from scripts.aggregate_results import (
+    render_markdown,
+    summarize_seed_metrics,
+    validate_formal_run_group,
+)
 from scripts.run_ablation import EXPERIMENTS, config_has_results
 from src.entities.gaussian_slam import build_run_statistics
 from src.utils.experiment_utils import (
@@ -117,6 +121,64 @@ def test_formal_outputs_reject_requested_effective_feature_mismatch(tmp_path):
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
 
     assert formal_outputs_complete(tmp_path) is False
+
+
+def test_formal_imu_run_requires_at_least_one_valid_prediction(tmp_path):
+    write_valid_formal_outputs(tmp_path)
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    manifest["requested_features"]["imu"] = True
+    manifest["effective_features"]["imu"] = True
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "imu_tracking_summary.yaml").write_text(yaml.safe_dump({
+        "enabled": True,
+        "commit_count": 1,
+        "prediction_records": [
+            {"frame_id": 1, "valid": False, "reason": "coverage"}],
+    }))
+
+    assert formal_outputs_complete(tmp_path) is False
+
+
+def test_formal_trajectory_rejects_nonfinite_rpe(tmp_path):
+    write_valid_formal_outputs(tmp_path)
+    (tmp_path / "trajectory_status.json").write_text(
+        '{"status": "available"}')
+    (tmp_path / "ate_aligned.json").write_text('{"rmse": 0.1}')
+    (tmp_path / "rpe.json").write_text(json.dumps({
+        "valid_pairs": 1,
+        "translation_rmse_m": float("nan"),
+        "rotation_rmse_deg": 1.0,
+    }))
+    (tmp_path / "trajectory_metrics.json").write_text(json.dumps({
+        "alignment_mode": "se3_horn_translation_no_scale",
+        "valid_poses": 2,
+        "ate_aligned": {"rmse": 0.1},
+        "rpe_consecutive": {
+            "valid_pairs": 1,
+            "translation_rmse_m": float("nan"),
+            "rotation_rmse_deg": 1.0,
+        },
+    }))
+
+    assert formal_outputs_complete(tmp_path) is False
+
+
+def test_formal_group_requires_three_seeds_and_shared_commit():
+    def record(seed, commit="a"):
+        return type("Record", (), {
+            "seed": seed,
+            "manifest": {
+                "git_commit": commit,
+                "gsr_max_iters": 100,
+                "environment": {"gpu": "GPU", "cuda_runtime": "12.1"},
+            },
+        })()
+
+    with pytest.raises(ValueError, match="seeds"):
+        validate_formal_run_group([record(0), record(1)], "C1_0")
+    with pytest.raises(ValueError, match="commit"):
+        validate_formal_run_group(
+            [record(0), record(1), record(2, "b")], "C1_0")
 
 
 def test_manifest_records_config_hash_command_and_effective_features(tmp_path):

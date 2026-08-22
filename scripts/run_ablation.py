@@ -299,6 +299,7 @@ def main():
         base_config = load_yaml(exp["config"])
         merged = deep_merge(base_config, exp["overrides"])
         merged["use_wandb"] = False
+        merged["formal_experiment"] = True
         merged["seed"] = seed
         merged["experiment_id"] = eid
         requested_output = Path(merged["data"]["output_path"])

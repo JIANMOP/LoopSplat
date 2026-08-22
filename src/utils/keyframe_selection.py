@@ -101,6 +101,13 @@ def gi_slam_keyframe_decision(frustum_ids_current: np.ndarray,
                               w_mot: float = 2.0,
                               v_max: float = 0.8,
                               omega_max: float = 50.0) -> KeyframeDecision:
+    if not np.any(np.isfinite(depth_map_current) & (depth_map_current > 0)):
+        return KeyframeDecision(
+            selected=False,
+            score=0.0,
+            reason="invalid_depth",
+            components={"valid_depth_pixels": 0},
+        )
     frustum_iou = compute_gaussian_iou(
         frustum_ids_current, frustum_ids_keyframe)
     frustum_term = w_covis * (1.0 - frustum_iou)

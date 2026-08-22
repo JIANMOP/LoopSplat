@@ -140,6 +140,7 @@ def write_manifest(run_dir, config, argv, effective_features) -> dict:
             config, exclude_seed=True),
         "seed": config.get("seed"),
         "experiment_id": config.get("experiment_id"),
+        "formal_experiment": bool(config.get("formal_experiment", False)),
         "command": [str(value) for value in argv],
         "requested_features": effective_features,
         "effective_features": observed_effective_features,
@@ -227,6 +228,40 @@ def formal_outputs_complete(run_dir):
             return False
         if manifest.get("evaluation_frame_ids") != frame_ids:
             return False
+        if manifest.get("formal_experiment"):
+            formal_paths = (
+                run_dir / "config.yaml",
+                run_dir / "run.log",
+                run_dir / "evaluation_frame_ids.json",
+            )
+            if not all(path.exists() for path in formal_paths):
+                return False
+            saved_frame_ids = json.loads(formal_paths[2].read_text())
+            if saved_frame_ids != frame_ids:
+                return False
+            seed_dir = run_dir.parent.name
+            if (not seed_dir.startswith("seed_")
+                    or manifest.get("seed") != int(
+                        seed_dir.removeprefix("seed_"))
+                    or manifest.get("experiment_id")
+                    != run_dir.parent.parent.name):
+                return False
+            if (not isinstance(manifest.get("command"), list)
+                    or not manifest["command"]
+                    or not re.fullmatch(
+                        r"[0-9a-f]{64}",
+                        str(manifest.get("config_sha256", "")))
+                    or not re.fullmatch(
+                        r"[0-9a-f]{64}",
+                        str(manifest.get(
+                            "experiment_config_sha256", "")))):
+                return False
+            environment = manifest.get("environment", {})
+            if (environment.get("cuda_available") is not True
+                    or not environment.get("gpu")
+                    or not environment.get("pytorch")
+                    or not environment.get("cuda_runtime")):
+                return False
 
         def feature_flags(features):
             pyramid = features.get("gaussian_pyramid", False)
@@ -282,9 +317,29 @@ def formal_outputs_complete(run_dir):
         if bool(pyramid_summary.get("enabled")) != effective[
                 "gaussian_pyramid"]:
             return False
-        if (effective["imu"] and statistics.get("frame_count", 0) > 1
-                and imu_summary.get("commit_count", 0) <= 0):
-            return False
+        if effective["imu"]:
+            prediction_records = imu_summary.get("prediction_records")
+            if (not isinstance(prediction_records, list)
+                    or not prediction_records
+                    or not any(
+                        record.get("valid") is True
+                        for record in prediction_records)):
+                return False
+            valid_prediction_count = sum(
+                record.get("valid") is True
+                for record in prediction_records)
+            if imu_summary.get(
+                    "valid_prediction_count") != valid_prediction_count:
+                return False
+            if (type(imu_summary.get("dataset_imu_samples")) is not int
+                    or imu_summary["dataset_imu_samples"] < 2
+                    or type(imu_summary.get(
+                        "dataset_imu_rows_dropped")) is not int
+                    or type(imu_summary.get(
+                        "dataset_max_malformed_imu_rows")) is not int
+                    or imu_summary["dataset_imu_rows_dropped"]
+                    > imu_summary["dataset_max_malformed_imu_rows"]):
+                return False
         if (effective["gaussian_pyramid"]
                 and pyramid_summary.get("optimizer_step_count", 0) <= 0):
             return False
@@ -315,11 +370,29 @@ def formal_outputs_complete(run_dir):
                 return False
             ate = json.loads(trajectory_paths[0].read_text())
             rpe = json.loads(trajectory_paths[1].read_text())
+            trajectory_metrics = json.loads(
+                trajectory_paths[2].read_text())
+            rpe_values = (
+                rpe.get("translation_rmse_m"),
+                rpe.get("rotation_rmse_deg"),
+            )
+            if (not isinstance(ate.get("rmse"), (int, float))
+                    or not math.isfinite(ate["rmse"])
+                    or ate["rmse"] < 0
+                    or type(rpe.get("valid_pairs")) is not int
+                    or rpe["valid_pairs"] <= 0
+                    or any(not isinstance(value, (int, float))
+                           or not math.isfinite(value) or value < 0
+                           for value in rpe_values)):
+                return False
             return (
-                isinstance(ate.get("rmse"), (int, float))
-                and math.isfinite(ate["rmse"])
-                and type(rpe.get("valid_pairs")) is int
-                and rpe["valid_pairs"] > 0
+                trajectory_metrics.get("alignment_mode")
+                == "se3_horn_translation_no_scale"
+                and type(trajectory_metrics.get("valid_poses")) is int
+                and trajectory_metrics["valid_poses"] >= 2
+                and trajectory_metrics.get("rpe_consecutive") == rpe
+                and trajectory_metrics.get(
+                    "ate_aligned", {}).get("rmse") == ate["rmse"]
             )
         return trajectory.get("status") == "skipped_no_ground_truth"
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, yaml.YAMLError):

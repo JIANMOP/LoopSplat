@@ -37,6 +37,11 @@ class FMDataset(BaseDataset):
         self.use_filtered_depth = dataset_config.get("use_filtered_depth", False)
         self.register_depth_to_color = dataset_config.get(
             "register_depth_to_color", False)
+        self.max_malformed_imu_rows = int(
+            dataset_config.get("max_malformed_imu_rows", 0))
+        if self.max_malformed_imu_rows < 0:
+            raise ValueError("max_malformed_imu_rows must be non-negative")
+        self.imu_rows_dropped = 0
         if self.register_depth_to_color:
             try:
                 self.depth_intrinsics = np.asarray(
@@ -103,36 +108,43 @@ class FMDataset(BaseDataset):
             print(f"  IMU file not found: {imu_path}")
             return
 
-        try:
-            with open(imu_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith('#'):
-                        continue
-                    # Format: timestamp(us), gx, gy, gz, ax, ay, az
-                    if ',' in line:
-                        parts = [p.strip() for p in line.split(',')]
-                    else:
-                        parts = line.split()
-                    if len(parts) < 7:
-                        continue
-                    ts = float(parts[0]) * 1e-6
-                    gyro = [float(parts[1]), float(parts[2]), float(parts[3])]
-                    accel = [float(parts[4]), float(parts[5]), float(parts[6])]
+        with open(imu_path) as f:
+            for line_number, line in enumerate(f, start=1):
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                # Format: timestamp(us), gx, gy, gz, ax, ay, az
+                parts = (
+                    [part.strip() for part in line.split(',')]
+                    if ',' in line else line.split())
+                if len(parts) < 7:
+                    self.imu_rows_dropped += 1
+                    if self.imu_rows_dropped > self.max_malformed_imu_rows:
+                        raise ValueError(
+                            f"invalid IMU row {line_number}: expected 7 fields")
+                    continue
+                values = np.asarray(
+                    [float(value) for value in parts[:7]],
+                    dtype=np.float64)
+                if not np.isfinite(values).all():
+                    raise ValueError(
+                        f"invalid IMU row {line_number}: non-finite value")
+                self.imu_data.append({
+                    'timestamp': values[0] * 1e-6,
+                    'acceleration': values[4:7].tolist(),
+                    'angular_velocity': values[1:4].tolist(),
+                })
 
-                    self.imu_data.append({
-                        'timestamp': ts,
-                        'acceleration': accel,
-                        'angular_velocity': gyro,
-                    })
-
-            self.has_imu = len(self.imu_data) > 0
-            print(f"  Loaded {len(self.imu_data)} IMU samples")
-
-        except Exception as e:
-            print(f"  Error loading IMU data: {e}")
-            self.has_imu = False
-            self.imu_data = []
+        if len(self.imu_data) < 2:
+            raise ValueError("IMU.txt must contain at least two valid samples")
+        imu_times = np.asarray([
+            sample['timestamp'] for sample in self.imu_data])
+        if np.any(np.diff(imu_times) <= 0):
+            raise ValueError("IMU timestamps must be strictly increasing")
+        self.has_imu = True
+        print(
+            f"  Loaded {len(self.imu_data)} IMU samples "
+            f"(dropped {self.imu_rows_dropped} explicitly allowed rows)")
 
     def get_imu_data_for_frame(self, frame_id: int):
         """Return IMU sample closest in time to frame_id's timestamp."""

@@ -377,7 +377,7 @@ def compute_gaussian_iou(visible_ids_a: np.ndarray,
         IoU value in [0.0, 1.0]. Returns 0.0 when union is empty.
     """
     if len(visible_ids_a) == 0 and len(visible_ids_b) == 0:
-        return 0.0
+        return 1.0
 
     set_a = set(visible_ids_a.tolist())
     set_b = set(visible_ids_b.tolist())
@@ -386,7 +386,7 @@ def compute_gaussian_iou(visible_ids_a: np.ndarray,
     union = len(set_a | set_b)
 
     if union == 0:
-        return 0.0
+        return 1.0
     return intersection / union
 
 

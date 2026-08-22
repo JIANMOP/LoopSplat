@@ -42,6 +42,7 @@ def fm_dataset():
         "cy": 245.549,
         "depth_scale": 1000.0,
         "use_filtered_depth": False,
+        "max_malformed_imu_rows": 3,
     })
 
 

@@ -18,6 +18,7 @@ from src.entities.imu_preintegration import (
     estimate_gravity,
     preintegrate_imu,
     so3_log,
+    validate_rigid_transform,
 )
 from src.entities.visual_odometer import VisualOdometer
 from src.utils.gaussian_model_utils import build_rotation
@@ -95,8 +96,12 @@ class Tracker(object):
         self.lambda_imu_trans = self.config.get("lambda_imu_trans", 1.0)
         self.lambda_imu_rot = self.config.get("lambda_imu_rot", 1.0)
         self.imu_config = self.config.get("imu", {})
-        if self.lambda_imu_trans < 0 or self.lambda_imu_rot < 0:
+        if (not np.isfinite(self.lambda_imu_trans)
+                or not np.isfinite(self.lambda_imu_rot)
+                or self.lambda_imu_trans < 0 or self.lambda_imu_rot < 0):
             raise ValueError("IMU loss weights must be non-negative")
+        if self.use_imu and self.lambda_imu_trans == self.lambda_imu_rot == 0:
+            raise ValueError("enabled IMU tracking requires a positive loss weight")
         if self.use_imu:
             required = {"T_cam_imu", "accel_bias", "gyro_bias"}
             missing = sorted(required.difference(self.imu_config))
@@ -104,6 +109,8 @@ class Tracker(object):
                 raise ValueError(
                     "IMU tracking requires calibrated values: "
                     + ", ".join(missing))
+            validate_rigid_transform(
+                self.imu_config["T_cam_imu"], torch.float64, "cuda")
         self.imu_translation_huber_m = self.imu_config.get(
             "translation_huber_m", 0.1)
         self.imu_rotation_huber_rad = self.imu_config.get(
@@ -112,9 +119,11 @@ class Tracker(object):
             "translation_residual_scale_m", 0.05)
         self.imu_rotation_residual_scale_rad = self.imu_config.get(
             "rotation_residual_scale_rad", 0.01)
-        if self.imu_translation_huber_m <= 0:
+        if (not np.isfinite(self.imu_translation_huber_m)
+                or self.imu_translation_huber_m <= 0):
             raise ValueError("tracking.imu.translation_huber_m must be positive")
-        if self.imu_rotation_huber_rad <= 0:
+        if (not np.isfinite(self.imu_rotation_huber_rad)
+                or self.imu_rotation_huber_rad <= 0):
             raise ValueError("tracking.imu.rotation_huber_rad must be positive")
         if (not np.isfinite(self.imu_translation_residual_scale_m)
                 or self.imu_translation_residual_scale_m <= 0):
@@ -124,10 +133,35 @@ class Tracker(object):
                 or self.imu_rotation_residual_scale_rad <= 0):
             raise ValueError(
                 "tracking.imu.rotation_residual_scale_rad must be positive")
+        positive_imu_limits = (
+            "max_interval_s",
+            "max_accel_norm_mps2",
+            "max_gyro_norm_rps",
+            "gravity_mps2",
+            "gravity_max_accel_std",
+            "gravity_max_gyro_norm",
+            "gravity_magnitude_tolerance_mps2",
+        )
+        for name in positive_imu_limits:
+            value = self.imu_config.get(name, {
+                "max_interval_s": 0.2,
+                "max_accel_norm_mps2": 50.0,
+                "max_gyro_norm_rps": 20.0,
+                "gravity_mps2": 9.81,
+                "gravity_max_accel_std": 0.2,
+                "gravity_max_gyro_norm": 0.1,
+                "gravity_magnitude_tolerance_mps2": 1.0,
+            }[name])
+            if not np.isfinite(value) or value <= 0:
+                raise ValueError(f"tracking.imu.{name} must be positive")
+        if not np.isfinite(self.imu_config.get("time_offset_s", 0.0)):
+            raise ValueError("tracking.imu.time_offset_s must be finite")
         self.imu_state = IMUTrackingState.create("cuda")
         self.imu_committed_frame_ids = []
+        self.imu_constraint_frame_ids = []
         self.imu_prediction_records = []
         self.tracking_loss_records = []
+        self.gravity_initialization_attempted = False
 
     def compute_losses(self, gaussian_model: GaussianModel, render_settings: dict,
                        opt_cam_rot: torch.Tensor, opt_cam_trans: torch.Tensor,
@@ -233,7 +267,9 @@ class Tracker(object):
         device = self.imu_state.velocity.device
         dtype = self.imu_state.velocity.dtype
         transform = self.imu_config.get("T_cam_imu")
-        if self.imu_state.gravity_cam is None:
+        if (self.imu_state.gravity_cam is None
+                and not self.gravity_initialization_attempted):
+            self.gravity_initialization_attempted = True
             gravity_estimate = estimate_gravity(
                 interval,
                 device=device,
@@ -243,6 +279,8 @@ class Tracker(object):
                 max_gyro_norm=self.imu_config.get(
                     "gravity_max_gyro_norm", 0.1),
                 t_cam_imu=transform,
+                magnitude_tolerance=self.imu_config.get(
+                    "gravity_magnitude_tolerance_mps2", 1.0),
             )
             if gravity_estimate.valid:
                 self.imu_state.gravity_cam = gravity_estimate.gravity_cam
@@ -332,24 +370,25 @@ class Tracker(object):
             raise RuntimeError(
                 f"IMU state for frame {frame_id} already committed")
 
-        if prediction is not None and prediction.valid:
-            rotation = optimized_relative_pose[:3, :3].to(
-                self.imu_state.velocity)
-            if prediction.translation_valid:
-                delta_velocity = prediction.delta_v.to(
-                    self.imu_state.velocity)
-                self.imu_state.velocity = (
-                    rotation.transpose(0, 1)
-                    @ (self.imu_state.velocity + delta_velocity))
-            if self.imu_state.gravity_cam is not None:
-                rotation = rotation.to(self.imu_state.gravity_cam)
-                self.imu_state.gravity_cam = (
-                    rotation.transpose(0, 1)
-                    @ self.imu_state.gravity_cam)
+        rotation = optimized_relative_pose[:3, :3].to(
+            self.imu_state.velocity)
+        delta_velocity = torch.zeros_like(self.imu_state.velocity)
+        if (prediction is not None and prediction.valid
+                and prediction.translation_valid):
+            delta_velocity = prediction.delta_v.to(self.imu_state.velocity)
+        self.imu_state.velocity = (
+            rotation.transpose(0, 1)
+            @ (self.imu_state.velocity + delta_velocity))
+        if self.imu_state.gravity_cam is not None:
+            self.imu_state.gravity_cam = (
+                rotation.to(self.imu_state.gravity_cam).transpose(0, 1)
+                @ self.imu_state.gravity_cam)
 
         self.imu_state.last_committed_frame_id = frame_id
         if self.use_imu:
             self.imu_committed_frame_ids.append(frame_id)
+            if prediction is not None and prediction.valid:
+                self.imu_constraint_frame_ids.append(frame_id)
         self.imu_state.last_c2w = torch.as_tensor(
             final_c2w,
             dtype=self.imu_state.velocity.dtype,

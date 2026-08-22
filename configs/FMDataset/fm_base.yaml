@@ -13,6 +13,9 @@ evaluation:
     enabled: false
     iterations: 0
 
+data:
+  max_malformed_imu_rows: 3
+
 mapping:
   new_submap_every: 50
   map_every: 1
@@ -63,6 +66,7 @@ tracking:
     gravity_mps2: 9.81
     gravity_max_accel_std: 0.2
     gravity_max_gyro_norm: 0.1
+    gravity_magnitude_tolerance_mps2: 1.0
     translation_huber_m: 0.1
     rotation_huber_rad: 0.1
     translation_residual_scale_m: 0.05

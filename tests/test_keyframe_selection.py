@@ -14,6 +14,7 @@ from src.utils.keyframe_selection import (
     gi_slam_keyframe_decision,
 )
 from src.utils.mapper_utils import compute_gaussian_visibility
+from src.utils.mapper_utils import compute_gaussian_iou
 
 
 class DatasetWhoseImuAccessRaises:
@@ -163,6 +164,22 @@ def test_frustum_visibility_is_empty_for_all_invalid_depth():
         np.eye(4), np.eye(3), np.zeros((4, 4), dtype=np.float32))
 
     assert visible.size == 0
+
+
+def test_two_empty_visibility_sets_have_no_novelty():
+    assert compute_gaussian_iou(
+        np.array([], dtype=np.int64),
+        np.array([], dtype=np.int64)) == pytest.approx(1.0)
+
+
+def test_invalid_depth_candidate_is_rejected_by_gi_score():
+    decision = gi_slam_keyframe_decision(
+        np.array([], dtype=np.int64), np.array([0], dtype=np.int64),
+        np.eye(4), np.eye(4), np.zeros((2, 2)),
+        0.0, 0.0, 0.5)
+
+    assert decision.selected is False
+    assert decision.reason == "invalid_depth"
 
 
 def test_gyro_assistance_is_controlled_by_separate_switch():

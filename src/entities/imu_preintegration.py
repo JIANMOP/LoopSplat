@@ -22,6 +22,25 @@ class GravityEstimate:
     reason: str
 
 
+def validate_rigid_transform(transform, dtype, device):
+    transform = torch.as_tensor(transform, dtype=dtype, device=device)
+    if transform.shape != (4, 4) or not torch.isfinite(transform).all():
+        raise ValueError("T_cam_imu must be a finite rigid 4x4 transform")
+    rotation = transform[:3, :3]
+    identity = torch.eye(3, dtype=dtype, device=device)
+    expected_bottom = torch.tensor(
+        [0.0, 0.0, 0.0, 1.0], dtype=dtype, device=device)
+    if (not torch.allclose(rotation.transpose(0, 1) @ rotation,
+                           identity, atol=1e-5, rtol=1e-5)
+            or not torch.isclose(torch.linalg.det(rotation),
+                                 rotation.new_tensor(1.0),
+                                 atol=1e-5, rtol=1e-5)
+            or not torch.allclose(transform[3], expected_bottom,
+                                  atol=1e-7, rtol=0.0)):
+        raise ValueError("T_cam_imu must be a finite rigid 4x4 transform")
+    return transform
+
+
 def so3_exp(rotation_vector):
     if rotation_vector.shape != (3,):
         raise ValueError("rotation_vector must have shape (3,)")
@@ -85,6 +104,13 @@ def preintegrate_imu(interval, bias_accel, bias_gyro, gravity_cam,
     sample_count = len(interval.timestamps_s)
     zero_vector = torch.zeros(3, dtype=dtype, device=device)
     identity = torch.eye(3, dtype=dtype, device=device)
+    for name, value in (
+            ("max_interval_s", max_interval_s),
+            ("max_accel_norm_mps2", max_accel_norm_mps2),
+            ("max_gyro_norm_rps", max_gyro_norm_rps)):
+        if value is not None and (not torch.isfinite(torch.as_tensor(value))
+                                  or value <= 0):
+            raise ValueError(f"{name} must be finite and positive")
     if not interval.valid:
         return IMUPrediction(
             identity, zero_vector, zero_vector.clone(), 0.0, sample_count,
@@ -133,9 +159,7 @@ def preintegrate_imu(interval, bias_accel, bias_gyro, gravity_cam,
         rotation_cam_imu = identity
         translation_cam_imu = zero_vector
     else:
-        t_cam_imu = torch.as_tensor(t_cam_imu, dtype=dtype, device=device)
-        if t_cam_imu.shape != (4, 4):
-            raise ValueError("t_cam_imu must be 4x4")
+        t_cam_imu = validate_rigid_transform(t_cam_imu, dtype, device)
         rotation_cam_imu = t_cam_imu[:3, :3]
         translation_cam_imu = t_cam_imu[:3, 3]
 
@@ -189,9 +213,17 @@ def preintegrate_imu(interval, bias_accel, bias_gyro, gravity_cam,
 
 
 def estimate_gravity(interval, device, gravity_magnitude, max_accel_std,
-                     max_gyro_norm, t_cam_imu=None):
+                     max_gyro_norm, t_cam_imu=None,
+                     magnitude_tolerance=1.0):
     dtype = torch.float64
     zero = torch.zeros(3, dtype=dtype, device=device)
+    for name, value in (
+            ("gravity_magnitude", gravity_magnitude),
+            ("max_accel_std", max_accel_std),
+            ("max_gyro_norm", max_gyro_norm),
+            ("magnitude_tolerance", magnitude_tolerance)):
+        if not torch.isfinite(torch.as_tensor(value)) or value <= 0:
+            raise ValueError(f"{name} must be finite and positive")
     if not interval.valid or len(interval.timestamps_s) < 2:
         return GravityEstimate(zero, False, "invalid_interval")
     accelerations = torch.as_tensor(
@@ -206,9 +238,7 @@ def estimate_gravity(interval, device, gravity_magnitude, max_accel_std,
     if t_cam_imu is None:
         rotation_cam_imu = identity
     else:
-        transform = torch.as_tensor(t_cam_imu, dtype=dtype, device=device)
-        if transform.shape != (4, 4):
-            raise ValueError("t_cam_imu must be 4x4")
+        transform = validate_rigid_transform(t_cam_imu, dtype, device)
         rotation_cam_imu = transform[:3, :3]
     accelerations_cam = (rotation_cam_imu @ accelerations.T).T
     angular_velocities_cam = (rotation_cam_imu @ angular_velocities.T).T
@@ -226,5 +256,7 @@ def estimate_gravity(interval, device, gravity_magnitude, max_accel_std,
     magnitude = torch.linalg.vector_norm(mean_acceleration)
     if magnitude.item() < 1e-8:
         return GravityEstimate(zero, False, "zero_gravity_direction")
+    if abs(magnitude.item() - gravity_magnitude) > magnitude_tolerance:
+        return GravityEstimate(zero, False, "gravity_magnitude_mismatch")
     gravity_cam = mean_acceleration / magnitude * gravity_magnitude
     return GravityEstimate(gravity_cam, True, "")

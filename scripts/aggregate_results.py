@@ -41,6 +41,7 @@ STRATEGY_LABELS_BC = {
 SCENE_IDS = ["A1","A2","A3","A4","A5","B1","C1","C2","C3"]
 STRATEGY_SUFFIXES_A = ["_0","_1","_2","_3"]
 STRATEGY_SUFFIXES_BC = ["_0","_1","_2","_3","_4","_5"]
+FORMAL_SEEDS = {0, 1, 2}
 
 
 def summarize_seed_metrics(seed_metrics):
@@ -58,6 +59,27 @@ def summarize_seed_metrics(seed_metrics):
         result[f"{metric_name}_std"] = (
             statistics.stdev(values) if len(values) > 1 else 0.0)
     return result
+
+
+def validate_formal_run_group(records, experiment_id):
+    seeds = {record.seed for record in records}
+    if seeds != FORMAL_SEEDS or len(records) != len(FORMAL_SEEDS):
+        raise ValueError(
+            f"{experiment_id} requires seeds {sorted(FORMAL_SEEDS)}, "
+            f"found {sorted(seeds)}")
+    commits = {record.manifest.get("git_commit") for record in records}
+    if None in commits or len(commits) != 1:
+        raise ValueError(f"mixed commit for {experiment_id}")
+    gsr_budgets = {
+        record.manifest.get("gsr_max_iters") for record in records}
+    if None in gsr_budgets or len(gsr_budgets) != 1:
+        raise ValueError(f"mixed GSR budget for {experiment_id}")
+    hardware = {
+        (record.manifest.get("environment", {}).get("gpu"),
+         record.manifest.get("environment", {}).get("cuda_runtime"))
+        for record in records}
+    if any(None in item for item in hardware) or len(hardware) != 1:
+        raise ValueError(f"mixed hardware for {experiment_id}")
 
 
 def strategy_spec(scene_id):
@@ -80,15 +102,14 @@ def read_trajectory_metrics(status, ate_aligned, trajectory_metrics):
         return {}
     rpe = trajectory_metrics.get("rpe_consecutive", {})
     result = {
-        "ate_rmse_cm": round(ate_aligned["rmse"] * 100, 2),
+        "ate_rmse_cm": ate_aligned["rmse"] * 100,
         "trajectory_alignment": trajectory_metrics.get("alignment_mode"),
     }
     if rpe.get("translation_rmse_m") is not None:
-        result["rpe_translation_cm"] = round(
-            rpe["translation_rmse_m"] * 100, 2)
+        result["rpe_translation_cm"] = (
+            rpe["translation_rmse_m"] * 100)
     if rpe.get("rotation_rmse_deg") is not None:
-        result["rpe_rotation_deg"] = round(
-            rpe["rotation_rmse_deg"], 3)
+        result["rpe_rotation_deg"] = rpe["rotation_rmse_deg"]
     result["rpe_valid_pairs"] = rpe.get("valid_pairs", 0)
     return result
 
@@ -98,6 +119,7 @@ def collect_results() -> dict:
     protocols_by_scene = {scene_id: [] for scene_id in SCENE_IDS}
     base = PROJECT_ROOT / "output" / "ablation"
     all_records = discover_completed_runs(base)
+    records_by_scene = {scene_id: [] for scene_id in SCENE_IDS}
 
     for sid in SCENE_IDS:
         suffixes, labels = strategy_spec(sid)
@@ -113,6 +135,8 @@ def collect_results() -> dict:
             if not records:
                 results[eid] = {"error": "no results"}
                 continue
+            validate_formal_run_group(records, eid)
+            records_by_scene[sid].extend(records)
 
             experiment_hashes = {
                 record.manifest.get("experiment_config_sha256")
@@ -172,6 +196,20 @@ def collect_results() -> dict:
 
     for protocols in protocols_by_scene.values():
         assert_compatible_protocols(protocols)
+    for sid, records in records_by_scene.items():
+        if not records:
+            continue
+        commits = {record.manifest.get("git_commit") for record in records}
+        gsr_budgets = {
+            record.manifest.get("gsr_max_iters") for record in records}
+        hardware = {
+            (record.manifest.get("environment", {}).get("gpu"),
+             record.manifest.get("environment", {}).get("cuda_runtime"))
+            for record in records}
+        if (len(commits) != 1 or len(gsr_budgets) != 1
+                or len(hardware) != 1):
+            raise ValueError(
+                f"mixed commit, GSR budget, or hardware across {sid}")
     return results
 
 

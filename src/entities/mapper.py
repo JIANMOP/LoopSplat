@@ -135,7 +135,11 @@ class Mapper(object):
             render_dict = render_gaussian_model(gaussian_model, keyframe["render_settings"])
             alpha_mask = (render_dict["alpha"] < self.alpha_thre)
             gt_depth_tensor = keyframe["depth"][None]
-            depth_error = torch.abs(gt_depth_tensor - render_dict["depth"]) * (gt_depth_tensor > 0)
+            valid_depth = torch.isfinite(gt_depth_tensor) & (gt_depth_tensor > 0)
+            depth_error = torch.where(
+                valid_depth,
+                torch.abs(gt_depth_tensor - render_dict["depth"]),
+                torch.zeros_like(gt_depth_tensor))
             depth_error_mask = (render_dict["depth"] > gt_depth_tensor) * (depth_error > 40 * depth_error.median())
             seeding_mask = alpha_mask | depth_error_mask
             seeding_mask = torch2np(seeding_mask[0])
@@ -159,7 +163,7 @@ class Mapper(object):
         """
         pts = create_point_cloud(gt_color, 1.005 * gt_depth, intrinsics, estimate_c2w)
         flat_gt_depth = gt_depth.flatten()
-        non_zero_depth_mask = flat_gt_depth > 0.  # need filter if zero depth pixels in gt_depth
+        non_zero_depth_mask = np.isfinite(flat_gt_depth) & (flat_gt_depth > 0)
         valid_ids = np.flatnonzero(seeding_mask)
         if is_new_submap:
             if self.new_submap_points_num < 0:
@@ -215,12 +219,16 @@ class Mapper(object):
                     cur_render_settings = keyframe["render_settings"]
                     cur_gt_image = keyframe["color"]
                     cur_gt_depth = keyframe["depth"]
-                    cur_valid_depth = keyframe["depth"] > 0
+                    cur_valid_depth = (
+                        torch.isfinite(keyframe["depth"])
+                        & (keyframe["depth"] > 0))
             else:
                 cur_render_settings = keyframe["render_settings"]
                 cur_gt_image = keyframe["color"]
                 cur_gt_depth = keyframe["depth"]
-                cur_valid_depth = keyframe["depth"] > 0
+                cur_valid_depth = (
+                    torch.isfinite(keyframe["depth"])
+                    & (keyframe["depth"] > 0))
             # ──────────────────────────────────────────────────────────
 
             render_pkg = render_gaussian_model(gaussian_model, cur_render_settings)
@@ -231,7 +239,13 @@ class Mapper(object):
             gt_image = cur_gt_image
             gt_depth = cur_gt_depth
 
-            mask = cur_valid_depth & (~torch.isnan(depth)).squeeze(0)
+            mask = (
+                cur_valid_depth
+                & torch.isfinite(gt_depth)
+                & torch.isfinite(depth).squeeze(0))
+            if not torch.any(mask):
+                raise RuntimeError(
+                    f"mapping frame {frame_id} has no finite depth residuals")
             color_loss = (1.0 - self.opt.lambda_dssim) * l1_loss(
                 image[:, mask], gt_image[:, mask]) + self.opt.lambda_dssim * (1.0 - ssim(image, gt_image))
 
@@ -313,6 +327,10 @@ class Mapper(object):
         """
 
         _, gt_color, gt_depth, _ = self.dataset[frame_id]
+        valid_depth = np.isfinite(gt_depth) & (gt_depth > 0)
+        if not np.any(valid_depth):
+            raise ValueError(
+                f"mapping frame {frame_id} has no valid depth pixels")
         estimate_w2c = np.linalg.inv(estimate_c2w)
 
         color_transform = torchvision.transforms.ToTensor()
@@ -328,7 +346,8 @@ class Mapper(object):
             keyframe["pyramid_colors"] = build_image_pyramid(
                 keyframe["color"], self._pyramid_num_sub_levels)
             depth_levels = build_depth_pyramid(
-                keyframe["depth"], keyframe["depth"] > 0,
+                keyframe["depth"], torch.isfinite(keyframe["depth"])
+                & (keyframe["depth"] > 0),
                 self._pyramid_num_sub_levels)
             keyframe["pyramid_depths"] = [
                 level_depth for level_depth, _ in depth_levels]
