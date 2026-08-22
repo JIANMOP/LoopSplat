@@ -4,10 +4,10 @@ LoopSplat Ablation Experiment Runner
 =====================================
 Three dataset groups × all strategy combinations.
 
-Group A  TUM RGB-D (no IMU)     5 scenes × 4 combos = 20 configurations
-Group B  AzureKinect (uncalibrated IMU) 1 scene × 4 combos = 4 configurations
+Group A  TUM RGB-D (no IMU)      5 scenes × 4 combos = 20 configurations
+Group R  Replica (no IMU)        8 scenes × 4 combos = 32 configurations
 Group C  FMDataset (has IMU)     3 scenes × 6 combos = 18 configurations
-                         42 configurations × 3 seeds = 126 formal runs
+                          70 configurations × 3 seeds = 210 formal runs
 
 Strategy codes per experiment:
   _0 = Baseline (all off)
@@ -122,9 +122,15 @@ SCENES_A = [
      "configs/TUM_RGBD/rgbd_dataset_freiburg3_long_office_household.yaml"),
 ]
 
-SCENES_B = [
-    ("B1", "Azure 144_5FPS_720p_IMU",
-     "configs/AzureKinect/144_5FPS_720p_IMU.yaml"),
+SCENES_R = [
+    ("R1", "Replica office0", "configs/Replica/office0.yaml"),
+    ("R2", "Replica office1", "configs/Replica/office1.yaml"),
+    ("R3", "Replica office2", "configs/Replica/office2.yaml"),
+    ("R4", "Replica office3", "configs/Replica/office3.yaml"),
+    ("R5", "Replica office4", "configs/Replica/office4.yaml"),
+    ("R6", "Replica room0", "configs/Replica/room0.yaml"),
+    ("R7", "Replica room1", "configs/Replica/room1.yaml"),
+    ("R8", "Replica room2", "configs/Replica/room2.yaml"),
 ]
 
 SCENES_C = [
@@ -159,7 +165,7 @@ def build_experiments():
                 },
             })
 
-    for scene_id, scene_name, config_path in SCENES_B:
+    for scene_id, scene_name, config_path in SCENES_R:
         for suffix, sname, sdesc, overrides in STRATEGIES_A:
             eid = scene_id + suffix
             exps.append({
@@ -167,12 +173,11 @@ def build_experiments():
                 "name": f"{scene_name} — {sname}",
                 "desc": f"{sdesc}",
                 "config": config_path,
-                "group": "B",
+                "group": "R",
                 "overrides": {
                     "data": {"output_path": f"output/ablation/{eid}/"},
                     "lc": {"registration": {
                         "gsr_max_iters": GSR_MAX_ITERS}},
-                    "tracking": {"use_imu": False},
                     **deepcopy(overrides),
                 },
             })
@@ -224,7 +229,7 @@ def update_recursive(d1: dict, d2: dict) -> None:
 
 def load_yaml(path: str | Path) -> dict:
     path = Path(path)
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     inherit = cfg.pop("inherit_from", None)
     if inherit is not None:
@@ -326,7 +331,7 @@ def main():
         merged["data"]["run_directory_prepared"] = True
         tmp_config = run_dir / "config.input.yaml"
 
-        with open(tmp_config, "w") as f:
+        with open(tmp_config, "w", encoding="utf-8") as f:
             yaml.dump(merged, f, default_flow_style=False)
 
         command = [sys.executable, runner, str(tmp_config)]
@@ -337,10 +342,13 @@ def main():
         print(f"      Running {runner} ...")
         t0 = time.time()
         try:
-            with open(run_dir / "run.log", "w", buffering=1) as log_file:
+            with open(
+                    run_dir / "run.log", "w", buffering=1,
+                    encoding="utf-8") as log_file:
                 process = subprocess.Popen(
                     command, cwd=PROJECT_ROOT, stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT, text=True, bufsize=1)
+                    stderr=subprocess.STDOUT, text=True, bufsize=1,
+                    encoding="utf-8", errors="replace")
                 for line in process.stdout:
                     print(line, end="")
                     log_file.write(line)

@@ -10,7 +10,12 @@ from scripts.aggregate_results import (
     summarize_seed_metrics,
     validate_formal_run_group,
 )
-from scripts.run_ablation import EXPERIMENTS, config_has_results
+from scripts.run_ablation import (
+    EXPERIMENTS,
+    config_has_results,
+    deep_merge,
+    load_yaml,
+)
 from src.entities.gaussian_slam import build_run_statistics
 from src.utils.experiment_utils import (
     create_run_directory,
@@ -283,17 +288,28 @@ def test_missing_output_path_fails_before_slam_initialization():
         raise AssertionError("missing output path must fail")
 
 
-def test_azure_matrix_excludes_imu_without_camera_imu_calibration():
-    azure_experiments = [
+def test_formal_matrix_replaces_azure_with_eight_replica_scenes():
+    replica_experiments = [
         experiment for experiment in EXPERIMENTS
-        if experiment["group"] == "B"
+        if experiment["group"] == "R"
     ]
 
-    assert azure_experiments
-    assert all(
-        experiment["overrides"]["tracking"]["use_imu"] is False
-        for experiment in azure_experiments
-    )
+    assert len(EXPERIMENTS) == 70
+    assert len(replica_experiments) == 32
+    assert len(EXPERIMENTS) * 3 == 210
+    assert {experiment["id"] for experiment in replica_experiments} == {
+        f"R{scene}_{strategy}"
+        for scene in range(1, 9)
+        for strategy in range(4)
+    }
+    assert not any(
+        "AzureKinect" in experiment["config"]
+        for experiment in EXPERIMENTS)
+    for experiment in replica_experiments:
+        merged = deep_merge(
+            load_yaml(experiment["config"]), experiment["overrides"])
+        assert merged["tracking"].get("use_imu", False) is False
+        assert merged["evaluation"]["run_reconstruction"] is False
 
 
 def test_azure_report_uses_rgbd_only_matrix_without_trajectory_columns():

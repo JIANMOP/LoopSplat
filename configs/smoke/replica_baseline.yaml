@@ -1,0 +1,23 @@
+inherit_from: configs/Replica/office0.yaml
+experiment_id: smoke_replica_baseline
+frame_limit: 8
+data:
+  output_path: output/smoke
+mapping:
+  iterations: 3
+  new_submap_iterations: 5
+  new_submap_points_num: 2000
+  new_submap_gradient_points_num: 1000
+  new_frame_sample_size: 1000
+  submap_using_motion_heuristic: false
+  new_submap_every: 50
+tracking:
+  iterations: 3
+  use_imu: false
+keyframing:
+  enable_gi_slam: false
+gaussian_pyramid:
+  enabled: false
+evaluation:
+  observed_view_stride: 3
+  run_reconstruction: false
