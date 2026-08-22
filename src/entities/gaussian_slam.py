@@ -84,13 +84,16 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
         use_imu_gyro=slam._gi_use_imu_gyro,
     )
     _, _, depth, _ = slam.dataset[frame_id]
+    gaussian_xyz = gaussian_model.get_xyz()
     frustum_ids_current = compute_gaussian_frustum_ids(
-        gaussian_model.get_xyz(), np.linalg.inv(estimated_c2w),
+        gaussian_xyz, estimated_c2w,
         slam.dataset.intrinsics, depth)
-    reference_frustum_ids = slam._gi_kf_frustum_ids.get(
-        last_keyframe_id, np.array([], dtype=np.int64))
     reference_c2w = slam._gi_kf_c2ws.get(
         last_keyframe_id, estimated_c2w)
+    _, _, reference_depth, _ = slam.dataset[last_keyframe_id]
+    reference_frustum_ids = compute_gaussian_frustum_ids(
+        gaussian_xyz, reference_c2w,
+        slam.dataset.intrinsics, reference_depth)
     decision = gi_slam_keyframe_decision(
         frustum_ids_current=frustum_ids_current,
         frustum_ids_keyframe=reference_frustum_ids,
@@ -116,13 +119,16 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
         decision.selected, decision.score, decision.reason, components)
 
 
-def register_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
-    _, _, depth, _ = slam.dataset[frame_id]
-    frustum_ids = compute_gaussian_frustum_ids(
-        gaussian_model.get_xyz(), np.linalg.inv(estimated_c2w),
-        slam.dataset.intrinsics, depth)
-    slam._gi_kf_frustum_ids[frame_id] = frustum_ids
+def register_gi_keyframe(slam, frame_id, estimated_c2w):
     slam._gi_kf_c2ws[frame_id] = estimated_c2w.copy()
+
+
+def mapping_keyframe_decision(slam, frame_id, gaussian_model,
+                              estimated_c2w, submap_boundary):
+    if submap_boundary:
+        return KeyframeDecision(True, 0.0, "submap_boundary", {})
+    return evaluate_gi_keyframe(
+        slam, frame_id, gaussian_model, estimated_c2w)
 
 
 class GaussianSLAM(object):
@@ -169,8 +175,7 @@ class GaussianSLAM(object):
         else:
             self.mapping_frame_ids = frame_ids[::config["mapping"]["map_every"]] + [n_frames - 1]
 
-        # GI-SLAM state: cache visibility + poses of keyframes for IoU scoring
-        self._gi_kf_visible_ids = {}  # frame_id → np.ndarray of visible Gaussian indices
+        # GI-SLAM state: cache keyframe poses for same-model IoU scoring
         self._gi_kf_c2ws = {}         # frame_id → np.ndarray (4, 4) estimated c2w
         self._gi_prev_c2w = None      # previous frame c2w for velocity computation
         self._gi_prev_frame_id = None # previous frame id for dt computation
@@ -197,7 +202,6 @@ class GaussianSLAM(object):
                 or not isinstance(self._gi_max_gap, int)
                 or self._gi_min_interval < 1 or self._gi_max_gap < 1):
             raise ValueError("keyframe intervals must be positive integers")
-        self._gi_kf_frustum_ids = {}
         self._gi_decisions = {}
         self._gi_decision_counts = {}
         self.tracker = Tracker(config["tracking"], self.dataset, self.logger)
@@ -286,13 +290,6 @@ class GaussianSLAM(object):
         self.mapper.keyframes = []
         self.mapper.reset_pyramid_state()
         self.keyframes_info = {}
-        if self._gi_enabled:
-            self._gi_kf_frustum_ids.clear()
-            _record_keyframe_decision(
-                self,
-                frame_id,
-                KeyframeDecision(True, 0.0, "submap_boundary", {}),
-            )
         if self.submap_using_motion_heuristic:
             self.new_submap_frame_ids.append(frame_id)
         self.mapping_frame_ids.append(frame_id) if frame_id not in self.mapping_frame_ids else self.mapping_frame_ids
@@ -300,142 +297,10 @@ class GaussianSLAM(object):
         self.loop_closer.submap_id += 1
 
         # Clear GI-SLAM keyframe state on submap reset (Gaussian model is reset)
-        self._gi_kf_visible_ids.clear()
         self._gi_kf_c2ws.clear()
 
         return gaussian_model
 
-    def _should_map_frame_gi_slam(self, frame_id: int,
-                                   gaussian_model: GaussianModel,
-                                   estimated_c2w: np.ndarray) -> bool:
-        return evaluate_gi_keyframe(
-            self, frame_id, gaussian_model, estimated_c2w).selected
-
-        """Evaluate whether the current frame should become a mapping keyframe
-        based on GI-SLAM's content-aware selection (Sec. 3.3).
-
-        Scoring: s_i = w_covis*(1-IoU_G) + w_base*||t_ij||/d_med
-                       - w_mot*𝕀(v_i>v_max ∨ ω_i>ω_max)
-
-        If s_i > threshold, the frame is selected.
-
-        Args:
-            frame_id: Current frame index.
-            gaussian_model: Current submap Gaussian model.
-            estimated_c2w: Estimated camera-to-world pose of current frame.
-
-        Returns:
-            True if the frame should be a keyframe.
-        """
-        # Always select frame 0 and the last frame as keyframes
-        if frame_id == 0 or frame_id == len(self.dataset) - 1:
-            return True
-
-        # Enforce minimum frame interval between keyframes
-        if len(self.mapping_frame_ids) > 0:
-            last_kf = self.mapping_frame_ids[-1]
-            if frame_id - last_kf < self._gi_min_interval:
-                return False
-
-        # ── Safety: force keyframe if gap is too large ───────────────
-        # Prevents model starvation when GI-KF score is consistently below
-        # threshold (e.g. fast motion + odometer noise = perpetual motion
-        # penalty).  The default map_every=1 would map every frame; this
-        # safety net ensures we map at least every 30 frames.
-        _max_gap = max(30, self._gi_min_interval * 10)
-        if len(self.mapping_frame_ids) > 0:
-            last_kf = self.mapping_frame_ids[-1]
-            if frame_id - last_kf > _max_gap:
-                print(f"\n⚠️  GI-SLAM SAFETY: frame {frame_id} forced as keyframe "
-                      f"(gap={frame_id - last_kf} > {_max_gap}, last_kf={last_kf}). "
-                      f"GI-KF threshold too strict for this dataset.")
-                return True
-        # ──────────────────────────────────────────────────────────────
-
-        # ── Velocity estimation ──────────────────────────────────────
-        linear_vel, angular_vel = 0.0, 0.0
-
-        # Time delta from dataset timestamps or fallback FPS
-        if hasattr(self.dataset, 'timestamps') and \
-           self._gi_prev_frame_id is not None and \
-           self._gi_prev_frame_id < len(self.dataset.timestamps) and \
-           frame_id < len(self.dataset.timestamps):
-            dt = self.dataset.timestamps[frame_id] - self.dataset.timestamps[self._gi_prev_frame_id]
-        else:
-            dt = 1.0 / self._gi_fps
-
-        # Visual odometry velocity
-        if self._gi_prev_c2w is not None and dt > 0:
-            linear_vel, angular_vel = compute_camera_velocity(
-                estimated_c2w, self._gi_prev_c2w, dt)
-
-        # Supplement with IMU angular velocity when available (deg/s)
-        if hasattr(self.dataset, 'get_imu_data_for_frame'):
-            imu_data = self.dataset.get_imu_data_for_frame(frame_id)
-            if imu_data is not None and 'angular_velocity' in imu_data:
-                imu_omega = np.linalg.norm(imu_data['angular_velocity'])
-                # rad/s → deg/s, take max of visual and IMU
-                angular_vel = max(angular_vel, imu_omega * 180.0 / np.pi)
-
-        # ── Gaussian visibility of current frame ─────────────────────
-        _, gt_color, gt_depth, _ = self.dataset[frame_id]
-        estimate_w2c = np.linalg.inv(estimated_c2w)
-        gaussian_xyz = gaussian_model.get_xyz()
-
-        visible_ids_curr = compute_gaussian_visibility(
-            gaussian_xyz, estimate_w2c, self.dataset.intrinsics, gt_depth)
-
-        # ── Score against nearest keyframe ───────────────────────────
-        last_kf_id = self.mapping_frame_ids[-1]
-        nearest_kf_visible = self._gi_kf_visible_ids.get(last_kf_id, np.array([], dtype=np.int64))
-        nearest_kf_c2w = self._gi_kf_c2ws.get(last_kf_id, estimated_c2w)
-
-        score = gi_slam_keyframe_score(
-            visible_ids_curr, nearest_kf_visible,
-            estimated_c2w, nearest_kf_c2w, gt_depth,
-            linear_vel, angular_vel,
-            w_covis=self._gi_w_covis,
-            w_base=self._gi_w_base,
-            w_mot=self._gi_w_mot,
-            v_max=self._gi_v_max,
-            omega_max=self._gi_omega_max,
-        )
-
-        selected = score > self._gi_score_threshold
-        if selected:
-            from src.utils.mapper_utils import compute_gaussian_iou
-            iou = compute_gaussian_iou(visible_ids_curr, nearest_kf_visible)
-            print(f"\nGI-SLAM: frame {frame_id} selected as keyframe "
-                  f"(score={score:.3f}, covis=1-IoU={1-iou:.3f}, "
-                  f"baseline={np.linalg.norm(estimated_c2w[:3, 3] - nearest_kf_c2w[:3, 3]):.3f}m, "
-                  f"vel={linear_vel:.2f}/{angular_vel:.1f})")
-
-        return selected
-
-    def _register_gi_keyframe(self, frame_id: int, gaussian_model: GaussianModel,
-                               estimated_c2w: np.ndarray) -> None:
-        register_gi_keyframe(
-            self, frame_id, gaussian_model, estimated_c2w)
-        return
-
-        """Cache the visible Gaussian IDs and pose of a newly-mapped keyframe
-        for subsequent GI-SLAM covisibility scoring.
-
-        Args:
-            frame_id: Frame just mapped as a keyframe.
-            gaussian_model: Updated Gaussian model after mapping.
-            estimated_c2w: Estimated camera-to-world pose.
-        """
-        _, gt_color, gt_depth, _ = self.dataset[frame_id]
-        estimate_w2c = np.linalg.inv(estimated_c2w)
-        gaussian_xyz = gaussian_model.get_xyz()
-
-        visible_ids = compute_gaussian_visibility(
-            gaussian_xyz, estimate_w2c, self.dataset.intrinsics, gt_depth)
-
-        self._gi_kf_visible_ids[frame_id] = visible_ids
-        self._gi_kf_c2ws[frame_id] = estimated_c2w.copy()
-    
     def rigid_transform_gaussians(self, gaussian_params, tsfm_matrix):
         '''
         Apply a rigid transformation to the Gaussian parameters.
@@ -525,18 +390,20 @@ class GaussianSLAM(object):
                     torch2np(self.estimated_c2ws[torch.tensor(pose_ids)]))
             exposure_ab = exposure_ab if self.enable_exposure else None
             self.estimated_c2ws[frame_id] = np2torch(estimated_c2w)
+            starts_new_submap = self.should_start_new_submap(frame_id)
 
             # ── GI-SLAM dynamic keyframe selection ───────────────────
             if self._gi_enabled:
-                decision = evaluate_gi_keyframe(
-                    self, frame_id, gaussian_model, estimated_c2w)
+                decision = mapping_keyframe_decision(
+                    self, frame_id, gaussian_model, estimated_c2w,
+                    starts_new_submap)
                 _record_keyframe_decision(self, frame_id, decision)
                 if decision.selected:
                     self.mapping_frame_ids.append(frame_id)
             # ──────────────────────────────────────────────────────────
 
             # Reinitialize gaussian model for new segment
-            if self.should_start_new_submap(frame_id):
+            if starts_new_submap:
                 # first save current submap and its keyframe info
                 self.save_current_submap(gaussian_model)
                 
@@ -571,10 +438,10 @@ class GaussianSLAM(object):
                     self.keyframes_info[frame_id]["exposure_a"] = exposure_ab[0].item()
                     self.keyframes_info[frame_id]["exposure_b"] = exposure_ab[1].item()
 
-                # Register frustum-center IDs; this is not occlusion visibility.
+                # Register the reference pose for same-model frustum comparison.
                 if self._gi_enabled:
                     register_gi_keyframe(
-                        self, frame_id, gaussian_model,
+                        self, frame_id,
                         torch2np(self.estimated_c2ws[frame_id]))
                 # ───────────────────────────────────────────────────────────────────
 

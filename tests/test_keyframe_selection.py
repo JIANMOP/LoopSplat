@@ -2,13 +2,18 @@ import numpy as np
 import pytest
 import torch
 
-from src.entities.gaussian_slam import evaluate_gi_keyframe
+import src.entities.gaussian_slam as gaussian_slam_module
+from src.entities.gaussian_slam import (
+    evaluate_gi_keyframe,
+    mapping_keyframe_decision,
+)
 from src.utils.keyframe_selection import (
     KeyframeDecision,
     compute_keyframe_motion,
     forced_keyframe_decision,
     gi_slam_keyframe_decision,
 )
+from src.utils.mapper_utils import compute_gaussian_visibility
 
 
 class DatasetWhoseImuAccessRaises:
@@ -28,6 +33,37 @@ def translated_pose(x):
     pose = np.eye(4)
     pose[0, 3] = x
     return pose
+
+
+def test_frustum_proxy_uses_c2w_and_keeps_camera_center_ray(cuda_device):
+    c2w = translated_pose(10.0)
+    intrinsics = np.array([
+        [2.0, 0.0, 2.0],
+        [0.0, 2.0, 2.0],
+        [0.0, 0.0, 1.0],
+    ])
+    depth = np.array([
+        [0.5, 0.5, 0.5, 0.5],
+        [0.5, 1.0, 1.0, 0.5],
+        [0.5, 1.0, 2.0, 0.5],
+        [0.5, 0.5, 0.5, 0.5],
+    ])
+    gaussian_xyz = torch.tensor(
+        [[10.0, 0.0, 1.0], [20.0, 0.0, 1.0]],
+        device=cuda_device)
+
+    visible = compute_gaussian_visibility(
+        gaussian_xyz, c2w, intrinsics, depth)
+
+    np.testing.assert_array_equal(visible, np.array([0]))
+
+
+def test_submap_boundary_is_the_single_primary_selection_reason():
+    decision = mapping_keyframe_decision(
+        None, 5, None, None, submap_boundary=True)
+
+    assert decision == KeyframeDecision(
+        True, 0.0, "submap_boundary", {})
 
 
 def test_gi_kf_does_not_read_gyro_when_keyframe_imu_is_disabled():
@@ -61,7 +97,6 @@ def test_active_slam_selector_keeps_gyro_disabled():
     slam._gi_prev_c2w = np.eye(4)
     slam._gi_fps = 30.0
     slam._gi_use_imu_gyro = False
-    slam._gi_kf_frustum_ids = {0: np.array([], dtype=np.int64)}
     slam._gi_kf_c2ws = {0: np.eye(4)}
     slam._gi_score_threshold = 0.5
     slam._gi_w_covis = 1.0
@@ -76,6 +111,50 @@ def test_active_slam_selector_keeps_gyro_disabled():
 
     assert isinstance(decision, KeyframeDecision)
     assert decision.components["gyro_assistance_used"] is False
+
+
+def test_selector_reprojects_same_current_gaussian_set_for_both_views(
+        monkeypatch):
+    current_gaussians = torch.tensor([[1.0, 2.0, 3.0]])
+    calls = []
+
+    def fake_frustum_ids(gaussians, w2c, intrinsics, depth):
+        calls.append((gaussians, w2c.copy()))
+        return np.array([0], dtype=np.int64)
+
+    monkeypatch.setattr(
+        gaussian_slam_module, "compute_gaussian_frustum_ids",
+        fake_frustum_ids)
+
+    class Model:
+        def get_xyz(self):
+            return current_gaussians
+
+    slam = type("SlamState", (), {})()
+    slam.dataset = DatasetWhoseImuAccessRaises()
+    slam.dataset.intrinsics = np.eye(3)
+    slam.mapping_frame_ids = [0]
+    slam._gi_min_interval = 1
+    slam._gi_max_gap = 30
+    slam._gi_prev_frame_id = 0
+    slam._gi_prev_c2w = np.eye(4)
+    slam._gi_fps = 30.0
+    slam._gi_use_imu_gyro = False
+    slam._gi_kf_c2ws = {0: np.eye(4)}
+    slam._gi_score_threshold = 0.5
+    slam._gi_w_covis = 1.0
+    slam._gi_w_base = 1.0
+    slam._gi_w_mot = 2.0
+    slam._gi_v_max = 0.8
+    slam._gi_omega_max = 50.0
+
+    decision = evaluate_gi_keyframe(
+        slam, 1, Model(), translated_pose(0.033275))
+
+    assert len(calls) == 2
+    assert calls[0][0] is current_gaussians
+    assert calls[1][0] is current_gaussians
+    assert decision.components["frustum_center_iou"] == pytest.approx(1.0)
 
 
 def test_gyro_assistance_is_controlled_by_separate_switch():

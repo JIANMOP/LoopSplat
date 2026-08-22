@@ -63,37 +63,30 @@ def compute_camera_frustum_planes(frustum_corners: np.ndarray) -> torch.Tensor:
     Returns:
         A tensor of frustum planes.
     """
-    # near, far, left, right, top, bottom
-    planes = torch.stack(
-        [
-            torch.cross(
-                frustum_corners[2] - frustum_corners[0],
-                frustum_corners[1] - frustum_corners[0]
-            ),
-            torch.cross(
-                frustum_corners[6] - frustum_corners[4],
-                frustum_corners[5] - frustum_corners[4]
-            ),
-            torch.cross(
-                frustum_corners[4] - frustum_corners[0],
-                frustum_corners[2] - frustum_corners[0]
-            ),
-            torch.cross(
-                frustum_corners[7] - frustum_corners[3],
-                frustum_corners[1] - frustum_corners[3]
-            ),
-            torch.cross(
-                frustum_corners[5] - frustum_corners[1], 
-                frustum_corners[0] - frustum_corners[1]
-            ),
-            torch.cross(
-                frustum_corners[6] - frustum_corners[2], 
-                frustum_corners[3] - frustum_corners[2]
-            ),
-        ]
+    corners = torch.as_tensor(frustum_corners)
+    center = corners.mean(dim=0)
+    face_ids = (
+        (0, 1, 2),  # near
+        (4, 6, 5),  # far
+        (0, 2, 4),  # left
+        (1, 5, 3),  # right
+        (2, 3, 6),  # top
+        (0, 4, 1),  # bottom
     )
-    D = torch.stack([-torch.dot(plane, frustum_corners[i]) for i, plane in enumerate(planes)])
-    return torch.cat([planes, D[:, None]], dim=1).float()
+    planes = []
+    for first, second, third in face_ids:
+        point = corners[first]
+        normal = torch.cross(
+            corners[second] - point,
+            corners[third] - point,
+            dim=0,
+        )
+        offset = -torch.dot(normal, point)
+        if torch.dot(normal, center) + offset > 0:
+            normal = -normal
+            offset = -offset
+        planes.append(torch.cat((normal, offset[None])))
+    return torch.stack(planes).float()
 
 
 def compute_frustum_aabb(frustum_corners: torch.Tensor):
@@ -336,7 +329,7 @@ def create_point_cloud(image: np.ndarray, depth: np.ndarray, intrinsics: np.ndar
     return point_cloud
 
 
-def compute_gaussian_visibility(gaussian_xyz: torch.Tensor, estimate_w2c: np.ndarray,
+def compute_gaussian_visibility(gaussian_xyz: torch.Tensor, estimate_c2w: np.ndarray,
                                 intrinsics: np.ndarray, depth_map: np.ndarray,
                                 device: str = "cuda") -> np.ndarray:
     """Compute the set of visible Gaussian point IDs from a given camera pose.
@@ -347,7 +340,7 @@ def compute_gaussian_visibility(gaussian_xyz: torch.Tensor, estimate_w2c: np.nda
 
     Args:
         gaussian_xyz: Tensor of Gaussian center positions (N, 3).
-        estimate_w2c: World-to-camera transformation matrix (4, 4).
+        estimate_c2w: Camera-to-world transformation matrix (4, 4).
         intrinsics: Camera intrinsic matrix (3, 3).
         depth_map: Depth map of the frame (H, W), used to estimate
             frustum near/far planes.
@@ -360,7 +353,7 @@ def compute_gaussian_visibility(gaussian_xyz: torch.Tensor, estimate_w2c: np.nda
         return np.array([], dtype=np.int64)
 
     frustum_corners = compute_camera_frustum_corners(
-        depth_map, estimate_w2c, intrinsics)
+        depth_map, estimate_c2w, intrinsics)
     frustum_corners_t = torch.from_numpy(frustum_corners).float().to(device)
 
     visible_ids = compute_frustum_point_ids(gaussian_xyz, frustum_corners_t, device=device)
