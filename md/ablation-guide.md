@@ -62,6 +62,7 @@ Azure Kinect 序列是自采数据，可在论文实验设置或定性结果中�
 ```bash
 conda activate loop_splat
 cd /root/autodl-tmp/LoopSplat
+export LOOPSPLAT_OUTPUT_ROOT=/root/autodl-fs/output/ablation
 python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 git status --short
 git rev-parse HEAD
@@ -213,10 +214,10 @@ python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 
 ## 5. 输出文件与真实性审计
 
-正式输出目录结构为：
+正式输出根目录由 `LOOPSPLAT_OUTPUT_ROOT` 控制；未设置时默认使用仓库内的 `output/ablation`。服务器统一设置为 `/root/autodl-fs/output/ablation`，其目录结构为：
 
 ```text
-output/ablation/<experiment_id>/seed_<seed>/<UTC时间>_<随机后缀>/
+/root/autodl-fs/output/ablation/<experiment_id>/seed_<seed>/<UTC时间>_<随机后缀>/
 ```
 
 核心文件：
@@ -254,7 +255,7 @@ output/ablation/<experiment_id>/seed_<seed>/<UTC时间>_<随机后缀>/
 检查单个运行目录：
 
 ```bash
-python -c "from src.utils.experiment_utils import formal_outputs_complete; print(formal_outputs_complete('output/ablation/R1_0/seed_0/<run-dir>'))"
+python -c "from src.utils.experiment_utils import formal_outputs_complete; print(formal_outputs_complete('/root/autodl-fs/output/ablation/R1_0/seed_0/<run-dir>'))"
 ```
 
 输出必须为 `True`。把 `<run-dir>` 替换为实际目录名。
@@ -270,11 +271,15 @@ python scripts/aggregate_results.py --format terminal
 生成论文表格草稿和机器可读结果：
 
 ```bash
-python scripts/aggregate_results.py --format markdown > output/ablation/results.md
-python scripts/aggregate_results.py --format json > output/ablation/results.json
+REPORT_ROOT="${LOOPSPLAT_OUTPUT_ROOT:-$PWD/output/ablation}"
+mkdir -p "$REPORT_ROOT"
+python scripts/aggregate_results.py --format markdown > "$REPORT_ROOT/results.md"
+python scripts/aggregate_results.py --format json > "$REPORT_ROOT/results.json"
 ```
 
 汇总器只接受每个配置恰好包含 `seed=0,1,2` 的成功结果，并检查三个种子的实验代码指纹、GSR 预算、GPU/CUDA一致；同一场景的所有策略还必须使用兼容的评估协议。Git commit 可以因纯文档提交而不同。若某配置完全未运行，会显示缺失；若只有 1–2 个种子，或混入不同实验代码/环境，会直接报错，不能静默生成不严谨表格。
+
+实验代码指纹包含 `src/`、`scripts/`、`configs/` 及两个 SLAM 入口。本次输出目录改造会开启一个新的指纹版本：在该提交之前生成的正式结果不会被自动续跑识别，也不能与新结果混合汇总。正式矩阵尚未开始时直接以本提交为起点；若已有旧正式结果，则至少应完整重跑同一场景的全部对比策略和三个种子，禁止只补跑单个配置后混用。
 
 ## 7. 消融比较方法
 
@@ -340,12 +345,17 @@ cd /root/autodl-tmp/LoopSplat
 source /etc/network_turbo
 git pull
 conda activate loop_splat
+mkdir -p /root/autodl-fs/output/ablation
+grep -qxF 'export LOOPSPLAT_OUTPUT_ROOT=/root/autodl-fs/output/ablation' /root/.bashrc || \
+  echo 'export LOOPSPLAT_OUTPUT_ROOT=/root/autodl-fs/output/ablation' >> /root/.bashrc
+source /root/.bashrc
+echo "$LOOPSPLAT_OUTPUT_ROOT"
 git rev-parse HEAD
 git status --short
 python -m pytest -q
 ```
 
-确认服务器包含相同实验代码、工作区为空、数据路径存在后，先重复第 3 节 GPU 冒烟，再启动正式矩阵。纯文档提交不会影响续跑；不要在服务器上直接编辑正式配置或算法代码，否则实验代码指纹会变化。
+确认环境变量输出为 `/root/autodl-fs/output/ablation`、服务器包含相同实验代码、工作区为空且数据路径存在后，先重复第 3 节 GPU 冒烟，再启动正式矩阵。正式运行器和汇总器会读取同一个输出根目录；冒烟结果仍保存在仓库的 `output/smoke`。纯文档提交不会影响续跑；不要在服务器上直接编辑正式配置或算法代码，否则实验代码指纹会变化。
 
 ## 10. 故障处理
 

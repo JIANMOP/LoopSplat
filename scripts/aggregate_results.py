@@ -2,7 +2,7 @@
 """
 LoopSplat Ablation Results Aggregator
 ======================================
-Scans output/ablation/ directories, collects metrics, renders tables.
+Scans the configured formal output root, collects metrics, renders tables.
 
 Usage:
   python scripts/aggregate_results.py --format markdown
@@ -19,7 +19,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.evaluation.protocol import assert_compatible_protocols
-from src.utils.experiment_utils import discover_completed_runs
+from src.utils.experiment_utils import (
+    ablation_output_root,
+    discover_completed_runs,
+)
 
 # Scene labels for display
 SCENE_LABELS = {
@@ -126,7 +129,7 @@ def read_trajectory_metrics(status, ate_aligned, trajectory_metrics):
 def collect_results() -> dict:
     results = {}
     protocols_by_scene = {scene_id: [] for scene_id in SCENE_IDS}
-    base = PROJECT_ROOT / "output" / "ablation"
+    base = ablation_output_root(PROJECT_ROOT)
     all_records = discover_completed_runs(base)
     records_by_scene = {scene_id: [] for scene_id in SCENE_IDS}
 

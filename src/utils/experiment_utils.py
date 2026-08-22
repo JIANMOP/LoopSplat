@@ -4,6 +4,7 @@ from copy import deepcopy
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import platform
 import re
@@ -23,6 +24,7 @@ EXPERIMENT_SOURCE_PATHS = (
     "run_slam.py",
     "run_slam_azure.py",
 )
+ABLATION_OUTPUT_ENV = "LOOPSPLAT_OUTPUT_ROOT"
 REQUIRED_FORMAL_OUTPUTS = (
     "manifest.json",
     "rendering_metrics_observed_view.json",
@@ -109,6 +111,19 @@ def current_git_dirty(project_root=None):
     project_root = Path(
         project_root or Path(__file__).resolve().parents[2])
     return bool(_git_value(project_root, ["status", "--porcelain"]))
+
+
+def ablation_output_root(project_root=None, environment=None):
+    project_root = Path(
+        project_root or Path(__file__).resolve().parents[2])
+    environment = os.environ if environment is None else environment
+    configured_root = environment.get(ABLATION_OUTPUT_ENV)
+    if not configured_root:
+        return project_root / "output" / "ablation"
+    output_root = Path(configured_root).expanduser()
+    return (
+        output_root if output_root.is_absolute()
+        else project_root / output_root)
 
 
 def experiment_source_sha256(project_root=None):

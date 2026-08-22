@@ -35,6 +35,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 GSR_MAX_ITERS = 100
 
 from src.utils.experiment_utils import (
+    ablation_output_root,
     create_run_directory,
     config_sha256,
     current_git_commit,
@@ -145,7 +146,8 @@ SCENES_C = [
 
 # ── Build experiment list ─────────────────────────────────────────────
 
-def build_experiments():
+def build_experiments(output_root=None):
+    output_root = Path(output_root or ablation_output_root())
     exps = []
 
     for scene_id, scene_name, config_path in SCENES_A:
@@ -158,7 +160,7 @@ def build_experiments():
                 "config": config_path,
                 "group": "A",
                 "overrides": {
-                    "data": {"output_path": f"output/ablation/{eid}/"},
+                    "data": {"output_path": str(output_root / eid)},
                     "lc": {"registration": {
                         "gsr_max_iters": GSR_MAX_ITERS}},
                     **deepcopy(overrides),
@@ -175,7 +177,7 @@ def build_experiments():
                 "config": config_path,
                 "group": "R",
                 "overrides": {
-                    "data": {"output_path": f"output/ablation/{eid}/"},
+                    "data": {"output_path": str(output_root / eid)},
                     "lc": {"registration": {
                         "gsr_max_iters": GSR_MAX_ITERS}},
                     **deepcopy(overrides),
@@ -192,7 +194,7 @@ def build_experiments():
                 "config": config_path,
                 "group": "C",
                 "overrides": {
-                    "data": {"output_path": f"output/ablation/{eid}/"},
+                    "data": {"output_path": str(output_root / eid)},
                     "lc": {"registration": {
                         "gsr_max_iters": GSR_MAX_ITERS}},
                     **deepcopy(overrides),
@@ -266,12 +268,13 @@ def main():
                         help="Run all experiments in group A/R/C")
     args = parser.parse_args()
 
-    experiments = EXPERIMENTS
+    available_experiments = build_experiments()
+    experiments = available_experiments
     if args.experiment:
         experiments = [e for e in experiments if e["id"] == args.experiment]
         if not experiments:
             print(f"Error: no experiment '{args.experiment}'")
-            ids = [e["id"] for e in EXPERIMENTS]
+            ids = [e["id"] for e in available_experiments]
             print(f"Available ({len(ids)}): {', '.join(ids[:20])}...")
             sys.exit(1)
     elif args.group:

@@ -1,18 +1,23 @@
 from argparse import Namespace
 from datetime import datetime, timezone
 import json
+from pathlib import Path
 import subprocess
+import sys
 import yaml
 import pytest
 
 from run_slam import update_config_with_args
+import scripts.run_ablation as run_ablation_module
 from scripts.aggregate_results import (
+    collect_results,
     render_markdown,
     summarize_seed_metrics,
     validate_formal_run_group,
 )
 from scripts.run_ablation import (
     EXPERIMENTS,
+    build_experiments,
     config_has_results,
     deep_merge,
     load_yaml,
@@ -387,6 +392,62 @@ def test_formal_matrix_replaces_azure_with_eight_replica_scenes():
             load_yaml(experiment["config"]), experiment["overrides"])
         assert merged["tracking"].get("use_imu", False) is False
         assert merged["evaluation"]["run_reconstruction"] is False
+
+
+def test_formal_matrix_routes_every_experiment_to_selected_output_root(
+        tmp_path):
+    output_root = tmp_path / "large-storage" / "ablation"
+
+    experiments = build_experiments(output_root)
+
+    assert len(experiments) == 70
+    assert all(
+        Path(experiment["overrides"]["data"]["output_path"]).parent
+        == output_root
+        for experiment in experiments)
+
+
+def test_aggregator_scans_output_root_from_environment(tmp_path, monkeypatch):
+    output_root = tmp_path / "external-ablation"
+    run_dir = create_run_directory(
+        output_root, "A1_0", 0, suffix="complete")
+    write_valid_formal_outputs(run_dir)
+    write_status(run_dir, "succeeded")
+    monkeypatch.setenv("LOOPSPLAT_OUTPUT_ROOT", str(output_root))
+
+    with pytest.raises(ValueError, match="seeds"):
+        collect_results()
+
+
+def test_ablation_output_root_defaults_locally_and_accepts_server_path(
+        tmp_path):
+    default_root = experiment_utils.ablation_output_root(
+        project_root=tmp_path, environment={})
+    server_root = experiment_utils.ablation_output_root(
+        project_root=tmp_path,
+        environment={
+            "LOOPSPLAT_OUTPUT_ROOT": "/root/autodl-fs/output/ablation"})
+    relative_root = experiment_utils.ablation_output_root(
+        project_root=tmp_path,
+        environment={"LOOPSPLAT_OUTPUT_ROOT": "external-ablation"})
+
+    assert default_root == tmp_path / "output" / "ablation"
+    assert server_root == Path("/root/autodl-fs/output/ablation")
+    assert relative_root == tmp_path / "external-ablation"
+
+
+def test_runner_resolves_output_environment_when_main_starts(
+        tmp_path, monkeypatch, capsys):
+    output_root = tmp_path / "runtime-ablation"
+    monkeypatch.setenv("LOOPSPLAT_OUTPUT_ROOT", str(output_root))
+    monkeypatch.setattr(
+        sys, "argv",
+        ["run_ablation.py", "--dry-run", "--experiment", "R1_0",
+         "--seeds", "0"])
+
+    run_ablation_module.main()
+
+    assert f"Output root: {output_root / 'R1_0'}" in capsys.readouterr().out
 
 
 def test_replica_report_uses_four_strategy_matrix_with_trajectory_columns():
