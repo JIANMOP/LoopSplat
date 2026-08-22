@@ -1,4 +1,6 @@
+from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -7,6 +9,7 @@ import torch
 from scripts.run_ablation import EXPERIMENTS, GSR_MAX_ITERS
 from src.entities.gaussian_slam import GaussianSLAM
 from src.entities.lc import Loop_closure
+import src.entities.lc as loop_closure_module
 from src.gsr.solver import validate_gsr_max_iters
 
 
@@ -50,6 +53,29 @@ def test_pgo_checkpoint_update_invalidates_cached_gaussians(tmp_path):
         reloaded["gaussian_params"]["xyz"],
         torch.tensor([[3.0, 0.0, 0.0]]),
     )
+
+
+def test_loop_closure_does_not_mutate_experiment_config(monkeypatch):
+    monkeypatch.setattr(loop_closure_module, "GlobalDesc", lambda: object())
+    config = {
+        "lc": {
+            "min_interval": 5,
+            "voxel_size": 0.02,
+            "registration": {"gsr_max_iters": 100},
+        },
+    }
+    original = deepcopy(config)
+    dataset = SimpleNamespace(
+        width=640,
+        height=480,
+        intrinsics=np.eye(3),
+    )
+
+    loop_closer = Loop_closure(config, dataset, logger=None)
+
+    assert config == original
+    assert loop_closer.config["Training"] == {"edge_threshold": 4.0}
+    assert loop_closer.config["Dataset"] == {"type": "replica"}
 
 
 @pytest.mark.parametrize("value", [0, -1, 1.5, True, None])

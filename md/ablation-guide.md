@@ -240,6 +240,32 @@ python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 | `ate_aligned.json`、`rpe.json`、`trajectory_metrics.json` | 有 GT 数据的 ATE/RPE |
 | `global_refinement_status.json` | 明确记录正式评估未做额外全局细化 |
 
+### 5.1 按需导出全局高斯 PLY
+
+正式消融默认关闭 `evaluation.run_reconstruction` 和全局高斯精修，以免不同策略额外承担重建或优化预算。因此默认不会生成 TSDF 网格 `mesh/cleaned_mesh.ply`，也不会生成精修后的 `*_global_splats.ply`。渲染评估使用的是从 `submaps/*.ckpt` 重新加载并直接拼接的未精修全局高斯；这些 checkpoint 会保留在运行目录中，所以实验结束、GPU 内存释放后仍可按需导出：
+
+```bash
+RUN_DIR=/root/autodl-fs/output/ablation/A1_0/seed_0/<run-dir>
+python scripts/export_gaussian_ply.py "$RUN_DIR"
+```
+
+默认输出：
+
+```text
+<run-dir>/unrefined_global_splats.ply
+```
+
+指定其他输出位置：
+
+```bash
+python scripts/export_gaussian_ply.py "$RUN_DIR" \
+  --output /root/autodl-fs/output/visualization/A1_0_seed0.ply
+```
+
+若目标文件已经存在，脚本会拒绝覆盖；确认需要替换时使用 `--force`。导出需要 CUDA GPU，PLY 保存的是带位置、球谐颜色、不透明度、尺度和旋转属性的 3D Gaussian Splat，不是三角网格，应使用支持 3DGS PLY 的查看器。该文件仅用于定性检查和论文可视化，不属于正式结果完整性条件，不影响续跑判定和指标汇总。一般只为代表性场景或 seed 0 导出，避免 210 次正式运行产生大量重复文件。
+
+状态为 `failed` 的旧运行即使 checkpoint 齐全，也只能导出用于故障诊断，不能手动改成 `succeeded` 或与修复后的正式结果混合。修复实验代码后源指纹会改变，必须重新运行相应 seed。
+
 审计时不要只看 `effective_features.yaml`。正式运行的完整性检查还会验证：
 
 - `manifest.json` 中 `git_dirty=false`，Git 提交、实验代码指纹、GPU、CUDA 和配置哈希存在；

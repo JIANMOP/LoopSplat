@@ -58,7 +58,7 @@ class Loop_closure(object):
         self.device = "cuda"
         self.dataset = dataset
         self.logger = logger
-        self.config = config
+        self.config = copy.deepcopy(config)
         self.netvlad = GlobalDesc()
         self.submap_lc_info = dict()
         self.submap_id = 0
