@@ -95,6 +95,7 @@ class Tracker(object):
         if self.imu_rotation_huber_rad <= 0:
             raise ValueError("tracking.imu.rotation_huber_rad must be positive")
         self.imu_state = IMUTrackingState.create("cuda")
+        self.imu_committed_frame_ids = []
 
     def compute_losses(self, gaussian_model: GaussianModel, render_settings: dict,
                        opt_cam_rot: torch.Tensor, opt_cam_trans: torch.Tensor,
@@ -290,6 +291,8 @@ class Tracker(object):
                     @ self.imu_state.gravity_cam)
 
         self.imu_state.last_committed_frame_id = frame_id
+        if self.use_imu:
+            self.imu_committed_frame_ids.append(frame_id)
         self.imu_state.last_c2w = torch.as_tensor(
             final_c2w,
             dtype=self.imu_state.velocity.dtype,
@@ -410,7 +413,7 @@ class Tracker(object):
                     self.frame_depth_loss.append(depth_loss.item())
                     # Log with IMU loss information
                     if self.use_imu:
-                        print(f"  IMU Loss: {imu_loss.item():.6f}")
+                        print(f"  IMU Loss: {imu_loss.item():.6e}")
                     self.logger.log_tracking_iteration(
                         frame_id, cur_cam, gt_quat, gt_trans, total_loss, color_loss, depth_loss, iter, num_iters,
                         wandb_output=True, print_output=True)

@@ -41,6 +41,7 @@ def make_tracker(device):
         "T_cam_imu": np.eye(4),
     }
     tracker.imu_state = IMUTrackingState.create(device)
+    tracker.imu_committed_frame_ids = []
     return tracker
 
 
@@ -116,6 +117,7 @@ def test_commit_advances_state_once(cuda_device):
     with pytest.raises(RuntimeError, match="already committed"):
         tracker.commit_imu_state(3, final_c2w, prediction)
     assert_snapshot_equal(tracker.imu_state, once)
+    assert tracker.imu_committed_frame_ids == [3]
 
 
 def test_prepare_prediction_uses_full_interval_and_initializes_gravity(

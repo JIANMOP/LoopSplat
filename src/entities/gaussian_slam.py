@@ -603,3 +603,16 @@ class GaussianSLAM(object):
         save_dict_to_ckpt(self.estimated_c2ws[:frame_id + 1], "estimated_c2w.ckpt", directory=self.output_path)
         if self.enable_exposure:
             save_dict_to_ckpt(self.exposures_ab, "exposures_ab.ckpt", directory=self.output_path)
+        save_dict_to_yaml(
+            {
+                "enabled": self.tracker.use_imu,
+                "committed_frame_ids": self.tracker.imu_committed_frame_ids,
+                "commit_count": len(self.tracker.imu_committed_frame_ids),
+                "last_committed_frame_id": (
+                    self.tracker.imu_state.last_committed_frame_id),
+                "translation_initialized": (
+                    self.tracker.imu_state.gravity_cam is not None),
+            },
+            "imu_tracking_summary.yaml",
+            directory=self.output_path,
+        )
