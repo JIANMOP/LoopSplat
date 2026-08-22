@@ -27,6 +27,10 @@ from src.utils.utils import np2torch, setup_seed, torch2np
 from src.utils.vis_utils import *  # noqa - needed for debugging
 
 
+def should_use_dataset_pose(frame_id, gt_camera, has_ground_truth):
+    return frame_id == 0 or (gt_camera and has_ground_truth)
+
+
 class GaussianSLAM(object):
 
     def __init__(self, config: dict) -> None:
@@ -375,14 +379,20 @@ class GaussianSLAM(object):
 
         for frame_id in range(len(self.dataset)):
 
-            if frame_id in [0, 1]:
+            use_dataset_pose = should_use_dataset_pose(
+                frame_id,
+                self.config["tracking"].get("gt_camera", False),
+                self.dataset.has_ground_truth,
+            )
+            if use_dataset_pose:
                 estimated_c2w = self.dataset[frame_id][-1]
                 exposure_ab = torch.nn.Parameter(torch.tensor(
                     0.0, device="cuda")), torch.nn.Parameter(torch.tensor(0.0, device="cuda"))
             else:
+                pose_ids = [0, max(0, frame_id - 2), frame_id - 1]
                 estimated_c2w, exposure_ab = self.tracker.track(
                     frame_id, gaussian_model,
-                    torch2np(self.estimated_c2ws[torch.tensor([0, frame_id - 2, frame_id - 1])]))
+                    torch2np(self.estimated_c2ws[torch.tensor(pose_ids)]))
             exposure_ab = exposure_ab if self.enable_exposure else None
             self.estimated_c2ws[frame_id] = np2torch(estimated_c2w)
 

@@ -17,6 +17,26 @@ class Logger(object):
         (self.output_path / "mapping_vis").mkdir(exist_ok=True, parents=True)
         self.use_wandb = use_wandb
 
+    def log_imu_prediction(self, frame_id, prediction) -> None:
+        """Log the single immutable IMU prediction prepared for a frame."""
+        if self.use_wandb:
+            wandb.log({
+                "Tracking/idx": frame_id,
+                "Tracking/imu_valid": int(prediction.valid),
+                "Tracking/imu_translation_valid": int(
+                    prediction.translation_valid),
+                "Tracking/imu_samples": prediction.sample_count,
+                "Tracking/imu_dt_s": prediction.total_dt,
+            })
+        if not prediction.valid or not prediction.translation_valid:
+            print(
+                f"IMU frame {frame_id}: valid={prediction.valid}, "
+                f"translation_valid={prediction.translation_valid}, "
+                f"samples={prediction.sample_count}, "
+                f"reason={prediction.reason}",
+                flush=True,
+            )
+
     def log_tracking_iteration(self, frame_id, cur_pose, gt_quat, gt_trans, total_loss,
                                color_loss, depth_loss, iter, num_iters,
                                wandb_output=False, print_output=False) -> None:

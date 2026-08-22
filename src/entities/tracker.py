@@ -1,5 +1,6 @@
 """ This module includes the Mapper class, which is responsible scene mapping: Paper Section 3.4  """
 from argparse import ArgumentParser
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -12,6 +13,12 @@ from src.entities.losses import l1_loss
 from src.entities.gaussian_model import GaussianModel
 from src.entities.logger import Logger
 from src.entities.datasets import BaseDataset
+from src.entities.imu_preintegration import (
+    IMUPrediction,
+    estimate_gravity,
+    preintegrate_imu,
+    so3_log,
+)
 from src.entities.visual_odometer import VisualOdometer
 from src.utils.gaussian_model_utils import build_rotation
 from src.utils.tracker_utils import (compute_camera_opt_params,
@@ -19,6 +26,23 @@ from src.utils.tracker_utils import (compute_camera_opt_params,
                                      transformation_to_quaternion)
 from src.utils.utils import (get_render_settings, np2torch,
                              render_gaussian_model, torch2np)
+
+
+@dataclass
+class IMUTrackingState:
+    velocity: torch.Tensor
+    gravity_cam: torch.Tensor | None
+    last_committed_frame_id: int | None
+    last_c2w: torch.Tensor | None
+
+    @classmethod
+    def create(cls, device):
+        return cls(
+            velocity=torch.zeros(3, dtype=torch.float64, device=device),
+            gravity_cam=None,
+            last_committed_frame_id=None,
+            last_c2w=None,
+        )
 
 
 class Tracker(object):
@@ -52,13 +76,30 @@ class Tracker(object):
         self.use_imu = self.config.get("use_imu", False)
         self.lambda_imu_trans = self.config.get("lambda_imu_trans", 1.0)
         self.lambda_imu_rot = self.config.get("lambda_imu_rot", 1.0)
-        self.prev_velocity = torch.zeros(3, device="cuda")
-        self.prev_timestamp = None
+        self.imu_config = self.config.get("imu", {})
+        if self.lambda_imu_trans < 0 or self.lambda_imu_rot < 0:
+            raise ValueError("IMU loss weights must be non-negative")
+        if self.use_imu:
+            required = {"T_cam_imu", "accel_bias", "gyro_bias"}
+            missing = sorted(required.difference(self.imu_config))
+            if missing:
+                raise ValueError(
+                    "IMU tracking requires calibrated values: "
+                    + ", ".join(missing))
+        self.imu_translation_huber_m = self.imu_config.get(
+            "translation_huber_m", 0.1)
+        self.imu_rotation_huber_rad = self.imu_config.get(
+            "rotation_huber_rad", 0.1)
+        if self.imu_translation_huber_m <= 0:
+            raise ValueError("tracking.imu.translation_huber_m must be positive")
+        if self.imu_rotation_huber_rad <= 0:
+            raise ValueError("tracking.imu.rotation_huber_rad must be positive")
+        self.imu_state = IMUTrackingState.create("cuda")
 
     def compute_losses(self, gaussian_model: GaussianModel, render_settings: dict,
                        opt_cam_rot: torch.Tensor, opt_cam_trans: torch.Tensor,
                        gt_color: torch.Tensor, gt_depth: torch.Tensor, depth_mask: torch.Tensor,
-                       exposure_ab=None, imu_data=None, dt=None) -> tuple:
+                       exposure_ab=None, imu_prediction=None) -> tuple:
         """ Computes the tracking losses with respect to ground truth color and depth.
         Args:
             gaussian_model: The current state of the Gaussian model of the scene.
@@ -115,72 +156,145 @@ class Tracker(object):
         depth_loss = depth_loss.sum()
 
         # Compute IMU loss if enabled
-        if self.use_imu and imu_data is not None and dt is not None:
-            # Construct current frame transformation matrix
-            rel_transform = torch.eye(4, device="cuda", dtype=torch.float32)
-            rel_transform[:3, :3] = build_rotation(F.normalize(opt_cam_rot[None]))[0]
-            rel_transform[:3, 3] = opt_cam_trans
-
-            imu_loss = self.compute_imu_loss(rel_transform, imu_data, dt)
+        if self.use_imu and imu_prediction is not None:
+            candidate_motion = torch.linalg.inv(rel_transform)
+            imu_loss = self.compute_imu_loss(
+                candidate_motion, imu_prediction)
         else:
             imu_loss = torch.tensor(0.0, device="cuda")
 
         return color_loss, depth_loss, imu_loss, rendered_color, rendered_depth, alpha_mask
 
-    def rotation_matrix_to_axis_angle(self, rotation_matrix):
-        """Convert rotation matrix to axis-angle representation"""
-        # Convert to scipy rotation for axis-angle extraction
-        r = R.from_matrix(rotation_matrix.detach().cpu().numpy())
-        axis_angle = r.as_rotvec()
-        return torch.tensor(axis_angle, device="cuda", dtype=torch.float32)
+    def _invalid_imu_prediction(self, reason):
+        device = self.imu_state.velocity.device
+        dtype = self.imu_state.velocity.dtype
+        return IMUPrediction(
+            delta_R=torch.eye(3, dtype=dtype, device=device),
+            delta_v=torch.zeros(3, dtype=dtype, device=device),
+            delta_p=torch.zeros(3, dtype=dtype, device=device),
+            total_dt=0.0,
+            sample_count=0,
+            valid=False,
+            translation_valid=False,
+            reason=reason,
+        )
 
-    def compute_imu_loss(self, delta_pose, imu_data, dt):
-        """
-        Compute IMU loss function following GI-SLAM paper exactly
+    def prepare_imu_prediction(self, frame_id):
+        if not self.use_imu:
+            return self._invalid_imu_prediction("imu_disabled")
+        if frame_id <= 0:
+            return self._invalid_imu_prediction("no_previous_frame")
+        if not hasattr(self.dataset, "get_imu_measurements"):
+            return self._invalid_imu_prediction("dataset_has_no_imu_interval")
 
-        Args:
-            delta_pose: 4x4 transformation matrix representing camera motion
-            imu_data: Dictionary containing acceleration and angular velocity
-            dt: Time interval between frames
+        interval = self.dataset.get_imu_measurements(frame_id - 1, frame_id)
+        device = self.imu_state.velocity.device
+        dtype = self.imu_state.velocity.dtype
+        transform = self.imu_config.get("T_cam_imu")
+        if self.imu_state.gravity_cam is None:
+            gravity_estimate = estimate_gravity(
+                interval,
+                device=device,
+                gravity_magnitude=self.imu_config.get("gravity_mps2", 9.81),
+                max_accel_std=self.imu_config.get(
+                    "gravity_max_accel_std", 0.2),
+                max_gyro_norm=self.imu_config.get(
+                    "gravity_max_gyro_norm", 0.1),
+                t_cam_imu=transform,
+            )
+            if gravity_estimate.valid:
+                self.imu_state.gravity_cam = gravity_estimate.gravity_cam
 
-        Returns:
-            IMU loss tensor
-        """
-        if not self.use_imu or imu_data is None or dt is None or dt <= 0:
-            return torch.tensor(0.0, device="cuda")
+        prediction = preintegrate_imu(
+            interval,
+            bias_accel=torch.as_tensor(
+                self.imu_config.get("accel_bias", [0.0, 0.0, 0.0]),
+                dtype=dtype, device=device),
+            bias_gyro=torch.as_tensor(
+                self.imu_config.get("gyro_bias", [0.0, 0.0, 0.0]),
+                dtype=dtype, device=device),
+            gravity_cam=self.imu_state.gravity_cam,
+            t_cam_imu=transform,
+        )
+        if not prediction.valid or not prediction.translation_valid:
+            return prediction
+        return IMUPrediction(
+            delta_R=prediction.delta_R,
+            delta_v=prediction.delta_v,
+            delta_p=(
+                self.imu_state.velocity * prediction.total_dt
+                + prediction.delta_p),
+            total_dt=prediction.total_dt,
+            sample_count=prediction.sample_count,
+            valid=True,
+            translation_valid=True,
+            reason=prediction.reason,
+        )
 
-        # Extract translation and rotation from optimized pose
-        delta_trans = delta_pose[:3, 3]
-        delta_rot_matrix = delta_pose[:3, :3]
-        delta_rot = self.rotation_matrix_to_axis_angle(delta_rot_matrix)
+    @staticmethod
+    def _huber_loss(residual, delta):
+        absolute = residual.abs()
+        delta_tensor = torch.as_tensor(
+            delta, dtype=residual.dtype, device=residual.device)
+        return torch.where(
+            absolute <= delta_tensor,
+            0.5 * residual.square(),
+            delta_tensor * (absolute - 0.5 * delta_tensor),
+        ).sum()
 
-        # IMU measurements
-        accel_raw = torch.tensor(imu_data['acceleration'], device="cuda", dtype=torch.float32)
-        gyro = torch.tensor(imu_data['angular_velocity'], device="cuda", dtype=torch.float32)
+    def compute_imu_loss(self, relative_pose, prediction):
+        if not self.use_imu or prediction is None or not prediction.valid:
+            return relative_pose.sum() * 0.0
 
-        # Gravity compensation: Remove gravity component from acceleration
-        # Assuming IMU Z-axis is approximately aligned with gravity (downward)
-        gravity = torch.tensor([0.0, 0.0, -9.81], device="cuda", dtype=torch.float32)
-        accel = accel_raw - gravity
+        dtype = relative_pose.dtype
+        device = relative_pose.device
+        predicted_rotation = prediction.delta_R.to(
+            dtype=dtype, device=device)
+        rotation_residual = so3_log(
+            predicted_rotation.transpose(0, 1) @ relative_pose[:3, :3])
+        rotation_loss = self._huber_loss(
+            rotation_residual, self.imu_rotation_huber_rad)
 
-        # GI-SLAM paper equations:
-        # Translation constraint: Δp_imu = v_{t-1} * Δt + 0.5 * a_t * Δt²
-        imu_trans = self.prev_velocity * dt + 0.5 * accel * dt**2
+        translation_loss = relative_pose.sum() * 0.0
+        if prediction.translation_valid:
+            translation_residual = (
+                relative_pose[:3, 3]
+                - prediction.delta_p.to(dtype=dtype, device=device))
+            translation_loss = self._huber_loss(
+                translation_residual, self.imu_translation_huber_m)
 
-        # Rotation constraint: Δθ_imu = ω_t * Δt
-        imu_rot = gyro * dt
+        return (
+            self.lambda_imu_trans * translation_loss
+            + self.lambda_imu_rot * rotation_loss)
 
-        # Compute losses (L2 norm as in GI-SLAM)
-        trans_loss = torch.norm(delta_trans - imu_trans, p=2)**2
-        rot_loss = torch.norm(delta_rot - imu_rot, p=2)**2
+    def commit_imu_state(self, frame_id, final_c2w, prediction):
+        previous_id = self.imu_state.last_committed_frame_id
+        if previous_id is not None and frame_id <= previous_id:
+            raise RuntimeError(
+                f"IMU state for frame {frame_id} already committed")
 
-        # Update velocity for next frame (kinematic integration)
-        self.prev_velocity = self.prev_velocity + accel * dt
+        if prediction is not None and prediction.valid:
+            if prediction.translation_valid:
+                rotation = prediction.delta_R.to(
+                    self.imu_state.velocity)
+                delta_velocity = prediction.delta_v.to(
+                    self.imu_state.velocity)
+                self.imu_state.velocity = (
+                    rotation.transpose(0, 1)
+                    @ (self.imu_state.velocity + delta_velocity))
+            if self.imu_state.gravity_cam is not None:
+                rotation = prediction.delta_R.to(
+                    self.imu_state.gravity_cam)
+                self.imu_state.gravity_cam = (
+                    rotation.transpose(0, 1)
+                    @ self.imu_state.gravity_cam)
 
-        # Combined IMU loss with weighting factors
-        imu_loss = self.lambda_imu_trans * trans_loss + self.lambda_imu_rot * rot_loss
-
-        return imu_loss
+        self.imu_state.last_committed_frame_id = frame_id
+        self.imu_state.last_c2w = torch.as_tensor(
+            final_c2w,
+            dtype=self.imu_state.velocity.dtype,
+            device=self.imu_state.velocity.device,
+        ).detach().clone()
 
     def track(self, frame_id: int, gaussian_model: GaussianModel, prev_c2ws: np.ndarray) -> np.ndarray:
         """
@@ -195,16 +309,9 @@ class Tracker(object):
         """
         _, image, depth, gt_c2w = self.dataset[frame_id]
 
-        # Get IMU data for current frame
-        imu_data = None
-        dt = None
-        if self.use_imu and hasattr(self.dataset, 'get_imu_data_for_frame'):
-            imu_data = self.dataset.get_imu_data_for_frame(frame_id)
-            if frame_id > 0 and self.prev_timestamp is not None:
-                current_timestamp = self.dataset.timestamps[frame_id]
-                dt = current_timestamp - self.prev_timestamp
-            if frame_id < len(self.dataset.timestamps):
-                self.prev_timestamp = self.dataset.timestamps[frame_id]
+        imu_prediction = self.prepare_imu_prediction(frame_id)
+        if self.use_imu:
+            self.logger.log_imu_prediction(frame_id, imu_prediction)
 
         if (self.help_camera_initialization or self.odometry_type == "odometer") and self.odometer.last_rgbd is None:
             _, last_image, last_depth, _ = self.dataset[frame_id - 1]
@@ -247,7 +354,7 @@ class Tracker(object):
         # Initial loss check
         color_loss, depth_loss, imu_loss, _, _, _ = self.compute_losses(gaussian_model, render_settings, opt_cam_rot,
                                                                         opt_cam_trans, gt_color, gt_depth, depth_mask,
-                                                                        exposure_ab, imu_data, dt)
+                                                                        exposure_ab, imu_prediction)
         if len(self.frame_color_loss) > 0 and (
             color_loss.item() > self.init_err_ratio * np.median(self.frame_color_loss)
             or depth_loss.item() > self.init_err_ratio * np.median(self.frame_depth_loss)
@@ -270,7 +377,7 @@ class Tracker(object):
         for iter in range(num_iters):
             color_loss, depth_loss, imu_loss, _, _, _ = self.compute_losses(
                 gaussian_model, render_settings, opt_cam_rot, opt_cam_trans, gt_color, gt_depth, depth_mask,
-                exposure_ab, imu_data, dt)
+                exposure_ab, imu_prediction)
 
             # Total loss includes IMU term
             total_loss = (self.w_color_loss * color_loss + (1 - self.w_color_loss) * depth_loss + imu_loss)
@@ -314,4 +421,5 @@ class Tracker(object):
 
         final_c2w = torch.inverse(torch.from_numpy(reference_w2c) @ best_w2c)
         final_c2w[-1, :] = torch.tensor([0., 0., 0., 1.], dtype=final_c2w.dtype, device=final_c2w.device)
+        self.commit_imu_state(frame_id, final_c2w, imu_prediction)
         return torch2np(final_c2w), exposure_ab
