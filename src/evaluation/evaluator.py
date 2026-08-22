@@ -27,8 +27,9 @@ from src.evaluation.evaluate_merged_map import (RenderFrames, merge_submaps,
 from src.evaluation.evaluate_reconstruction import evaluate_reconstruction, clean_mesh
 from src.evaluation.evaluate_trajectory import evaluate_trajectory
 from src.evaluation.protocol import (
-    assign_frames_to_submaps,
+    aggregate_weighted_depth_l1,
     build_evaluation_frame_ids,
+    concatenate_gaussian_params,
     masked_depth_l1,
     trajectory_status,
 )
@@ -108,7 +109,7 @@ class Evaluator(object):
         protocol = {
             "frame_ids": frame_ids,
             "observed_view_stride": stride,
-            "formal_map_source": "submap_checkpoint",
+            "formal_map_source": "unrefined_global_gaussian_concatenation",
             "global_refinement_enabled": False,
             "global_refinement_iterations": 0,
             "optional_global_refinement_enabled": bool(
@@ -124,72 +125,67 @@ class Evaluator(object):
             (self.checkpoint_path / "submaps").glob("*.ckpt"))
         if not submap_paths:
             raise RuntimeError("no submap checkpoints available for evaluation")
-        submap_keyframe_ids = []
-        for submap_path in submap_paths:
-            submap = torch.load(submap_path, map_location="cpu")
-            submap_keyframe_ids.append(submap["submap_keyframes"])
-        assignments = assign_frames_to_submaps(
-            frame_ids, submap_keyframe_ids)
+        parameter_sets = [
+            torch.load(path, map_location="cpu")["gaussian_params"]
+            for path in submap_paths
+        ]
+        merged_params = {
+            key: value.to(self.device)
+            for key, value in concatenate_gaussian_params(
+                parameter_sets).items()
+        }
 
         color_transform = torchvision.transforms.ToTensor()
         lpips_model = LearnedPerceptualImagePatchSimilarity(
             net_type="alex", normalize=True).to(self.device)
         opt_settings = OptimizationParams(ArgumentParser(
             description="Training script parameters"))
-        psnr_values, lpips_values, ssim_values, depth_values = [], [], [], []
-        depth_valid_pixels = 0
+        psnr_values, lpips_values, ssim_values = [], [], []
+        depth_frame_values = []
+        gaussian_model = GaussianModel()
+        gaussian_model.training_setup(opt_settings)
+        gaussian_model.restore_from_params(merged_params, opt_settings)
 
-        for submap_index, submap_path in enumerate(submap_paths):
-            assigned_ids = assignments[submap_index]
-            if not assigned_ids:
-                continue
-            submap = torch.load(submap_path, map_location=self.device)
-            gaussian_model = GaussianModel()
-            gaussian_model.training_setup(opt_settings)
-            gaussian_model.restore_from_params(
-                submap["gaussian_params"], opt_settings)
-
-            for frame_id in assigned_ids:
-                _, gt_color, gt_depth, _ = self.dataset[frame_id]
-                gt_color = color_transform(gt_color).to(self.device)
-                gt_depth = np2torch(gt_depth).to(self.device)
-                estimate_w2c = np.linalg.inv(self.estimated_c2w[frame_id])
-                render_dict = render_gaussian_model(
-                    gaussian_model,
-                    get_render_settings(
-                        self.width, self.height, self.dataset.intrinsics,
-                        estimate_w2c),
-                )
+        for frame_id in frame_ids:
+            _, gt_color, gt_depth, _ = self.dataset[frame_id]
+            gt_color = color_transform(gt_color).to(self.device)
+            gt_depth = np2torch(gt_depth).to(self.device)
+            estimate_w2c = np.linalg.inv(self.estimated_c2w[frame_id])
+            render_dict = render_gaussian_model(
+                gaussian_model,
+                get_render_settings(
+                    self.width, self.height, self.dataset.intrinsics,
+                    estimate_w2c),
+            )
+            rendered_color = torch.clamp(
+                render_dict["color"].detach(), 0.0, 1.0)
+            rendered_depth = render_dict["depth"][0].detach()
+            if self.exposures_ab is not None:
+                exposure = self.exposures_ab[frame_id]
                 rendered_color = torch.clamp(
-                    render_dict["color"].detach(), 0.0, 1.0)
-                rendered_depth = render_dict["depth"][0].detach()
-                if self.exposures_ab is not None:
-                    exposure = self.exposures_ab[frame_id]
-                    rendered_color = torch.clamp(
-                        torch.exp(torch.as_tensor(
-                            exposure[0], device=self.device))
-                        * rendered_color + exposure[1], 0.0, 1.0)
-                if self.save_render:
-                    torchvision.utils.save_image(
-                        rendered_color,
-                        self.render_path / f"{frame_id:05d}.png")
+                    torch.exp(torch.as_tensor(
+                        exposure[0], device=self.device))
+                    * rendered_color + exposure[1], 0.0, 1.0)
+            if self.save_render:
+                torchvision.utils.save_image(
+                    rendered_color,
+                    self.render_path / f"{frame_id:05d}.png")
 
-                mse = torch.nn.functional.mse_loss(
-                    rendered_color, gt_color)
-                psnr_values.append((-10.0 * torch.log10(mse)).item())
-                lpips_values.append(lpips_model(
-                    rendered_color[None], gt_color[None]).item())
-                ssim_values.append(ms_ssim(
-                    rendered_color[None], gt_color[None],
-                    data_range=1.0, size_average=True).item())
-                depth_l1, valid_count = masked_depth_l1(
-                    rendered_depth, gt_depth)
-                if valid_count:
-                    depth_values.append(depth_l1.item())
-                    depth_valid_pixels += valid_count
+            mse = torch.nn.functional.mse_loss(
+                rendered_color, gt_color)
+            psnr_values.append((-10.0 * torch.log10(mse)).item())
+            lpips_values.append(lpips_model(
+                rendered_color[None], gt_color[None]).item())
+            ssim_values.append(ms_ssim(
+                rendered_color[None], gt_color[None],
+                data_range=1.0, size_average=True).item())
+            depth_l1, valid_count = masked_depth_l1(
+                rendered_depth, gt_depth)
+            if valid_count:
+                depth_frame_values.append((depth_l1.item(), valid_count))
 
-            del gaussian_model, submap
-            torch.cuda.empty_cache()
+        del gaussian_model, merged_params, parameter_sets
+        torch.cuda.empty_cache()
 
         if len(psnr_values) != len(frame_ids):
             raise RuntimeError("not every formal evaluation frame was rendered")
@@ -197,9 +193,10 @@ class Evaluator(object):
             "psnr": float(np.mean(psnr_values)),
             "lpips": float(np.mean(lpips_values)),
             "ssim": float(np.mean(ssim_values)),
-            "depth_l1_observed_view": (
-                float(np.mean(depth_values)) if depth_values else None),
-            "depth_valid_pixels": depth_valid_pixels,
+            "depth_l1_observed_view": aggregate_weighted_depth_l1(
+                depth_frame_values),
+            "depth_valid_pixels": sum(
+                valid_count for _, valid_count in depth_frame_values),
             "num_renders": len(frame_ids),
         }
         save_dict_to_json(

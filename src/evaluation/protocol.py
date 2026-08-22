@@ -1,6 +1,16 @@
 import torch
 
 
+GAUSSIAN_PARAM_KEYS = (
+    "xyz",
+    "features_dc",
+    "features_rest",
+    "opacity",
+    "scaling",
+    "rotation",
+)
+
+
 def build_evaluation_frame_ids(num_frames: int, stride: int) -> list[int]:
     if stride < 1:
         raise ValueError("evaluation stride must be positive")
@@ -32,6 +42,26 @@ def masked_depth_l1(rendered_depth, ground_truth_depth):
         return rendered_depth.new_tensor(float("nan")), 0
     return torch.abs(
         rendered_depth[valid] - ground_truth_depth[valid]).mean(), valid_count
+
+
+def aggregate_weighted_depth_l1(frame_values):
+    total_valid_pixels = sum(valid_count for _, valid_count in frame_values)
+    if total_valid_pixels == 0:
+        return None
+    return sum(
+        mean_value * valid_count
+        for mean_value, valid_count in frame_values
+    ) / total_valid_pixels
+
+
+def concatenate_gaussian_params(parameter_sets):
+    if not parameter_sets:
+        raise ValueError("at least one Gaussian parameter set is required")
+    merged = {}
+    for key in GAUSSIAN_PARAM_KEYS:
+        tensors = [parameters[key].detach() for parameters in parameter_sets]
+        merged[key] = torch.cat(tensors, dim=0)
+    return merged
 
 
 def assign_frames_to_submaps(frame_ids, submap_keyframe_ids):

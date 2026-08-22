@@ -8,9 +8,11 @@ from scripts.aggregate_results import read_trajectory_metrics
 from src.evaluation.evaluator import Evaluator
 from src.evaluation.evaluate_trajectory import compute_relative_pose_errors
 from src.evaluation.protocol import (
+    aggregate_weighted_depth_l1,
     assert_compatible_protocols,
     assign_frames_to_submaps,
     build_evaluation_frame_ids,
+    concatenate_gaussian_params,
     masked_depth_l1,
     trajectory_status,
 )
@@ -51,6 +53,33 @@ def test_depth_metric_ignores_invalid_ground_truth_pixels():
 
     assert value.item() == pytest.approx(0.75)
     assert valid_count == 2
+
+
+def test_depth_metric_is_aggregated_by_valid_pixel_count():
+    assert aggregate_weighted_depth_l1(
+        [(1.0, 1), (3.0, 3)]) == pytest.approx(2.5)
+
+
+def test_submap_gaussians_are_concatenated_without_retraining():
+    first = {
+        "xyz": torch.tensor([[1.0, 2.0, 3.0]]),
+        "features_dc": torch.ones(1, 1, 3),
+        "features_rest": torch.empty(1, 0, 3),
+        "opacity": torch.tensor([[0.1]]),
+        "scaling": torch.tensor([[0.2, 0.2, 0.2]]),
+        "rotation": torch.tensor([[1.0, 0.0, 0.0, 0.0]]),
+    }
+    second = {
+        key: value + 1 if value.numel() else value.clone()
+        for key, value in first.items()
+    }
+
+    merged = concatenate_gaussian_params([first, second])
+
+    assert merged["xyz"].shape == (2, 3)
+    torch.testing.assert_close(merged["xyz"][0], first["xyz"][0])
+    torch.testing.assert_close(merged["xyz"][1], second["xyz"][0])
+    assert all(not value.requires_grad for value in merged.values())
 
 
 def test_fixed_frames_are_assigned_once_to_temporal_submap_ranges():
