@@ -4,10 +4,10 @@ LoopSplat Ablation Experiment Runner
 =====================================
 Three dataset groups × all strategy combinations.
 
-Group A  TUM RGB-D (no IMU)     5 scenes × 4 combos = 20 experiments
-Group B  AzureKinect (uncalibrated IMU) 1 scene × 4 combos = 4 experiments
-Group C  FMDataset (has IMU)     3 scenes × 6 combos = 18 experiments
-                                                  Total = 42 experiments
+Group A  TUM RGB-D (no IMU)     5 scenes × 4 combos = 20 configurations
+Group B  AzureKinect (uncalibrated IMU) 1 scene × 4 combos = 4 configurations
+Group C  FMDataset (has IMU)     3 scenes × 6 combos = 18 configurations
+                         42 configurations × 3 seeds = 126 formal runs
 
 Strategy codes per experiment:
   _0 = Baseline (all off)
@@ -36,6 +36,9 @@ GSR_MAX_ITERS = 100
 
 from src.utils.experiment_utils import (
     create_run_directory,
+    config_sha256,
+    current_git_commit,
+    current_git_dirty,
     discover_completed_runs,
     effective_features_from_config,
     formal_outputs_complete,
@@ -231,10 +234,15 @@ def load_yaml(path: str | Path) -> dict:
     return cfg
 
 
-def config_has_results(output_dir: Path) -> bool:
+def config_has_results(output_dir: Path, seed: int, config: dict,
+                       git_commit: str) -> bool:
     records = discover_completed_runs(output_dir.parent)
     return any(
-        record.experiment_id == output_dir.name for record in records)
+        record.experiment_id == output_dir.name
+        and record.seed == seed
+        and record.manifest.get("config_sha256") == config_sha256(config)
+        and record.manifest.get("git_commit") == git_commit
+        for record in records)
 
 
 # ── Main ───────────────────────────────────────────────────────────────
@@ -243,6 +251,9 @@ def main():
     parser = argparse.ArgumentParser(description="LoopSplat Ablation Runner")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--seeds", nargs="+", type=int, default=[0, 1, 2],
+        help="Random seeds for repeated formal runs (default: 0 1 2)")
     parser.add_argument("--experiment", type=str, default=None,
                         help="Run single experiment, e.g. A1_0")
     parser.add_argument("--group", type=str, default=None,
@@ -263,11 +274,24 @@ def main():
             print(f"Error: no group '{args.group}'")
             sys.exit(1)
 
-    total = len(experiments)
+    if not args.seeds or len(set(args.seeds)) != len(args.seeds):
+        parser.error("--seeds must contain unique integers")
+    jobs = [
+        (experiment, seed)
+        for experiment in experiments
+        for seed in args.seeds
+    ]
+    total = len(jobs)
     completed = skipped = failed = 0
     start_time = time.time()
+    frozen_commit = current_git_commit()
+    if not frozen_commit:
+        raise RuntimeError("formal runs require a Git commit")
+    if not args.dry_run and current_git_dirty():
+        raise RuntimeError(
+            "formal runs require a clean Git worktree; commit changes first")
 
-    for i, exp in enumerate(experiments):
+    for i, (exp, seed) in enumerate(jobs):
         eid = exp["id"]
         ename = exp["name"]
         edesc = exp["desc"]
@@ -275,10 +299,12 @@ def main():
         base_config = load_yaml(exp["config"])
         merged = deep_merge(base_config, exp["overrides"])
         merged["use_wandb"] = False
+        merged["seed"] = seed
+        merged["experiment_id"] = eid
         requested_output = Path(merged["data"]["output_path"])
 
         print(f"\n{'='*70}")
-        print(f"[{i+1}/{total}] {eid} — {ename}")
+        print(f"[{i+1}/{total}] {eid} seed={seed} — {ename}")
         print(f"      {edesc}")
         print(f"      Output root: {requested_output}")
         print(f"{'='*70}")
@@ -286,15 +312,15 @@ def main():
         if args.dry_run:
             continue
 
-        if not args.force and config_has_results(requested_output):
+        if (not args.force and config_has_results(
+                requested_output, seed, merged, frozen_commit)):
             print(f"      ⏭  Skipped (results exist)")
             skipped += 1
             continue
 
         runner = "run_slam_azure.py" if merged.get("dataset_name") == "azure_kinect" else "run_slam.py"
         run_dir = create_run_directory(
-            requested_output.parent, eid, merged["seed"])
-        merged["experiment_id"] = eid
+            requested_output.parent, eid, seed)
         merged["data"]["output_path"] = str(run_dir)
         merged["data"]["run_directory_prepared"] = True
         tmp_config = run_dir / "config.input.yaml"

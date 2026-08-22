@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import json
+import statistics
 import sys
 from pathlib import Path
 
@@ -42,17 +43,27 @@ STRATEGY_SUFFIXES_A = ["_0","_1","_2","_3"]
 STRATEGY_SUFFIXES_BC = ["_0","_1","_2","_3","_4","_5"]
 
 
+def summarize_seed_metrics(seed_metrics):
+    if not seed_metrics:
+        return {}
+    result = {"seed_count": len(seed_metrics)}
+    metric_names = sorted(set.intersection(*(
+        {key for key, value in metrics.items()
+         if isinstance(value, (int, float)) and not isinstance(value, bool)}
+        for metrics in seed_metrics
+    )))
+    for metric_name in metric_names:
+        values = [float(metrics[metric_name]) for metrics in seed_metrics]
+        result[metric_name] = statistics.mean(values)
+        result[f"{metric_name}_std"] = (
+            statistics.stdev(values) if len(values) > 1 else 0.0)
+    return result
+
+
 def strategy_spec(scene_id):
     if scene_id.startswith(("A", "B")):
         return STRATEGY_SUFFIXES_A, STRATEGY_LABELS_A
     return STRATEGY_SUFFIXES_BC, STRATEGY_LABELS_BC
-
-
-def find_result_dir(base: Path) -> Path | None:
-    records = [
-        record for record in discover_completed_runs(base.parent)
-        if record.experiment_id == base.name]
-    return records[-1].path if records else None
 
 
 def read_json(path: Path) -> dict | None:
@@ -86,51 +97,78 @@ def collect_results() -> dict:
     results = {}
     protocols_by_scene = {scene_id: [] for scene_id in SCENE_IDS}
     base = PROJECT_ROOT / "output" / "ablation"
+    all_records = discover_completed_runs(base)
 
     for sid in SCENE_IDS:
         suffixes, labels = strategy_spec(sid)
         for suffix in suffixes:
             eid = sid + suffix
-            exp_dir = base / eid
-            rd = find_result_dir(exp_dir)
-            if rd is None:
+            records_by_seed = {
+                record.seed: record
+                for record in all_records
+                if record.experiment_id == eid
+            }
+            records = [
+                records_by_seed[seed] for seed in sorted(records_by_seed)]
+            if not records:
                 results[eid] = {"error": "no results"}
                 continue
 
-            m = {"scene": SCENE_LABELS.get(sid, sid),
-                 "strategy": labels.get(suffix, suffix)}
-            status = read_json(rd / "status.json") or {}
-            for field in (
-                    "keyframe_count", "submap_count",
-                    "slam_elapsed_seconds"):
-                if status.get(field) is not None:
-                    m[field] = status[field]
-            peak_bytes = status.get("slam_peak_gpu_memory_bytes")
-            if peak_bytes is not None:
-                m["slam_peak_gpu_memory_gib"] = peak_bytes / (1024 ** 3)
+            experiment_hashes = {
+                record.manifest.get("experiment_config_sha256")
+                for record in records}
+            commits = {
+                record.manifest.get("git_commit") for record in records}
+            gsr_budgets = {
+                record.manifest.get("gsr_max_iters") for record in records}
+            if (None in experiment_hashes or len(experiment_hashes) != 1
+                    or None in commits or len(commits) != 1
+                    or len(gsr_budgets) != 1):
+                raise ValueError(
+                    f"mixed config, commit, or GSR budget for {eid}")
 
-            protocol = read_json(rd / "evaluation_protocol.json")
-            if protocol is None:
-                results[eid] = {"error": "missing formal evaluation protocol"}
-                continue
-            protocols_by_scene[sid].append(protocol)
+            seed_metrics = []
+            for record in records:
+                rd = record.path
+                metrics = {}
+                status = read_json(rd / "status.json") or {}
+                for field in (
+                        "keyframe_count", "submap_count",
+                        "slam_elapsed_seconds"):
+                    if status.get(field) is not None:
+                        metrics[field] = status[field]
+                peak_bytes = status.get("slam_peak_gpu_memory_bytes")
+                if peak_bytes is not None:
+                    metrics["slam_peak_gpu_memory_gib"] = (
+                        peak_bytes / (1024 ** 3))
 
-            ate = read_json(rd / "ate_aligned.json")
-            trajectory = read_json(rd / "trajectory_status.json")
-            trajectory_metrics = read_json(rd / "trajectory_metrics.json")
-            m.update(read_trajectory_metrics(
-                trajectory, ate, trajectory_metrics))
+                protocol = read_json(rd / "evaluation_protocol.json")
+                if protocol is None:
+                    raise ValueError(
+                        f"missing formal evaluation protocol for {rd}")
+                protocols_by_scene[sid].append(protocol)
 
-            render = read_json(rd / "rendering_metrics_observed_view.json")
-            if render:
-                m["psnr"] = round(render.get("psnr", 0), 2)
-                m["ssim"] = round(render.get("ssim", 0), 4)
-                m["lpips"] = round(render.get("lpips", 0), 4)
-                depth_l1 = render.get("depth_l1_observed_view")
-                if depth_l1 is not None:
-                    m["depth_l1"] = round(depth_l1, 4)
+                metrics.update(read_trajectory_metrics(
+                    read_json(rd / "trajectory_status.json"),
+                    read_json(rd / "ate_aligned.json"),
+                    read_json(rd / "trajectory_metrics.json"),
+                ))
+                render = read_json(
+                    rd / "rendering_metrics_observed_view.json") or {}
+                for source, target in (
+                        ("psnr", "psnr"),
+                        ("ssim", "ssim"),
+                        ("lpips", "lpips"),
+                        ("depth_l1_observed_view", "depth_l1")):
+                    if render.get(source) is not None:
+                        metrics[target] = render[source]
+                seed_metrics.append(metrics)
 
-            results[eid] = m
+            results[eid] = {
+                "scene": SCENE_LABELS.get(sid, sid),
+                "strategy": labels.get(suffix, suffix),
+                **summarize_seed_metrics(seed_metrics),
+            }
 
     for protocols in protocols_by_scene.values():
         assert_compatible_protocols(protocols)
@@ -143,6 +181,18 @@ def _fmt(v, precision=2):
     return str(v)
 
 
+def _fmt_mean_std(result, key, precision=2):
+    value = result.get(key)
+    if value is None:
+        return "—"
+    standard_deviation = result.get(f"{key}_std")
+    if standard_deviation is None:
+        return _fmt(value, precision)
+    return (
+        f"{_fmt(value, precision)}±"
+        f"{_fmt(standard_deviation, precision)}")
+
+
 def render_markdown(results: dict) -> str:
     lines = ["# LoopSplat Ablation Results\n"]
     lines.append("_Auto-generated_\n")
@@ -150,7 +200,7 @@ def render_markdown(results: dict) -> str:
     # ── Helper: render one scene table ──
     def scene_table(sid, show_ate=True):
         suffixes, slabels = strategy_spec(sid)
-        cols = ["Exp"]
+        cols = ["Exp", "Seeds"]
         if show_ate:
             cols += ["ATE↓", "RPE-t↓", "RPE-R↓"]
         cols += [
@@ -167,21 +217,21 @@ def render_markdown(results: dict) -> str:
             if "error" in r:
                 row = [label] + ["—"] * (len(cols) - 1)
             else:
-                row = [label]
+                row = [label, _fmt(r.get("seed_count", "—"), 0)]
                 if show_ate:
                     row += [
-                        _fmt(r.get("ate_rmse_cm", "—")),
-                        _fmt(r.get("rpe_translation_cm", "—")),
-                        _fmt(r.get("rpe_rotation_deg", "—"), 3),
+                        _fmt_mean_std(r, "ate_rmse_cm"),
+                        _fmt_mean_std(r, "rpe_translation_cm"),
+                        _fmt_mean_std(r, "rpe_rotation_deg", 3),
                     ]
-                row += [_fmt(r.get("psnr", "—")),
-                        _fmt(r.get("ssim", "—"), 4),
-                        _fmt(r.get("lpips", "—"), 4),
-                        _fmt(r.get("depth_l1", "—"), 4),
-                        _fmt(r.get("keyframe_count", "—"), 0),
-                        _fmt(r.get("submap_count", "—"), 0),
-                        _fmt(r.get("slam_elapsed_seconds", "—"), 2),
-                        _fmt(r.get("slam_peak_gpu_memory_gib", "—"), 2)]
+                row += [_fmt_mean_std(r, "psnr"),
+                        _fmt_mean_std(r, "ssim", 4),
+                        _fmt_mean_std(r, "lpips", 4),
+                        _fmt_mean_std(r, "depth_l1", 4),
+                        _fmt_mean_std(r, "keyframe_count", 1),
+                        _fmt_mean_std(r, "submap_count", 1),
+                        _fmt_mean_std(r, "slam_elapsed_seconds", 2),
+                        _fmt_mean_std(r, "slam_peak_gpu_memory_gib", 2)]
             rows.append("| " + " | ".join(row) + " |")
         return "\n".join(rows)
 

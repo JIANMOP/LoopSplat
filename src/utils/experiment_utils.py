@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from copy import deepcopy
 import hashlib
 import json
 import math
@@ -92,10 +93,30 @@ def _git_value(project_root, args):
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def current_git_commit():
+    project_root = Path(__file__).resolve().parents[2]
+    return _git_value(project_root, ["rev-parse", "HEAD"])
+
+
+def current_git_dirty():
+    project_root = Path(__file__).resolve().parents[2]
+    return bool(_git_value(project_root, ["status", "--porcelain"]))
+
+
+def config_sha256(config, exclude_seed=False):
+    normalized = deepcopy(config)
+    data_config = normalized.get("data", {})
+    data_config.pop("output_path", None)
+    data_config.pop("run_directory_prepared", None)
+    if exclude_seed:
+        normalized.pop("seed", None)
+    serialized = yaml.safe_dump(normalized, sort_keys=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
 def write_manifest(run_dir, config, argv, effective_features) -> dict:
     run_dir = Path(run_dir)
     project_root = Path(__file__).resolve().parents[2]
-    serialized_config = yaml.safe_dump(config, sort_keys=True)
     manifest_path = run_dir / "manifest.json"
     existing = (
         json.loads(manifest_path.read_text()) if manifest_path.exists() else {})
@@ -114,8 +135,11 @@ def write_manifest(run_dir, config, argv, effective_features) -> dict:
         "updated_utc": datetime.now(timezone.utc).isoformat(),
         "git_commit": _git_value(project_root, ["rev-parse", "HEAD"]),
         "git_dirty": bool(_git_value(project_root, ["status", "--porcelain"])),
-        "config_sha256": hashlib.sha256(
-            serialized_config.encode("utf-8")).hexdigest(),
+        "config_sha256": config_sha256(config),
+        "experiment_config_sha256": config_sha256(
+            config, exclude_seed=True),
+        "seed": config.get("seed"),
+        "experiment_id": config.get("experiment_id"),
         "command": [str(value) for value in argv],
         "requested_features": effective_features,
         "effective_features": observed_effective_features,

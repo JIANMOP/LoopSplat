@@ -2,13 +2,15 @@ from argparse import Namespace
 from datetime import datetime, timezone
 import json
 import yaml
+import pytest
 
 from run_slam import update_config_with_args
-from scripts.aggregate_results import render_markdown
-from scripts.run_ablation import EXPERIMENTS
+from scripts.aggregate_results import render_markdown, summarize_seed_metrics
+from scripts.run_ablation import EXPERIMENTS, config_has_results
 from src.entities.gaussian_slam import build_run_statistics
 from src.utils.experiment_utils import (
     create_run_directory,
+    config_sha256,
     discover_completed_runs,
     prepare_run_directory,
     formal_outputs_complete,
@@ -132,6 +134,56 @@ def test_manifest_records_config_hash_command_and_effective_features(tmp_path):
     assert manifest["effective_features"]["imu"] is False
     assert "git_commit" in manifest
     assert "pytorch" in manifest["environment"]
+
+
+def test_config_hash_ignores_run_directory_but_not_seed():
+    first = {
+        "seed": 0,
+        "data": {"output_path": "/tmp/run-a", "run_directory_prepared": True},
+        "tracking": {"use_imu": False},
+    }
+    second = {
+        **first,
+        "data": {"output_path": "/tmp/run-b", "run_directory_prepared": True},
+    }
+
+    assert config_sha256(first) == config_sha256(second)
+    assert config_sha256(first) != config_sha256({**second, "seed": 1})
+
+
+def test_resume_requires_matching_seed_config_and_commit(tmp_path):
+    config = {"seed": 0, "data": {"output_path": str(tmp_path)}}
+    run_dir = create_run_directory(
+        tmp_path, "C1_0", 0, suffix="complete")
+    write_valid_formal_outputs(run_dir)
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest.update({
+        "config_sha256": config_sha256(config),
+        "git_commit": "b" * 40,
+    })
+    manifest_path.write_text(json.dumps(manifest))
+    write_status(run_dir, "succeeded")
+
+    output_dir = tmp_path / "C1_0"
+    assert config_has_results(output_dir, 0, config, "b" * 40)
+    assert not config_has_results(output_dir, 1, {**config, "seed": 1}, "b" * 40)
+    assert not config_has_results(
+        output_dir, 0, {**config, "tracking": {"use_imu": True}}, "b" * 40)
+    assert not config_has_results(output_dir, 0, config, "c" * 40)
+
+
+def test_seed_metrics_report_mean_sample_std_and_count():
+    summary = summarize_seed_metrics([
+        {"psnr": 20.0, "keyframe_count": 10},
+        {"psnr": 22.0, "keyframe_count": 12},
+        {"psnr": 24.0, "keyframe_count": 14},
+    ])
+
+    assert summary["psnr"] == pytest.approx(22.0)
+    assert summary["psnr_std"] == pytest.approx(2.0)
+    assert summary["keyframe_count"] == pytest.approx(12.0)
+    assert summary["seed_count"] == 3
 
 
 def test_cli_applies_gt_camera_and_seed_zero():
