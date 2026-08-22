@@ -89,14 +89,14 @@ def load_config(path: str, default_path: str = None) -> dict:
         A dictionary containing the merged configuration.
     """
     # load configuration from per scene/dataset cfg.
-    with open(path, 'r') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         cfg_special = yaml.full_load(f)
     inherit_from = cfg_special.get('inherit_from')
     cfg = dict()
     if inherit_from is not None:
         cfg = load_config(inherit_from, default_path)
     elif default_path is not None:
-        with open(default_path, 'r') as f:
+        with open(default_path, 'r', encoding='utf-8') as f:
             cfg = yaml.full_load(f)
     update_recursive(cfg, cfg_special)
     return cfg

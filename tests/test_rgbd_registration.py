@@ -1,3 +1,5 @@
+import builtins
+
 import numpy as np
 import pytest
 import cv2
@@ -5,6 +7,22 @@ import cv2
 from src.entities.datasets_fm import FMDataset
 from src.utils.io_utils import load_config
 from src.utils.rgbd_registration import register_depth_to_color
+
+
+def test_config_loader_opens_yaml_as_utf8(monkeypatch):
+    real_open = builtins.open
+    config_encodings = []
+
+    def recording_open(path, mode="r", *args, **kwargs):
+        if str(path).endswith((".yaml", ".yml")) and "r" in mode:
+            config_encodings.append(kwargs.get("encoding"))
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", recording_open)
+    load_config("configs/FMDataset/dorm1_fast1.yaml")
+
+    assert config_encodings
+    assert all(encoding == "utf-8" for encoding in config_encodings)
 
 
 def test_identity_depth_to_color_registration_preserves_depth():
