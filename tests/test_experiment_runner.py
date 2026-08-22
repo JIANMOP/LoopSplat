@@ -1,9 +1,11 @@
 from argparse import Namespace
 from datetime import datetime, timezone
+import json
 
 from run_slam import update_config_with_args
 from scripts.aggregate_results import render_markdown
 from scripts.run_ablation import EXPERIMENTS
+from src.entities.gaussian_slam import build_run_statistics
 from src.utils.experiment_utils import (
     create_run_directory,
     discover_completed_runs,
@@ -121,6 +123,16 @@ def test_azure_report_uses_rgbd_only_matrix_without_trajectory_columns():
         f"B1_{suffix}": {"error": "no results"}
         for suffix in range(6)
     }
+    results["B1_0"] = {
+        "psnr": 20.0,
+        "ssim": 0.8,
+        "lpips": 0.2,
+        "depth_l1": 0.1,
+        "keyframe_count": 12,
+        "submap_count": 3,
+        "slam_elapsed_seconds": 45.0,
+        "slam_peak_gpu_memory_gib": 2.5,
+    }
 
     report = render_markdown(results)
     azure_section = report.split("## Group B", 1)[1].split(
@@ -130,3 +142,41 @@ def test_azure_report_uses_rgbd_only_matrix_without_trajectory_columns():
     assert "+ALL" not in azure_section
     assert "ATE↓" not in azure_section
     assert "RPE-t↓" not in azure_section
+    assert "KF↓" in azure_section
+    assert "Submaps↓" in azure_section
+    assert "SLAM s↓" in azure_section
+    assert "Peak GiB↓" in azure_section
+    assert "12" in azure_section
+    assert "2.50" in azure_section
+
+
+def test_run_statistics_count_unique_keyframes_and_submaps():
+    statistics = build_run_statistics(
+        mapping_frame_ids=[0, 3, 3, 5],
+        frame_count=6,
+        submap_count=2,
+        elapsed_seconds=12.5,
+        peak_gpu_memory_bytes=2_000_000_000,
+    )
+
+    assert statistics["mapping_frame_ids"] == [0, 3, 5]
+    assert statistics["keyframe_count"] == 3
+    assert statistics["submap_count"] == 2
+    assert statistics["frame_count"] == 6
+    assert statistics["slam_elapsed_seconds"] == 12.5
+    assert statistics["slam_peak_gpu_memory_bytes"] == 2_000_000_000
+
+
+def test_succeeded_status_includes_persisted_run_statistics(tmp_path):
+    (tmp_path / "run_statistics.yaml").write_text(
+        "keyframe_count: 3\nsubmap_count: 2\n"
+        "slam_peak_gpu_memory_bytes: 2000000000\n"
+    )
+
+    write_status(tmp_path, "succeeded", elapsed_seconds=15.0)
+
+    status = json.loads((tmp_path / "status.json").read_text())
+    assert status["keyframe_count"] == 3
+    assert status["submap_count"] == 2
+    assert status["slam_peak_gpu_memory_bytes"] == 2_000_000_000
+    assert status["elapsed_seconds"] == 15.0

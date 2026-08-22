@@ -137,12 +137,22 @@ def write_manifest(run_dir, config, argv, effective_features) -> dict:
 def write_status(run_dir, state, **fields) -> None:
     if state not in VALID_STATES:
         raise ValueError(f"invalid run state: {state}")
+    run_dir = Path(run_dir)
+    status_path = run_dir / "status.json"
+    existing = (
+        json.loads(status_path.read_text()) if status_path.exists() else {})
+    statistics_path = run_dir / "run_statistics.yaml"
+    statistics = (
+        yaml.safe_load(statistics_path.read_text())
+        if state == "succeeded" and statistics_path.exists() else {})
     status = {
+        **existing,
+        **statistics,
         "state": state,
         "updated_utc": datetime.now(timezone.utc).isoformat(),
         **fields,
     }
-    _write_json(Path(run_dir) / "status.json", status)
+    _write_json(status_path, status)
 
 
 def effective_features_from_config(config):

@@ -99,6 +99,15 @@ def collect_results() -> dict:
 
             m = {"scene": SCENE_LABELS.get(sid, sid),
                  "strategy": labels.get(suffix, suffix)}
+            status = read_json(rd / "status.json") or {}
+            for field in (
+                    "keyframe_count", "submap_count",
+                    "slam_elapsed_seconds"):
+                if status.get(field) is not None:
+                    m[field] = status[field]
+            peak_bytes = status.get("slam_peak_gpu_memory_bytes")
+            if peak_bytes is not None:
+                m["slam_peak_gpu_memory_gib"] = peak_bytes / (1024 ** 3)
 
             protocol = read_json(rd / "evaluation_protocol.json")
             if protocol is None:
@@ -144,7 +153,10 @@ def render_markdown(results: dict) -> str:
         cols = ["Exp"]
         if show_ate:
             cols += ["ATE↓", "RPE-t↓", "RPE-R↓"]
-        cols += ["PSNR↑", "SSIM↑", "LPIPS↓", "Depth L1↓"]
+        cols += [
+            "PSNR↑", "SSIM↑", "LPIPS↓", "Depth L1↓",
+            "KF↓", "Submaps↓", "SLAM s↓", "Peak GiB↓",
+        ]
         header = "| " + " | ".join(cols) + " |"
         sep = "|" + "|".join(["---"] * len(cols)) + "|"
         rows = [header, sep]
@@ -165,7 +177,11 @@ def render_markdown(results: dict) -> str:
                 row += [_fmt(r.get("psnr", "—")),
                         _fmt(r.get("ssim", "—"), 4),
                         _fmt(r.get("lpips", "—"), 4),
-                        _fmt(r.get("depth_l1", "—"), 4)]
+                        _fmt(r.get("depth_l1", "—"), 4),
+                        _fmt(r.get("keyframe_count", "—"), 0),
+                        _fmt(r.get("submap_count", "—"), 0),
+                        _fmt(r.get("slam_elapsed_seconds", "—"), 2),
+                        _fmt(r.get("slam_peak_gpu_memory_gib", "—"), 2)]
             rows.append("| " + " | ".join(row) + " |")
         return "\n".join(rows)
 
@@ -208,7 +224,11 @@ def render_terminal(results: dict) -> str:
             else:
                 psnr = _fmt(r.get("psnr", "?"))
                 ate = _fmt(r.get("ate_rmse_cm", "?"))
-                lines.append(f"  {label:14s}  ATE={ate}cm  PSNR={psnr}")
+                keyframes = _fmt(r.get("keyframe_count", "?"), 0)
+                elapsed = _fmt(r.get("slam_elapsed_seconds", "?"), 2)
+                lines.append(
+                    f"  {label:14s}  ATE={ate}cm  PSNR={psnr}  "
+                    f"KF={keyframes}  SLAM={elapsed}s")
     return "\n".join(lines)
 
 

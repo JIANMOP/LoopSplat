@@ -3,6 +3,7 @@
 """
 import os
 import pprint
+import time
 from argparse import ArgumentParser
 import json
 from pathlib import Path
@@ -129,6 +130,19 @@ def mapping_keyframe_decision(slam, frame_id, gaussian_model,
         return KeyframeDecision(True, 0.0, "submap_boundary", {})
     return evaluate_gi_keyframe(
         slam, frame_id, gaussian_model, estimated_c2w)
+
+
+def build_run_statistics(mapping_frame_ids, frame_count, submap_count,
+                         elapsed_seconds, peak_gpu_memory_bytes):
+    unique_frame_ids = sorted(set(mapping_frame_ids))
+    return {
+        "frame_count": frame_count,
+        "mapping_frame_ids": unique_frame_ids,
+        "keyframe_count": len(unique_frame_ids),
+        "submap_count": submap_count,
+        "slam_elapsed_seconds": elapsed_seconds,
+        "slam_peak_gpu_memory_bytes": peak_gpu_memory_bytes,
+    }
 
 
 class GaussianSLAM(object):
@@ -367,6 +381,9 @@ class GaussianSLAM(object):
     
     def run(self) -> None:
         """ Starts the main program flow for Gaussian-SLAM, including tracking and mapping. """
+        slam_started = time.perf_counter()
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
         setup_seed(self.config["seed"])
         gaussian_model = GaussianModel(0)
         gaussian_model.training_setup(self.opt)
@@ -499,5 +516,18 @@ class GaussianSLAM(object):
                 "optimizer_step_count": sum(level_totals.values()),
             },
             "gaussian_pyramid_summary.yaml",
+            directory=self.output_path,
+        )
+        save_dict_to_yaml(
+            build_run_statistics(
+                mapping_frame_ids=self.mapping_frame_ids,
+                frame_count=len(self.dataset),
+                submap_count=self.submap_id + 1,
+                elapsed_seconds=time.perf_counter() - slam_started,
+                peak_gpu_memory_bytes=(
+                    torch.cuda.max_memory_allocated()
+                    if torch.cuda.is_available() else 0),
+            ),
+            "run_statistics.yaml",
             directory=self.output_path,
         )
