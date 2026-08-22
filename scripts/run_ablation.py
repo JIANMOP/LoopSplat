@@ -31,7 +31,17 @@ from copy import deepcopy
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 os.chdir(PROJECT_ROOT)
+sys.path.insert(0, str(PROJECT_ROOT))
 GSR_MAX_ITERS = 100
+
+from src.utils.experiment_utils import (
+    create_run_directory,
+    discover_completed_runs,
+    effective_features_from_config,
+    formal_outputs_complete,
+    write_manifest,
+    write_status,
+)
 
 
 # ── Strategy definitions ─────────────────────────────────────────────
@@ -221,15 +231,9 @@ def load_yaml(path: str | Path) -> dict:
 
 
 def config_has_results(output_dir: Path) -> bool:
-    if not output_dir.exists():
-        return False
-    subdirs = sorted(
-        [d for d in output_dir.iterdir() if d.is_dir() and d.name[0].isdigit()],
-        reverse=True,
-    )
-    if not subdirs:
-        return False
-    return (subdirs[0] / "rendering_metrics_observed_view.json").exists()
+    records = discover_completed_runs(output_dir.parent)
+    return any(
+        record.experiment_id == output_dir.name for record in records)
 
 
 # ── Main ───────────────────────────────────────────────────────────────
@@ -270,49 +274,70 @@ def main():
         base_config = load_yaml(exp["config"])
         merged = deep_merge(base_config, exp["overrides"])
         merged["use_wandb"] = False
-        output_base = Path(merged["data"]["output_path"])
+        requested_output = Path(merged["data"]["output_path"])
 
         print(f"\n{'='*70}")
         print(f"[{i+1}/{total}] {eid} — {ename}")
         print(f"      {edesc}")
-        print(f"      Output: {output_base}")
+        print(f"      Output root: {requested_output}")
         print(f"{'='*70}")
 
         if args.dry_run:
             continue
 
-        if not args.force and config_has_results(output_base):
+        if not args.force and config_has_results(requested_output):
             print(f"      ⏭  Skipped (results exist)")
             skipped += 1
             continue
 
         runner = "run_slam_azure.py" if merged.get("dataset_name") == "azure_kinect" else "run_slam.py"
-        tmp_config = Path(f"_ablation_{eid}.yaml")
+        run_dir = create_run_directory(
+            requested_output.parent, eid, merged["seed"])
+        merged["experiment_id"] = eid
+        merged["data"]["output_path"] = str(run_dir)
+        merged["data"]["run_directory_prepared"] = True
+        tmp_config = run_dir / "config.input.yaml"
 
         with open(tmp_config, "w") as f:
             yaml.dump(merged, f, default_flow_style=False)
 
+        command = [sys.executable, runner, str(tmp_config)]
+        features = effective_features_from_config(merged)
+        write_manifest(run_dir, merged, command, features)
+        write_status(run_dir, "running")
+
         print(f"      Running {runner} ...")
         t0 = time.time()
         try:
-            result = subprocess.run(
-                [sys.executable, runner, str(tmp_config)],
-                cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=21600)
+            with open(run_dir / "run.log", "w", buffering=1) as log_file:
+                process = subprocess.Popen(
+                    command, cwd=PROJECT_ROOT, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, text=True, bufsize=1)
+                for line in process.stdout:
+                    print(line, end="")
+                    log_file.write(line)
+                return_code = process.wait()
             elapsed = time.time() - t0
-            if result.returncode == 0:
+            write_manifest(run_dir, merged, command, features)
+            if return_code == 0 and formal_outputs_complete(run_dir):
+                write_status(run_dir, "succeeded", elapsed_seconds=elapsed)
                 print(f"      ✅ Completed in {elapsed:.0f}s")
                 completed += 1
             else:
-                print(f"      ❌ Failed (exit {result.returncode}) in {elapsed:.0f}s")
-                for line in result.stderr.strip().split("\n")[-8:]:
-                    print(f"        {line}")
+                reason = (
+                    "missing formal evaluation outputs"
+                    if return_code == 0 else f"exit {return_code}")
+                write_status(
+                    run_dir, "failed", elapsed_seconds=elapsed,
+                    reason=reason)
+                print(f"      ❌ Failed ({reason}) in {elapsed:.0f}s")
                 failed += 1
-        except subprocess.TimeoutExpired:
-            print(f"      ❌ Timeout after {time.time()-t0:.0f}s")
+        except Exception as error:
+            write_status(
+                run_dir, "failed", elapsed_seconds=time.time() - t0,
+                reason=repr(error))
+            print(f"      ❌ Failed: {error}")
             failed += 1
-        finally:
-            if tmp_config.exists():
-                tmp_config.unlink()
 
     total_elapsed = time.time() - start_time
     print(f"\n{'='*70}")

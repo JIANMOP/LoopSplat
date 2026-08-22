@@ -4,7 +4,6 @@
 import os
 import pprint
 from argparse import ArgumentParser
-from datetime import datetime
 import json
 from pathlib import Path
 
@@ -197,6 +196,16 @@ class GaussianSLAM(object):
         self.enable_exposure = self.tracker.enable_exposure
         self.loop_closer = Loop_closure(config, self.dataset, self.logger)
         self.loop_closer.submap_path = self.output_path / "submaps"
+        save_dict_to_yaml(
+            {
+                "imu": self.tracker.use_imu,
+                "gaussian_pyramid": self.mapper.effective_pyramid_config(),
+                "gi_keyframing": self._gi_enabled,
+                "gi_keyframing_imu_gyro": self._gi_use_imu_gyro,
+            },
+            "effective_features.yaml",
+            directory=self.output_path,
+        )
         
         print('Tracking config')
         pprint.PrettyPrinter().pprint(config["tracking"])
@@ -212,12 +221,10 @@ class GaussianSLAM(object):
         Args:
             config: A dictionary containing the experiment configuration including data and output path information.
         """
-        if "output_path" not in config["data"]:
-            output_path = Path(config["data"]["output_path"])
-            self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.output_path = output_path / self.timestamp
-        else:
-            self.output_path = Path(config["data"]["output_path"])
+        output_path = config.get("data", {}).get("output_path")
+        if not output_path:
+            raise ValueError("data.output_path is required")
+        self.output_path = Path(output_path)
         self.output_path.mkdir(exist_ok=True, parents=True)
         
         os.makedirs(self.output_path / "mapping_vis", exist_ok=True)

@@ -18,6 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.evaluation.protocol import assert_compatible_protocols
+from src.utils.experiment_utils import discover_completed_runs
 
 # Scene labels for display
 SCENE_LABELS = {
@@ -42,10 +43,10 @@ STRATEGY_SUFFIXES_BC = ["_0","_1","_2","_3","_4","_5"]
 
 
 def find_result_dir(base: Path) -> Path | None:
-    if not base.exists():
-        return None
-    dirs = sorted([d for d in base.iterdir() if d.is_dir() and d.name[0].isdigit()], reverse=True)
-    return dirs[0] if dirs else None
+    records = [
+        record for record in discover_completed_runs(base.parent)
+        if record.experiment_id == base.name]
+    return records[-1].path if records else None
 
 
 def read_json(path: Path) -> dict | None:

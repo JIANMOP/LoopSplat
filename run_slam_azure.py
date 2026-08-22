@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 import time
 import uuid
 
@@ -11,6 +12,13 @@ import wandb
 
 from src.evaluation.evaluator import Evaluator
 from src.utils.io_utils import load_config
+from src.utils.experiment_utils import (
+    effective_features_from_config,
+    formal_outputs_complete,
+    prepare_run_directory,
+    write_manifest,
+    write_status,
+)
 from src.utils.utils import setup_seed
 
 # Patch the dataset loading to support Azure Kinect
@@ -95,8 +103,10 @@ def update_config_with_args(config, args):
         config["project_name"] = args.project_name
     if args.alpha_seeding_thre is not None:
         config["mapping"]["alpha_thre"] = args.alpha_seeding_thre
-    if args.seed:
+    if args.seed is not None:
         config["seed"] = args.seed
+    if args.gt_camera:
+        config["tracking"]["gt_camera"] = True
     if args.help_camera_initialization:
         config["tracking"]["help_camera_initialization"] = True
     if args.soft_alpha:
@@ -117,29 +127,46 @@ if __name__ == "__main__":
     args = get_args()
     config = load_config(args.config_path)
     config = update_config_with_args(config, args)
+    run_dir = prepare_run_directory(config)
+    command = [sys.executable, *sys.argv]
+    features = effective_features_from_config(config)
+    write_manifest(run_dir, config, command, features)
+    write_status(run_dir, "running")
+    started_at = time.time()
 
-    if os.getenv('DISABLE_WANDB') == 'true':
-        config["use_wandb"] = False
-    if config["use_wandb"]:
-        wandb.init(
-            project=config["project_name"],
-            config=config,
-            dir="/home/yli3/scratch/outputs/slam/wandb",
-            group=config["data"]["scene_name"]
-            if not args.group_name
-            else args.group_name,
-            name=f'{config["data"]["scene_name"]}_{time.strftime("%Y%m%d_%H%M%S", time.localtime())}_{str(uuid.uuid4())[:5]}',
-        )
-        wandb.run.log_code(".", include_fn=lambda path: path.endswith(".py"))
+    try:
+        if os.getenv('DISABLE_WANDB') == 'true':
+            config["use_wandb"] = False
+        if config["use_wandb"]:
+            wandb.init(
+                project=config["project_name"],
+                config=config,
+                dir="/home/yli3/scratch/outputs/slam/wandb",
+                group=config["data"]["scene_name"]
+                if not args.group_name
+                else args.group_name,
+                name=f'{config["data"]["scene_name"]}_{time.strftime("%Y%m%d_%H%M%S", time.localtime())}_{str(uuid.uuid4())[:5]}',
+            )
+            wandb.run.log_code(".", include_fn=lambda path: path.endswith(".py"))
 
-    setup_seed(config["seed"])
-
-    # Use standard SLAM class with patched dataset loading
-    gslam = GaussianSLAM(config)
-    gslam.run()
-
-    evaluator = Evaluator(gslam.output_path, gslam.output_path / "config.yaml")
-    evaluator.run()
-    if config["use_wandb"]:
-        wandb.finish()
-    print("Azure Kinect SLAM completed successfully! ✨")
+        setup_seed(config["seed"])
+        gslam = GaussianSLAM(config)
+        gslam.run()
+        evaluator = Evaluator(
+            gslam.output_path, gslam.output_path / "config.yaml")
+        evaluator.run()
+        if not formal_outputs_complete(run_dir):
+            raise RuntimeError("formal evaluation outputs are incomplete")
+        write_manifest(run_dir, config, command, features)
+        write_status(
+            run_dir, "succeeded",
+            elapsed_seconds=time.time() - started_at)
+        print("Azure Kinect SLAM completed successfully! ✨")
+    except Exception as error:
+        write_status(
+            run_dir, "failed", elapsed_seconds=time.time() - started_at,
+            reason=repr(error))
+        raise
+    finally:
+        if config["use_wandb"] and wandb.run is not None:
+            wandb.finish()
