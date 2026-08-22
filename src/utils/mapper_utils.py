@@ -648,42 +648,12 @@ def get_pyramid_render_settings(full_render_settings, W_level: int,
         A new ``GaussianRasterizationSettings`` object (if the input is one),
         or a dict with ``image_height``/``image_width`` updated.
     """
-    # Determine full-res dimensions and compute scale factors
-    if hasattr(full_render_settings, 'image_height'):
-        # It's a GaussianRasterizationSettings namedtuple-like object
-        from diff_gaussian_rasterization import GaussianRasterizationSettings
-        H_full = full_render_settings.image_height
-        W_full = full_render_settings.image_width
-        scale_x = W_level / max(W_full, 1)
-        scale_y = H_level / max(H_full, 1)
-
-        # Scale intrinsics
-        new_tanfovx = full_render_settings.tanfovx  # unchanged — fov is same
-        new_tanfovy = full_render_settings.tanfovy
-        new_viewmatrix = full_render_settings.viewmatrix
-        new_projmatrix = full_render_settings.projmatrix
-        new_cam_center = full_render_settings.camera_center
-
-        # Build new projection matrix for the scaled image
-        # We need to scale fx,fy,cx,cy, but the projection matrix already
-        # encodes the full-res intrinsics. Re-use the existing projmatrix;
-        # the rasterizer uses tanfovx/y + image dimensions for the actual
-        # projection, so the stored projmatrix is advisory.
-        return GaussianRasterizationSettings(
+    if hasattr(full_render_settings, '_replace'):
+        return full_render_settings._replace(
             image_height=H_level,
             image_width=W_level,
-            tanfovx=new_tanfovx,
-            tanfovy=new_tanfovy,
-            bg=full_render_settings.bg,
-            scale_modifier=full_render_settings.scale_modifier,
-            viewmatrix=new_viewmatrix,
-            projmatrix=new_projmatrix,
-            sh_degree=full_render_settings.sh_degree,
-            campos=new_cam_center,
-            prefiltered=full_render_settings.prefiltered,
-            debug=full_render_settings.debug,
         )
-    else:
+    if isinstance(full_render_settings, dict):
         # It's a dict
         import copy
         settings = copy.deepcopy(full_render_settings)
