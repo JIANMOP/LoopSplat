@@ -65,6 +65,7 @@ class Mapper(object):
         self._pyramid_uses_per_level = uses_per_level
         self._pyramid_step_counts = {}
         self._pyramid_level_usage = {}
+        self._pyramid_lifetime_level_usage = {}
         # ────────────────────────────────────────────────────────────────
 
     def effective_pyramid_config(self) -> dict:
@@ -84,12 +85,15 @@ class Mapper(object):
     def _advance_pyramid_level(self, frame_id: int, level: int) -> None:
         self._pyramid_step_counts[frame_id] = (
             self._pyramid_step_counts.get(frame_id, 0) + 1)
-        usage = self._pyramid_level_usage.setdefault(
-            frame_id,
-            {level_id: 0 for level_id in range(
-                self._pyramid_num_sub_levels + 1)},
-        )
-        usage[level] += 1
+        for usage_by_frame in (
+                self._pyramid_level_usage,
+                self._pyramid_lifetime_level_usage):
+            usage = usage_by_frame.setdefault(
+                frame_id,
+                {level_id: 0 for level_id in range(
+                    self._pyramid_num_sub_levels + 1)},
+            )
+            usage[level] += 1
 
     def next_pyramid_level(self, frame_id: int) -> int:
         level = self._current_pyramid_level(frame_id)
@@ -100,6 +104,12 @@ class Mapper(object):
         return {
             frame_id: dict(counts)
             for frame_id, counts in self._pyramid_level_usage.items()
+        }
+
+    def pyramid_lifetime_usage_summary(self) -> dict:
+        return {
+            frame_id: dict(counts)
+            for frame_id, counts in self._pyramid_lifetime_level_usage.items()
         }
 
     def reset_pyramid_state(self) -> None:

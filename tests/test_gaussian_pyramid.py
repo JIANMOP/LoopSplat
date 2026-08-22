@@ -74,6 +74,18 @@ def test_pyramid_state_reset_clears_frame_schedule():
     assert mapper.next_pyramid_level(7) == 0
 
 
+def test_pyramid_lifetime_usage_survives_submap_reset():
+    mapper = make_mapper()
+    mapper.next_pyramid_level(7)
+
+    mapper.reset_pyramid_state()
+
+    assert mapper.pyramid_usage_summary() == {}
+    assert mapper.pyramid_lifetime_usage_summary() == {
+        7: {0: 1, 1: 0, 2: 0},
+    }
+
+
 def test_real_raster_settings_preserve_camera_fields(cuda_device):
     settings = get_render_settings(
         640, 480,

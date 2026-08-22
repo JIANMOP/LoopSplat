@@ -616,3 +616,21 @@ class GaussianSLAM(object):
             "imu_tracking_summary.yaml",
             directory=self.output_path,
         )
+        pyramid_usage = self.mapper.pyramid_lifetime_usage_summary()
+        pyramid_config = self.mapper.effective_pyramid_config()
+        level_totals = {
+            level_id: sum(
+                counts.get(level_id, 0) for counts in pyramid_usage.values())
+            for level_id in range(
+                pyramid_config["num_sub_levels"] + 1)
+        }
+        save_dict_to_yaml(
+            {
+                **pyramid_config,
+                "frame_level_usage": pyramid_usage,
+                "level_totals": level_totals,
+                "optimizer_step_count": sum(level_totals.values()),
+            },
+            "gaussian_pyramid_summary.yaml",
+            directory=self.output_path,
+        )
