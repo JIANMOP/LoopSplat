@@ -170,6 +170,7 @@ class GaussianSLAM(object):
         gaussian_model = GaussianModel(0)
         gaussian_model.training_setup(self.opt)
         self.mapper.keyframes = []
+        self.mapper.reset_pyramid_state()
         self.keyframes_info = {}
         if self.submap_using_motion_heuristic:
             self.new_submap_frame_ids.append(frame_id)

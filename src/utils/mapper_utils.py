@@ -557,40 +557,59 @@ def build_image_pyramid(image: "torch.Tensor", num_sub_levels: int) -> list:
     return pyramid
 
 
-def build_depth_pyramid(depth: "torch.Tensor", num_sub_levels: int) -> list:
+def build_depth_pyramid(depth: "torch.Tensor", valid_mask: "torch.Tensor",
+                        num_sub_levels: int) -> list:
     """Build a depth pyramid from a single depth map tensor.
 
-    Differs from ``build_image_pyramid`` in that depth values should NOT be
-    Gaussian-smoothed before downsampling (to preserve geometric edges).
-    Simple bilinear interpolation (area-weighted) is used instead.
+    Invalid depth must not be averaged into valid measurements. Each level is
+    therefore a weighted area average of valid depth values and is returned
+    together with its validity mask.
 
     Args:
         depth: (H, W) or (1, H, W) torch tensor.
+        valid_mask: Boolean tensor with the same shape as ``depth``.
         num_sub_levels: Number of sub-resolution levels (≥ 1).
 
     Returns:
-        List of tensors with the same number of dimensions, coarsest first.
+        List of ``(depth, valid_mask)`` tuples, coarsest first.
     """
     if num_sub_levels < 1:
         return []
 
+    if depth.shape != valid_mask.shape:
+        raise ValueError("depth and valid_mask must have the same shape")
+    if depth.dim() not in (2, 3):
+        raise ValueError("depth must have shape (H, W) or (1, H, W)")
+    if depth.dim() == 3 and depth.shape[0] != 1:
+        raise ValueError("3D depth must have a singleton channel dimension")
+
     pyramid = []
-    if depth.dim() == 2:
-        depth = depth.unsqueeze(0)  # (1, H, W)
-    squeeze_out = depth.dim() == 3 and depth.shape[0] == 1
-    _, H, W = depth.shape if depth.dim() == 3 else (1, depth.shape[0], depth.shape[1])
+    squeeze_out = depth.dim() == 2
+    depth_3d = depth.unsqueeze(0) if squeeze_out else depth
+    valid_3d = valid_mask.unsqueeze(0) if squeeze_out else valid_mask
+    _, H, W = depth_3d.shape
+    valid_float = valid_3d.to(dtype=depth.dtype)
+    weighted_depth = depth_3d * valid_float
 
     for level in range(num_sub_levels):
         scale = 0.5 ** (num_sub_levels - level)
         new_h, new_w = max(1, int(H * scale)), max(1, int(W * scale))
-        downsampled = torch.nn.functional.interpolate(
-            depth.unsqueeze(0) if depth.dim() == 2 else depth.unsqueeze(0),
-            size=(new_h, new_w),
-            mode='bilinear', align_corners=False
-        ).squeeze(0)
+        numerator = torch.nn.functional.interpolate(
+            weighted_depth.unsqueeze(0), size=(new_h, new_w),
+            mode="area").squeeze(0)
+        denominator = torch.nn.functional.interpolate(
+            valid_float.unsqueeze(0), size=(new_h, new_w),
+            mode="area").squeeze(0)
+        downsampled_valid = denominator > 0
+        downsampled = torch.where(
+            downsampled_valid,
+            numerator / denominator.clamp_min(torch.finfo(depth.dtype).eps),
+            torch.zeros_like(numerator),
+        )
         if squeeze_out:
             downsampled = downsampled.squeeze(0)
-        pyramid.append(downsampled)
+            downsampled_valid = downsampled_valid.squeeze(0)
+        pyramid.append((downsampled, downsampled_valid))
 
     return pyramid
 

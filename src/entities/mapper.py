@@ -63,7 +63,8 @@ class Mapper(object):
         self._pyramid_enabled = enabled
         self._pyramid_num_sub_levels = num_sub_levels
         self._pyramid_uses_per_level = uses_per_level
-        self._pyramid_usage_counters = {}  # frame_id → [remaining_uses_l0, ...]
+        self._pyramid_step_counts = {}
+        self._pyramid_level_usage = {}
         # ────────────────────────────────────────────────────────────────
 
     def effective_pyramid_config(self) -> dict:
@@ -72,6 +73,38 @@ class Mapper(object):
             "num_sub_levels": self._pyramid_num_sub_levels,
             "uses_per_level": self._pyramid_uses_per_level,
         }
+
+    def _current_pyramid_level(self, frame_id: int) -> int:
+        step = self._pyramid_step_counts.get(frame_id, 0)
+        return min(
+            step // self._pyramid_uses_per_level,
+            self._pyramid_num_sub_levels,
+        )
+
+    def _advance_pyramid_level(self, frame_id: int, level: int) -> None:
+        self._pyramid_step_counts[frame_id] = (
+            self._pyramid_step_counts.get(frame_id, 0) + 1)
+        usage = self._pyramid_level_usage.setdefault(
+            frame_id,
+            {level_id: 0 for level_id in range(
+                self._pyramid_num_sub_levels + 1)},
+        )
+        usage[level] += 1
+
+    def next_pyramid_level(self, frame_id: int) -> int:
+        level = self._current_pyramid_level(frame_id)
+        self._advance_pyramid_level(frame_id, level)
+        return level
+
+    def pyramid_usage_summary(self) -> dict:
+        return {
+            frame_id: dict(counts)
+            for frame_id, counts in self._pyramid_level_usage.items()
+        }
+
+    def reset_pyramid_state(self) -> None:
+        self._pyramid_step_counts.clear()
+        self._pyramid_level_usage.clear()
 
     def compute_seeding_mask(self, gaussian_model: GaussianModel, keyframe: dict, new_submap: bool) -> np.ndarray:
         """
@@ -161,26 +194,23 @@ class Mapper(object):
             frame_id, keyframe = keyframes[keyframe_id]
 
             # ── Photo-SLAM pyramid-level rendering ──────────────────
-            if self._pyramid_enabled and frame_id in self._pyramid_usage_counters:
-                level = self._pyramid_num_sub_levels  # default = full-res
-                counters = self._pyramid_usage_counters[frame_id]
-                for l in range(self._pyramid_num_sub_levels):
-                    if counters[l] > 0:
-                        counters[l] -= 1
-                        level = l
-                        break
+            if self._pyramid_enabled:
+                level = self._current_pyramid_level(frame_id)
                 if level < self._pyramid_num_sub_levels:
                     cur_render_settings = keyframe["pyramid_render_settings"][level]
                     cur_gt_image = keyframe["pyramid_colors"][level]
                     cur_gt_depth = keyframe["pyramid_depths"][level]
+                    cur_valid_depth = keyframe["pyramid_valid_masks"][level]
                 else:
                     cur_render_settings = keyframe["render_settings"]
                     cur_gt_image = keyframe["color"]
                     cur_gt_depth = keyframe["depth"]
+                    cur_valid_depth = keyframe["depth"] > 0
             else:
                 cur_render_settings = keyframe["render_settings"]
                 cur_gt_image = keyframe["color"]
                 cur_gt_depth = keyframe["depth"]
+                cur_valid_depth = keyframe["depth"] > 0
             # ──────────────────────────────────────────────────────────
 
             render_pkg = render_gaussian_model(gaussian_model, cur_render_settings)
@@ -191,7 +221,7 @@ class Mapper(object):
             gt_image = cur_gt_image
             gt_depth = cur_gt_depth
 
-            mask = (gt_depth > 0) & (~torch.isnan(depth)).squeeze(0)
+            mask = cur_valid_depth & (~torch.isnan(depth)).squeeze(0)
             color_loss = (1.0 - self.opt.lambda_dssim) * l1_loss(
                 image[:, mask], gt_image[:, mask]) + self.opt.lambda_dssim * (1.0 - ssim(image, gt_image))
 
@@ -214,12 +244,16 @@ class Mapper(object):
                 # Optimizer step
                 if iteration < iterations:
                     gaussian_model.optimizer.step()
+                    if self._pyramid_enabled:
+                        self._advance_pyramid_level(frame_id, level)
                 gaussian_model.optimizer.zero_grad(set_to_none=True)
 
             iteration += 1
         optimization_time = time.time() - start_time
         losses_dict["optimization_time"] = optimization_time
         losses_dict["optimization_iter_time"] = optimization_time / iterations
+        if self._pyramid_enabled:
+            losses_dict["pyramid_usage"] = self.pyramid_usage_summary()
         return losses_dict
 
     def grow_submap(self, gt_depth: np.ndarray, estimate_c2w: np.ndarray, gaussian_model: GaussianModel,
@@ -280,8 +314,13 @@ class Mapper(object):
         if self._pyramid_enabled:
             keyframe["pyramid_colors"] = build_image_pyramid(
                 keyframe["color"], self._pyramid_num_sub_levels)
-            keyframe["pyramid_depths"] = build_depth_pyramid(
-                keyframe["depth"], self._pyramid_num_sub_levels)
+            depth_levels = build_depth_pyramid(
+                keyframe["depth"], keyframe["depth"] > 0,
+                self._pyramid_num_sub_levels)
+            keyframe["pyramid_depths"] = [
+                level_depth for level_depth, _ in depth_levels]
+            keyframe["pyramid_valid_masks"] = [
+                level_valid for _, level_valid in depth_levels]
             keyframe["pyramid_render_settings"] = []
             for l in range(self._pyramid_num_sub_levels):
                 w_l, h_l = get_pyramid_level_dims(
@@ -290,10 +329,7 @@ class Mapper(object):
                 rs = get_pyramid_render_settings(
                     keyframe["render_settings"], w_l, h_l)
                 keyframe["pyramid_render_settings"].append(rs)
-            # Per-keyframe usage counters (coarsest-to-finest)
-            self._pyramid_usage_counters[frame_id] = [
-                self._pyramid_uses_per_level
-            ] * self._pyramid_num_sub_levels
+            self._pyramid_step_counts.setdefault(frame_id, 0)
         # ────────────────────────────────────────────────────────────────
 
         seeding_mask = self.compute_seeding_mask(gaussian_model, keyframe, is_new_submap)
