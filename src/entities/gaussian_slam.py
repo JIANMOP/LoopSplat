@@ -496,6 +496,11 @@ class GaussianSLAM(object):
                     self.tracker.imu_state.last_committed_frame_id),
                 "translation_initialized": (
                     self.tracker.imu_state.gravity_cam is not None),
+                "translation_residual_scale_m": (
+                    self.tracker.imu_translation_residual_scale_m),
+                "rotation_residual_scale_rad": (
+                    self.tracker.imu_rotation_residual_scale_rad),
+                "loss_records": self.tracker.tracking_loss_records,
             },
             "imu_tracking_summary.yaml",
             directory=self.output_path,

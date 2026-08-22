@@ -5,7 +5,12 @@ import torch
 from src.entities.gaussian_slam import should_use_dataset_pose
 from src.entities.imu_preintegration import IMUPrediction, so3_exp
 from src.entities.imu_types import IMUInterval
-from src.entities.tracker import IMUTrackingState, Tracker
+from src.entities.tracker import (
+    IMUTrackingState,
+    Tracker,
+    mean_over_valid_tracking_pixels,
+    relative_camera_motion_from_tracking,
+)
 
 
 class IntervalDataset:
@@ -32,6 +37,8 @@ def make_tracker(device):
     tracker.lambda_imu_rot = 0.01
     tracker.imu_translation_huber_m = 0.1
     tracker.imu_rotation_huber_rad = 0.1
+    tracker.imu_translation_residual_scale_m = 0.05
+    tracker.imu_rotation_residual_scale_rad = 0.01
     tracker.imu_config = {
         "accel_bias": [0.0, 0.0, 0.0],
         "gyro_bias": [0.0, 0.0, 0.0],
@@ -85,6 +92,44 @@ def assert_snapshot_equal(actual, expected):
         torch.testing.assert_close(actual.last_c2w, expected["last_c2w"])
 
 
+def test_tracking_transform_is_converted_to_previous_camera_motion(
+        cuda_device):
+    previous_c2w = torch.eye(
+        4, dtype=torch.float64, device=cuda_device)
+    previous_c2w[:3, :3] = so3_exp(torch.tensor(
+        [0.0, 0.0, 0.7], dtype=torch.float64, device=cuda_device))
+    previous_c2w[:3, 3] = torch.tensor(
+        [1.0, -2.0, 0.5], dtype=torch.float64, device=cuda_device)
+    current_c2w = torch.eye(
+        4, dtype=torch.float64, device=cuda_device)
+    current_c2w[:3, :3] = so3_exp(torch.tensor(
+        [0.2, -0.1, 0.3], dtype=torch.float64, device=cuda_device))
+    current_c2w[:3, 3] = torch.tensor(
+        [-0.4, 0.8, 1.2], dtype=torch.float64, device=cuda_device)
+    previous_w2c = torch.linalg.inv(previous_c2w)
+    tracking_transform = previous_c2w @ torch.linalg.inv(current_c2w)
+
+    actual = relative_camera_motion_from_tracking(
+        previous_w2c, tracking_transform)
+
+    expected = previous_w2c @ current_c2w
+    torch.testing.assert_close(actual, expected)
+    assert not torch.allclose(actual, torch.linalg.inv(tracking_transform))
+
+
+def test_tracking_losses_are_means_over_valid_pixels(cuda_device):
+    loss_map = torch.tensor(
+        [[[1.0, 100.0]], [[3.0, 100.0]], [[5.0, 100.0]]],
+        device=cuda_device,
+    )
+    valid_mask = torch.tensor(
+        [[[True, False]]], device=cuda_device)
+
+    actual = mean_over_valid_tracking_pixels(loss_map, valid_mask)
+
+    assert actual.item() == pytest.approx(3.0)
+
+
 def test_repeated_imu_loss_does_not_mutate_tracker_state(cuda_device):
     tracker = make_tracker(cuda_device)
     prediction = make_prediction(cuda_device)
@@ -106,16 +151,46 @@ def test_repeated_imu_loss_does_not_mutate_tracker_state(cuda_device):
     assert torch.linalg.vector_norm(rotation_vector.grad).item() > 0.0
 
 
+def test_imu_rotation_residual_uses_configured_physical_scale(cuda_device):
+    tracker = make_tracker(cuda_device)
+    prediction = make_prediction(cuda_device)
+    prediction = IMUPrediction(
+        delta_R=torch.eye(3, dtype=torch.float64, device=cuda_device),
+        delta_v=prediction.delta_v,
+        delta_p=prediction.delta_p,
+        total_dt=prediction.total_dt,
+        sample_count=prediction.sample_count,
+        valid=True,
+        translation_valid=False,
+        reason="rotation_only",
+    )
+    relative_pose = torch.eye(
+        4, dtype=torch.float64, device=cuda_device)
+    relative_pose[:3, :3] = so3_exp(torch.tensor(
+        [0.02, 0.0, 0.0], dtype=torch.float64, device=cuda_device))
+
+    fine_scale_loss = tracker.compute_imu_loss(relative_pose, prediction)
+    tracker.imu_rotation_residual_scale_rad = 0.02
+    coarse_scale_loss = tracker.compute_imu_loss(relative_pose, prediction)
+
+    assert fine_scale_loss.item() == pytest.approx(
+        4.0 * coarse_scale_loss.item(), rel=1e-5)
+
+
 def test_commit_advances_state_once(cuda_device):
     tracker = make_tracker(cuda_device)
     prediction = make_prediction(cuda_device)
     final_c2w = torch.eye(4, dtype=torch.float64, device=cuda_device)
 
-    tracker.commit_imu_state(3, final_c2w, prediction)
+    optimized_relative_pose = torch.eye(
+        4, dtype=torch.float64, device=cuda_device)
+    tracker.commit_imu_state(
+        3, final_c2w, prediction, optimized_relative_pose)
     once = snapshot(tracker.imu_state)
 
     with pytest.raises(RuntimeError, match="already committed"):
-        tracker.commit_imu_state(3, final_c2w, prediction)
+        tracker.commit_imu_state(
+            3, final_c2w, prediction, optimized_relative_pose)
     assert_snapshot_equal(tracker.imu_state, once)
     assert tracker.imu_committed_frame_ids == [3]
 
@@ -127,7 +202,8 @@ def test_commit_is_noop_when_imu_is_disabled(cuda_device):
     before = snapshot(tracker.imu_state)
 
     tracker.commit_imu_state(
-        3, torch.eye(4, dtype=torch.float64, device=cuda_device), prediction)
+        3, torch.eye(4, dtype=torch.float64, device=cuda_device), prediction,
+        torch.eye(4, dtype=torch.float64, device=cuda_device))
 
     assert_snapshot_equal(tracker.imu_state, before)
     assert tracker.imu_committed_frame_ids == []

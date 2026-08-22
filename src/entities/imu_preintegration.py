@@ -113,11 +113,13 @@ def preintegrate_imu(interval, bias_accel, bias_gyro, gravity_cam,
 
     if t_cam_imu is None:
         rotation_cam_imu = identity
+        translation_cam_imu = zero_vector
     else:
         t_cam_imu = torch.as_tensor(t_cam_imu, dtype=dtype, device=device)
         if t_cam_imu.shape != (4, 4):
             raise ValueError("t_cam_imu must be 4x4")
         rotation_cam_imu = t_cam_imu[:3, :3]
+        translation_cam_imu = t_cam_imu[:3, 3]
 
     delta_rotation = identity
     delta_velocity = zero_vector
@@ -151,6 +153,10 @@ def preintegrate_imu(interval, bias_accel, bias_gyro, gravity_cam,
             delta_velocity = delta_velocity + linear_acceleration * time_step
 
         delta_rotation = delta_rotation @ rotation_step
+
+    delta_position = (
+        delta_position + translation_cam_imu
+        - delta_rotation @ translation_cam_imu)
 
     return IMUPrediction(
         delta_R=delta_rotation,

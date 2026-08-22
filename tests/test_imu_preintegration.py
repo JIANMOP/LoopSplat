@@ -66,6 +66,29 @@ def test_static_acceleration_has_no_translation_after_gravity_compensation(
     assert torch.linalg.vector_norm(prediction.delta_p).item() < 1e-9
 
 
+def test_camera_imu_lever_arm_affects_rotational_translation(cuda_device):
+    interval = make_interval(
+        (0.0, 0.0, 9.81), (0.0, 0.0, 1.0))
+    gravity = torch.tensor(
+        [0.0, 0.0, 9.81], dtype=torch.float64, device=cuda_device)
+    t_cam_imu = np.eye(4)
+    t_cam_imu[0, 3] = 1.0
+
+    prediction = preintegrate_imu(
+        interval,
+        bias_accel=zeros(cuda_device),
+        bias_gyro=zeros(cuda_device),
+        gravity_cam=gravity,
+        t_cam_imu=t_cam_imu,
+    )
+
+    lever_arm = torch.tensor(
+        [1.0, 0.0, 0.0], dtype=torch.float64, device=cuda_device)
+    expected = lever_arm - prediction.delta_R @ lever_arm
+    torch.testing.assert_close(prediction.delta_p, expected)
+    assert torch.linalg.vector_norm(prediction.delta_p).item() > 0.0
+
+
 def test_so3_residual_has_finite_nonzero_rotation_gradient(cuda_device):
     target_vector = torch.tensor(
         [0.02, -0.01, 0.03], dtype=torch.float64, device=cuda_device)
