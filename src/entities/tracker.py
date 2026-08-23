@@ -369,13 +369,16 @@ class Tracker(object):
 
         rotation = optimized_relative_pose[:3, :3].to(
             self.imu_state.velocity)
-        delta_velocity = torch.zeros_like(self.imu_state.velocity)
         if (prediction is not None and prediction.valid
-                and prediction.translation_valid):
-            delta_velocity = prediction.delta_v.to(self.imu_state.velocity)
-        self.imu_state.velocity = (
-            rotation.transpose(0, 1)
-            @ (self.imu_state.velocity + delta_velocity))
+                and prediction.total_dt > 0.0):
+            visual_velocity = (
+                optimized_relative_pose[:3, 3].to(self.imu_state.velocity)
+                / prediction.total_dt)
+            self.imu_state.velocity = (
+                rotation.transpose(0, 1) @ visual_velocity)
+        else:
+            self.imu_state.velocity = (
+                rotation.transpose(0, 1) @ self.imu_state.velocity)
         if self.imu_state.gravity_cam is not None:
             self.imu_state.gravity_cam = (
                 rotation.to(self.imu_state.gravity_cam).transpose(0, 1)

@@ -197,6 +197,42 @@ def test_commit_advances_state_once(cuda_device):
     assert tracker.imu_committed_frame_ids == [3]
 
 
+def test_commit_reanchors_velocity_to_optimized_visual_motion(cuda_device):
+    tracker = make_tracker(cuda_device)
+    tracker.imu_state.velocity = torch.tensor(
+        [20.0, -5.0, 2.0], dtype=torch.float64, device=cuda_device)
+    base_prediction = make_prediction(cuda_device)
+    prediction = IMUPrediction(
+        delta_R=base_prediction.delta_R,
+        delta_v=base_prediction.delta_v,
+        delta_p=base_prediction.delta_p,
+        total_dt=0.2,
+        sample_count=base_prediction.sample_count,
+        valid=True,
+        translation_valid=True,
+        reason="",
+    )
+    optimized_relative_pose = torch.eye(
+        4, dtype=torch.float64, device=cuda_device)
+    optimized_relative_pose[:3, :3] = so3_exp(torch.tensor(
+        [0.1, -0.2, 0.3], dtype=torch.float64, device=cuda_device))
+    optimized_relative_pose[:3, 3] = torch.tensor(
+        [0.06, -0.02, 0.04], dtype=torch.float64, device=cuda_device)
+
+    tracker.commit_imu_state(
+        3,
+        torch.eye(4, dtype=torch.float64, device=cuda_device),
+        prediction,
+        optimized_relative_pose,
+    )
+
+    velocity_in_previous_camera = torch.tensor(
+        [0.3, -0.1, 0.2], dtype=torch.float64, device=cuda_device)
+    expected_velocity = (
+        optimized_relative_pose[:3, :3].T @ velocity_in_previous_camera)
+    torch.testing.assert_close(tracker.imu_state.velocity, expected_velocity)
+
+
 def test_invalid_prediction_still_rebases_inertial_state(cuda_device):
     tracker = make_tracker(cuda_device)
     tracker.imu_state.velocity = torch.tensor(
@@ -215,6 +251,44 @@ def test_invalid_prediction_still_rebases_inertial_state(cuda_device):
 
     expected_velocity = relative_pose[:3, :3].T @ torch.tensor(
         [1.0, 0.0, 0.0], dtype=torch.float64, device=cuda_device)
+    torch.testing.assert_close(tracker.imu_state.velocity, expected_velocity)
+
+
+def test_invalid_prediction_with_duration_does_not_reanchor_velocity(
+        cuda_device):
+    tracker = make_tracker(cuda_device)
+    initial_velocity = torch.tensor(
+        [1.0, -2.0, 0.5], dtype=torch.float64, device=cuda_device)
+    tracker.imu_state.velocity = initial_velocity.clone()
+    invalid = IMUPrediction(
+        delta_R=torch.eye(3, dtype=torch.float64, device=cuda_device),
+        delta_v=torch.tensor(
+            [100.0, 100.0, 100.0], dtype=torch.float64,
+            device=cuda_device),
+        delta_p=torch.tensor(
+            [10.0, 10.0, 10.0], dtype=torch.float64,
+            device=cuda_device),
+        total_dt=0.2,
+        sample_count=3,
+        valid=False,
+        translation_valid=False,
+        reason="interval_too_long",
+    )
+    relative_pose = torch.eye(
+        4, dtype=torch.float64, device=cuda_device)
+    relative_pose[:3, :3] = so3_exp(torch.tensor(
+        [0.1, -0.2, 0.3], dtype=torch.float64, device=cuda_device))
+    relative_pose[:3, 3] = torch.tensor(
+        [2.0, 3.0, 4.0], dtype=torch.float64, device=cuda_device)
+
+    tracker.commit_imu_state(
+        3,
+        torch.eye(4, dtype=torch.float64, device=cuda_device),
+        invalid,
+        relative_pose,
+    )
+
+    expected_velocity = relative_pose[:3, :3].T @ initial_velocity
     torch.testing.assert_close(tracker.imu_state.velocity, expected_velocity)
 
 
