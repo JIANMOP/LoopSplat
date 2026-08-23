@@ -161,7 +161,6 @@ class Tracker(object):
         self.imu_constraint_frame_ids = []
         self.imu_prediction_records = []
         self.tracking_loss_records = []
-        self.gravity_initialization_attempted = False
 
     def compute_losses(self, gaussian_model: GaussianModel, render_settings: dict,
                        opt_cam_rot: torch.Tensor, opt_cam_trans: torch.Tensor,
@@ -267,9 +266,7 @@ class Tracker(object):
         device = self.imu_state.velocity.device
         dtype = self.imu_state.velocity.dtype
         transform = self.imu_config.get("T_cam_imu")
-        if (self.imu_state.gravity_cam is None
-                and not self.gravity_initialization_attempted):
-            self.gravity_initialization_attempted = True
+        if self.imu_state.gravity_cam is None:
             gravity_estimate = estimate_gravity(
                 interval,
                 device=device,

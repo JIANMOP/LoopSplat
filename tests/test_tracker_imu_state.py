@@ -51,7 +51,6 @@ def make_tracker(device):
     tracker.imu_state = IMUTrackingState.create(device)
     tracker.imu_committed_frame_ids = []
     tracker.imu_constraint_frame_ids = []
-    tracker.gravity_initialization_attempted = False
     return tracker
 
 
@@ -219,7 +218,8 @@ def test_invalid_prediction_still_rebases_inertial_state(cuda_device):
     torch.testing.assert_close(tracker.imu_state.velocity, expected_velocity)
 
 
-def test_gravity_initialization_is_not_retried_on_later_frames(cuda_device):
+def test_gravity_initialization_retries_until_stationary_interval(
+        cuda_device):
     tracker = make_tracker(cuda_device)
     moving = IMUInterval(
         timestamps_s=np.array([0.0, 0.01]),
@@ -238,9 +238,43 @@ def test_gravity_initialization_is_not_retried_on_later_frames(cuda_device):
     first = tracker.prepare_imu_prediction(1)
     second = tracker.prepare_imu_prediction(2)
 
+    assert first.valid is True
     assert first.translation_valid is False
-    assert second.translation_valid is False
-    assert tracker.imu_state.gravity_cam is None
+    assert first.reason == "rotation_only_no_gravity"
+    torch.testing.assert_close(
+        first.delta_R,
+        so3_exp(torch.tensor(
+            [0.01, 0.0, 0.0], dtype=torch.float64,
+            device=cuda_device)),
+    )
+    assert second.translation_valid is True
+    assert tracker.imu_state.gravity_cam is not None
+
+
+def test_gravity_initialization_is_frozen_after_success(cuda_device):
+    tracker = make_tracker(cuda_device)
+    stationary = IMUInterval(
+        timestamps_s=np.array([0.0, 0.01]),
+        accelerations=np.array([[0.0, 0.0, 9.81], [0.0, 0.0, 9.81]]),
+        angular_velocities=np.zeros((2, 3)),
+        dt_s=0.01, valid=True, reason="")
+    contradictory_stationary = IMUInterval(
+        timestamps_s=np.array([0.01, 0.02]),
+        accelerations=np.array([[0.0, 9.81, 0.0], [0.0, 9.81, 0.0]]),
+        angular_velocities=np.zeros((2, 3)),
+        dt_s=0.01, valid=True, reason="")
+    tracker.dataset.intervals = [stationary, contradictory_stationary]
+    tracker.dataset.get_imu_measurements = lambda *args, **kwargs: (
+        tracker.dataset.intervals.pop(0))
+
+    first = tracker.prepare_imu_prediction(1)
+    initialized_gravity = tracker.imu_state.gravity_cam.clone()
+    second = tracker.prepare_imu_prediction(2)
+
+    assert first.translation_valid is True
+    assert second.translation_valid is True
+    torch.testing.assert_close(
+        tracker.imu_state.gravity_cam, initialized_gravity)
 
 
 def test_commit_is_noop_when_imu_is_disabled(cuda_device):

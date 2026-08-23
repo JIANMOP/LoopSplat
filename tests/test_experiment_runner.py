@@ -394,6 +394,32 @@ def test_formal_matrix_replaces_azure_with_eight_replica_scenes():
         assert merged["evaluation"]["run_reconstruction"] is False
 
 
+def test_every_formal_gi_strategy_caps_keyframe_gap_at_eight_frames():
+    gi_experiments = [
+        experiment for experiment in EXPERIMENTS
+        if experiment["overrides"].get("keyframing", {}).get(
+            "enable_gi_slam", False)
+    ]
+    non_gi_experiments = [
+        experiment for experiment in EXPERIMENTS
+        if not experiment["overrides"].get("keyframing", {}).get(
+            "enable_gi_slam", False)
+    ]
+
+    assert gi_experiments
+    assert all(
+        experiment["overrides"]["keyframing"]["max_keyframe_gap"] == 8
+        for experiment in gi_experiments
+    )
+    assert all(
+        deep_merge(
+            load_yaml(experiment["config"]),
+            experiment["overrides"],
+        )["keyframing"].get("max_keyframe_gap", 30) == 30
+        for experiment in non_gi_experiments
+    )
+
+
 def test_formal_matrix_routes_every_experiment_to_selected_output_root(
         tmp_path):
     output_root = tmp_path / "large-storage" / "ablation"
