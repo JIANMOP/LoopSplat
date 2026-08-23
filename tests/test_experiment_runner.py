@@ -394,7 +394,7 @@ def test_formal_matrix_replaces_azure_with_eight_replica_scenes():
         assert merged["evaluation"]["run_reconstruction"] is False
 
 
-def test_every_formal_gi_strategy_caps_keyframe_gap_at_eight_frames():
+def test_every_formal_gi_strategy_caps_keyframe_gap_at_five_frames():
     gi_experiments = [
         experiment for experiment in EXPERIMENTS
         if experiment["overrides"].get("keyframing", {}).get(
@@ -408,7 +408,7 @@ def test_every_formal_gi_strategy_caps_keyframe_gap_at_eight_frames():
 
     assert gi_experiments
     assert all(
-        experiment["overrides"]["keyframing"]["max_keyframe_gap"] == 8
+        experiment["overrides"]["keyframing"]["max_keyframe_gap"] == 5
         for experiment in gi_experiments
     )
     assert all(
