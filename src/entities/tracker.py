@@ -324,9 +324,16 @@ class Tracker(object):
             delta_tensor * (absolute - 0.5 * delta_tensor),
         ).sum()
 
-    def compute_imu_loss(self, relative_pose, prediction):
+    def compute_imu_loss_terms(self, relative_pose, prediction):
+        zero = relative_pose.sum() * 0.0
         if not self.use_imu or prediction is None or not prediction.valid:
-            return relative_pose.sum() * 0.0
+            return {
+                "rotation_residual_rad": zero,
+                "translation_residual_m": None,
+                "weighted_rotation_loss": zero,
+                "weighted_translation_loss": zero,
+                "total_loss": zero,
+            }
 
         dtype = relative_pose.dtype
         device = relative_pose.device
@@ -341,11 +348,14 @@ class Tracker(object):
             self.imu_rotation_huber_rad
             / self.imu_rotation_residual_scale_rad)
 
-        translation_loss = relative_pose.sum() * 0.0
+        translation_loss = zero
+        translation_residual_m = None
         if prediction.translation_valid:
             translation_residual = (
                 relative_pose[:3, 3]
                 - prediction.delta_p.to(dtype=dtype, device=device))
+            translation_residual_m = torch.linalg.vector_norm(
+                translation_residual)
             normalized_translation_residual = (
                 translation_residual
                 / self.imu_translation_residual_scale_m)
@@ -354,9 +364,20 @@ class Tracker(object):
                 self.imu_translation_huber_m
                 / self.imu_translation_residual_scale_m)
 
-        return (
-            self.lambda_imu_trans * translation_loss
-            + self.lambda_imu_rot * rotation_loss)
+        weighted_translation_loss = self.lambda_imu_trans * translation_loss
+        weighted_rotation_loss = self.lambda_imu_rot * rotation_loss
+        return {
+            "rotation_residual_rad": torch.linalg.vector_norm(
+                rotation_residual),
+            "translation_residual_m": translation_residual_m,
+            "weighted_rotation_loss": weighted_rotation_loss,
+            "weighted_translation_loss": weighted_translation_loss,
+            "total_loss": weighted_translation_loss + weighted_rotation_loss,
+        }
+
+    def compute_imu_loss(self, relative_pose, prediction):
+        return self.compute_imu_loss_terms(
+            relative_pose, prediction)["total_loss"]
 
     def commit_imu_state(self, frame_id, final_c2w, prediction,
                          optimized_relative_pose):
@@ -489,18 +510,18 @@ class Tracker(object):
 
             # Total loss includes IMU term
             total_loss = (self.w_color_loss * color_loss + (1 - self.w_color_loss) * depth_loss + imu_loss)
-            total_loss.backward()
-            gaussian_model.optimizer.step()
-            # gaussian_model.scheduler.step(total_loss, epoch=iter)
-            gaussian_model.optimizer.zero_grad(set_to_none=True)
-
             with torch.no_grad():
                 if total_loss.item() < current_min_loss:
                     current_min_loss = total_loss.item()
                     best_w2c = torch.eye(4)
                     best_w2c[:3, :3] = build_rotation(F.normalize(opt_cam_rot[None].clone().detach().cpu()))[0]
                     best_w2c[:3, 3] = opt_cam_trans.clone().detach().cpu()
+            total_loss.backward()
+            gaussian_model.optimizer.step()
+            # gaussian_model.scheduler.step(total_loss, epoch=iter)
+            gaussian_model.optimizer.zero_grad(set_to_none=True)
 
+            with torch.no_grad():
                 cur_quat, cur_trans = F.normalize(opt_cam_rot[None].clone().detach()), opt_cam_trans.clone().detach()
                 cur_rel_w2c = torch.eye(4)
                 cur_rel_w2c[:3, :3] = build_rotation(cur_quat)[0]
@@ -542,6 +563,22 @@ class Tracker(object):
         final_c2w[-1, :] = torch.tensor([0., 0., 0., 1.], dtype=final_c2w.dtype, device=final_c2w.device)
         optimized_relative_pose = relative_camera_motion_from_tracking(
             reference_w2c, best_w2c)
+        imu_terms = self.compute_imu_loss_terms(
+            optimized_relative_pose, imu_prediction)
+        tracking_record = self.tracking_loss_records[-1]
+        tracking_record.update({
+            "imu_rotation_residual_rad": float(
+                imu_terms["rotation_residual_rad"].item()),
+            "imu_translation_residual_m": (
+                None if imu_terms["translation_residual_m"] is None
+                else float(imu_terms["translation_residual_m"].item())),
+            "imu_rotation_loss": float(
+                imu_terms["weighted_rotation_loss"].item()),
+            "imu_translation_loss": float(
+                imu_terms["weighted_translation_loss"].item()),
+            "imu_loss_at_best_pose": float(
+                imu_terms["total_loss"].item()),
+        })
         self.commit_imu_state(
             frame_id, final_c2w, imu_prediction, optimized_relative_pose)
         return torch2np(final_c2w), exposure_ab

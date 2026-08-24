@@ -31,11 +31,13 @@ FMDataset 有相机—IMU标定，使用六策略：
 | 后缀 | 名称 | GI-KF | Pyramid | IMU |
 |---|---|---:|---:|---:|
 | `_0` | Baseline | 关 | 关 | 关 |
-| `_1` | +IMU | 关 | 关 | 开 |
+| `_1` | +IMU | 关 | 关 | 弱旋转先验 |
 | `_2` | +GI-KF | 开 | 关 | 关 |
 | `_3` | +Pyramid | 关 | 开 | 关 |
 | `_4` | +KF+Pyramid | 开 | 开 | 关 |
-| `_5` | +ALL | 开 | 开 | 开 |
+| `_5` | +ALL | 开 | 开 | 弱旋转先验 |
+
+正式 IMU 策略只使用陀螺仪旋转约束：`lambda_imu_rot=0.001`、`lambda_imu_trans=0.0`。当前 FMDataset 没有可靠的逐序列加速度计 bias、长静止初始化窗口和轨迹 GT，直接启用双重积分平移约束会把不确定的速度与重力状态写入正式结论，因此不使用旧的旋转+平移配置。`+IMU` 和 `+ALL` 使用完全相同的 IMU 权重。
 
 ### 1.3 场景编号
 
@@ -230,7 +232,7 @@ python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 | `status.json` | 成功/失败、帧数、关键帧数、子图数、耗时、显存峰值 |
 | `run.log` | 完整标准输出和错误日志 |
 | `effective_features.yaml` | 实际启用的 IMU/Pyramid/GI-KF |
-| `imu_tracking_summary.yaml` | IMU 样本、预测有效性和提交次数 |
+| `imu_tracking_summary.yaml` | IMU 样本、预测有效性、提交次数，以及最佳位姿上的旋转/平移残差和实际加权 loss |
 | `gaussian_pyramid_summary.yaml` | Pyramid 是否生效及优化步数 |
 | `keyframe_decisions.jsonl` | GI-KF 每帧的选择记录，仅 GI-KF 开启时要求 |
 | `evaluation_protocol.json` | 固定评估帧、地图来源、是否全局细化 |
@@ -391,4 +393,4 @@ python -m pytest -q
 - IMU 完整性失败：检查 `imu_tracking_summary.yaml` 的时间覆盖、丢弃行和 `valid_prediction_count`；
 - Pyramid 完整性失败：检查 `enabled` 与 `optimizer_step_count`，不能只看 YAML 开关；
 - Azure 缓存异常：检查 `processed_images/redepth/processing_metadata.json`；标定或预处理配置变化后，加载器应自动重建缓存；
-- CUDA OOM：先记录失败配置与峰值，降低并发而不是单独降低该策略的优化预算；所有策略必须保持相同预算才可公平比较。
+- CUDA OOM：先确认当前代码已使用受限单 GPU FAISS 临时区；仍失败时记录配置与峰值并检查高斯数量。降低并发或只对回环重叠估计做统一的确定性采样，不得单独降低某个消融策略的优化预算。

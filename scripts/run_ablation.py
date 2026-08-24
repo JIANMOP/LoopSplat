@@ -79,11 +79,11 @@ STRATEGIES_BC = [
      {"keyframing": {"enable_gi_slam": False},
       "gaussian_pyramid": {"enabled": False},
       "tracking": {"use_imu": False}}),
-    ("_1", "+IMU",                  "IMU loss only",
+    ("_1", "+IMU",                  "weak rotation-only IMU prior",
      {"keyframing": {"enable_gi_slam": False},
       "gaussian_pyramid": {"enabled": False},
       "tracking": {"use_imu": True,
-                   "lambda_imu_trans": 0.01, "lambda_imu_rot": 0.01}}),
+                   "lambda_imu_trans": 0.0, "lambda_imu_rot": 0.001}}),
     ("_2", "+GI-KF",                "GI-SLAM keyframe only",
      {"keyframing": {"enable_gi_slam": True, "score_threshold": 0.5,
                      "w_covis": 1.0, "w_base": 1.0, "w_mot": 2.0,
@@ -109,7 +109,7 @@ STRATEGIES_BC = [
       "gaussian_pyramid": {"enabled": True,
                            "num_sub_levels": 2, "uses_per_level": 8},
       "tracking": {"use_imu": True,
-                   "lambda_imu_trans": 0.01, "lambda_imu_rot": 0.01}}),
+                   "lambda_imu_trans": 0.0, "lambda_imu_rot": 0.001}}),
 ]
 
 

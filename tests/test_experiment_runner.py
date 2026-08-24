@@ -420,6 +420,26 @@ def test_every_formal_gi_strategy_caps_keyframe_gap_at_five_frames():
     )
 
 
+def test_formal_imu_strategy_uses_weak_rotation_only_prior():
+    imu_experiments = [
+        experiment for experiment in EXPERIMENTS
+        if experiment["group"] == "C"
+        and experiment["overrides"].get("tracking", {}).get(
+            "use_imu", False)
+    ]
+
+    assert {experiment["id"].split("_")[-1]
+            for experiment in imu_experiments} == {"1", "5"}
+    assert all(
+        experiment["overrides"]["tracking"]["lambda_imu_trans"] == 0.0
+        for experiment in imu_experiments
+    )
+    assert all(
+        experiment["overrides"]["tracking"]["lambda_imu_rot"] == 0.001
+        for experiment in imu_experiments
+    )
+
+
 def test_formal_matrix_routes_every_experiment_to_selected_output_root(
         tmp_path):
     output_root = tmp_path / "large-storage" / "ablation"

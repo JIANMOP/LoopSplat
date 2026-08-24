@@ -5,7 +5,34 @@ import faiss
 import faiss.contrib.torch_utils
 from pycg import vis
 
-from src.utils.utils import batch_search_faiss
+
+
+FAISS_TEMP_MEMORY_BYTES = 256 * 1024 * 1024
+FAISS_SEARCH_BATCH_SIZE = 65535
+
+
+def _directional_overlap_count(reference_points, query_points,
+                               squared_threshold):
+    resources = faiss.StandardGpuResources()
+    resources.setTempMemory(FAISS_TEMP_MEMORY_BYTES)
+    cpu_index = faiss.IndexFlatL2(3)
+    device_index = reference_points.device.index
+    if device_index is None:
+        device_index = torch.cuda.current_device()
+    gpu_index = faiss.index_cpu_to_gpu(
+        resources, device_index, cpu_index)
+    gpu_index.add(reference_points.float())
+
+    match_count = torch.zeros(
+        (), dtype=torch.int64, device=query_points.device)
+    for query_batch in torch.split(
+            query_points, FAISS_SEARCH_BATCH_SIZE, dim=0):
+        distances, indices = gpu_index.search(query_batch.float(), 1)
+        match_count += (distances[:, 0] < squared_threshold).sum()
+        del distances, indices
+
+    del gpu_index, cpu_index, resources
+    return match_count
 
 def get_correspondences(src_pcd, tgt_pcd, trans, search_voxel_size, K=None):
     src_pcd.transform(trans)
@@ -48,21 +75,13 @@ def compute_overlap_gaussians(src_gs, tgt_gs, threshold=0.03):
     """
     src_tensor = src_gs.get_xyz().detach()
     tgt_tensor = tgt_gs.get_xyz().detach()
-    cpu_index = faiss.IndexFlatL2(3)
-    gpu_index = faiss.index_cpu_to_all_gpus(cpu_index)
-    gpu_index.add(tgt_tensor)
-    
-    distances, _ = batch_search_faiss(gpu_index, src_tensor, 1)
-    mask_src = distances < threshold
-    
-    cpu_index = faiss.IndexFlatL2(3)
-    gpu_index = faiss.index_cpu_to_all_gpus(cpu_index)
-    gpu_index.add(src_tensor)
-    
-    distances, _ = batch_search_faiss(gpu_index, tgt_tensor, 1)
-    mask_tgt = distances < threshold
-    
-    faiss_overlap_ratio = min(mask_src.sum()/len(mask_src), mask_tgt.sum()/len(mask_tgt))
+    squared_threshold = threshold * threshold
+    matched_src = _directional_overlap_count(
+        tgt_tensor, src_tensor, squared_threshold)
+    matched_tgt = _directional_overlap_count(
+        src_tensor, tgt_tensor, squared_threshold)
+    faiss_overlap_ratio = torch.minimum(
+        matched_src / len(src_tensor), matched_tgt / len(tgt_tensor))
     
     return faiss_overlap_ratio
 

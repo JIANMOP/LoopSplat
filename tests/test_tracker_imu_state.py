@@ -1,7 +1,9 @@
 import numpy as np
 import pytest
 import torch
+import torchvision
 
+import src.entities.tracker as tracker_module
 from src.entities.gaussian_slam import should_use_dataset_pose
 from src.entities.imu_preintegration import IMUPrediction, so3_exp
 from src.entities.imu_types import IMUInterval
@@ -177,6 +179,28 @@ def test_imu_rotation_residual_uses_configured_physical_scale(cuda_device):
 
     assert fine_scale_loss.item() == pytest.approx(
         4.0 * coarse_scale_loss.item(), rel=1e-5)
+
+
+def test_imu_loss_terms_report_weighted_rotation_and_translation(
+        cuda_device):
+    tracker = make_tracker(cuda_device)
+    prediction = make_prediction(cuda_device)
+    relative_pose = torch.eye(
+        4, dtype=torch.float64, device=cuda_device)
+
+    terms = tracker.compute_imu_loss_terms(relative_pose, prediction)
+
+    assert terms["rotation_residual_rad"].item() == pytest.approx(0.02)
+    assert terms["translation_residual_m"].item() == pytest.approx(0.001)
+    torch.testing.assert_close(
+        terms["total_loss"],
+        terms["weighted_rotation_loss"]
+        + terms["weighted_translation_loss"],
+    )
+    torch.testing.assert_close(
+        tracker.compute_imu_loss(relative_pose, prediction),
+        terms["total_loss"],
+    )
 
 
 def test_commit_advances_state_once(cuda_device):
@@ -377,6 +401,86 @@ def test_prepare_prediction_uses_full_interval_and_initializes_gravity(
     assert prediction.total_dt == pytest.approx(0.1)
     assert tracker.imu_state.gravity_cam is not None
     assert torch.linalg.vector_norm(prediction.delta_p).item() < 1e-8
+
+
+def test_track_saves_pose_that_produced_the_best_loss(
+        cuda_device, monkeypatch):
+    class OneFrameDataset:
+        width = 1
+        height = 1
+        intrinsics = np.eye(3)
+
+        def __getitem__(self, frame_id):
+            return (
+                frame_id,
+                np.zeros((1, 1, 3), dtype=np.uint8),
+                np.ones((1, 1), dtype=np.float32),
+                np.eye(4, dtype=np.float32),
+            )
+
+    class MovingOptimizer:
+        def __init__(self, translation):
+            self.translation = translation
+
+        def step(self):
+            with torch.no_grad():
+                self.translation[0].add_(1.0)
+
+        def zero_grad(self, set_to_none=True):
+            self.translation.grad = None
+
+    class GaussianStub:
+        def training_setup_camera(
+                self, rotation, translation, config, exposure_ab):
+            self.optimizer = MovingOptimizer(translation)
+
+    class LoggerStub:
+        def log_tracking_iteration(self, *args, **kwargs):
+            pass
+
+    tracker = Tracker.__new__(Tracker)
+    tracker.dataset = OneFrameDataset()
+    tracker.use_imu = False
+    tracker.help_camera_initialization = False
+    tracker.odometry_type = "previous"
+    tracker.enable_exposure = False
+    tracker.transform = torchvision.transforms.ToTensor()
+    tracker.config = {"iterations": 1}
+    tracker.w_color_loss = 0.5
+    tracker.init_err_ratio = 3.0
+    tracker.frame_color_loss = []
+    tracker.frame_depth_loss = []
+    tracker.tracking_loss_records = []
+    tracker.logger = LoggerStub()
+    tracker.prepare_imu_prediction = lambda frame_id: None
+    tracker.commit_imu_state = lambda *args, **kwargs: None
+
+    rotation = torch.nn.Parameter(torch.tensor(
+        [1.0, 0.0, 0.0, 0.0], device=cuda_device))
+    translation = torch.nn.Parameter(torch.zeros(3, device=cuda_device))
+    monkeypatch.setattr(
+        tracker_module, "compute_camera_opt_params",
+        lambda transform: (rotation, translation))
+    monkeypatch.setattr(
+        tracker_module, "get_render_settings", lambda *args: {})
+
+    def constant_losses(*args, **kwargs):
+        differentiable = translation.sum() * 0.0 + 1.0
+        zero = translation.sum() * 0.0
+        return differentiable, differentiable, zero, None, None, None
+
+    tracker.compute_losses = constant_losses
+    previous_poses = np.repeat(
+        np.eye(4, dtype=np.float32)[None], 3, axis=0)
+
+    estimated_c2w, _ = tracker.track(
+        1, GaussianStub(), previous_poses)
+
+    np.testing.assert_allclose(estimated_c2w, np.eye(4), atol=1e-6)
+    assert tracker.tracking_loss_records[0]["imu_rotation_residual_rad"] == 0.0
+    assert tracker.tracking_loss_records[0]["imu_translation_residual_m"] is None
+    assert tracker.tracking_loss_records[0]["imu_rotation_loss"] == 0.0
+    assert tracker.tracking_loss_records[0]["imu_translation_loss"] == 0.0
 
 
 @pytest.mark.parametrize(
