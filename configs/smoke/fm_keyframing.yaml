@@ -1,7 +1,10 @@
 inherit_from: configs/smoke/fm_baseline.yaml
 experiment_id: smoke_fm_keyframing
+frame_limit: 8
 keyframing:
   enable_gi_slam: true
   use_imu_gyro: false
   min_keyframe_interval: 2
-  max_keyframe_gap: 3
+  max_keyframe_gap: 10
+  high_motion_max_gap: 3
+  v_max: 0.01

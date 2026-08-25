@@ -84,7 +84,26 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
         fallback_fps=slam._gi_fps,
         use_imu_gyro=slam._gi_use_imu_gyro,
     )
+    high_motion = (
+        motion["linear_velocity_mps"] > slam._gi_v_max
+        or motion["angular_velocity_dps"] > slam._gi_omega_max)
+    frame_gap = frame_id - last_keyframe_id
     _, _, depth, _ = slam.dataset[frame_id]
+    if not np.any(np.isfinite(depth) & (depth > 0)):
+        return KeyframeDecision(
+            False, 0.0, "invalid_depth", {"valid_depth_pixels": 0})
+    if high_motion and frame_gap >= slam._gi_high_motion_max_gap:
+        return KeyframeDecision(
+            True,
+            0.0,
+            "high_motion_guard",
+            {
+                **motion,
+                "frame_gap": frame_gap,
+                "motion_penalty": slam._gi_w_mot,
+            },
+        )
+
     gaussian_xyz = gaussian_model.get_xyz()
     frustum_ids_current = compute_gaussian_frustum_ids(
         gaussian_xyz, estimated_c2w,
@@ -194,6 +213,8 @@ class GaussianSLAM(object):
         self._gi_v_max = kf_cfg.get("v_max", 0.8)
         self._gi_omega_max = kf_cfg.get("omega_max", 50.0)
         self._gi_min_interval = kf_cfg.get("min_keyframe_interval", 1)
+        self._gi_high_motion_max_gap = kf_cfg.get(
+            "high_motion_max_gap", 3)
         self._gi_fps = kf_cfg.get("fps", 30.0)  # fallback when no timestamps
 
         # Pre-compute mapping frame IDs (may be overridden dynamically by GI-SLAM)

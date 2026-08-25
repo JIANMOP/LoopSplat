@@ -409,6 +409,10 @@ def test_every_formal_gi_strategy_uses_calibrated_score_and_gap():
         experiment["overrides"]["keyframing"]["max_keyframe_gap"] == 10
         for experiment in gi_experiments
     )
+    assert all(
+        experiment["overrides"]["keyframing"]["high_motion_max_gap"] == 3
+        for experiment in gi_experiments
+    )
 
 
 def test_formal_imu_strategy_uses_weak_rotation_only_prior():
