@@ -133,8 +133,13 @@ def mapping_keyframe_decision(slam, frame_id, gaussian_model,
 
 
 def build_run_statistics(mapping_frame_ids, frame_count, submap_count,
-                         elapsed_seconds, peak_gpu_memory_bytes):
+                         elapsed_seconds, peak_gpu_memory_bytes,
+                         gi_keyframing_enabled=False,
+                         gi_decision_counts=None):
     unique_frame_ids = sorted(set(mapping_frame_ids))
+    decision_counts = dict(gi_decision_counts or {})
+    decision_count = sum(decision_counts.values())
+    score_selection_count = decision_counts.get("score", 0)
     return {
         "frame_count": frame_count,
         "mapping_frame_ids": unique_frame_ids,
@@ -142,6 +147,15 @@ def build_run_statistics(mapping_frame_ids, frame_count, submap_count,
         "submap_count": submap_count,
         "slam_elapsed_seconds": elapsed_seconds,
         "slam_peak_gpu_memory_bytes": peak_gpu_memory_bytes,
+        "gi_keyframing": {
+            "enabled": bool(gi_keyframing_enabled),
+            "decision_counts": decision_counts,
+            "decision_count": decision_count,
+            "score_selection_count": score_selection_count,
+            "score_selection_ratio": (
+                score_selection_count / decision_count
+                if decision_count else 0.0),
+        },
     }
 
 
@@ -543,6 +557,8 @@ class GaussianSLAM(object):
                 peak_gpu_memory_bytes=(
                     torch.cuda.max_memory_allocated()
                     if torch.cuda.is_available() else 0),
+                gi_keyframing_enabled=self._gi_enabled,
+                gi_decision_counts=self._gi_decision_counts,
             ),
             "run_statistics.yaml",
             directory=self.output_path,

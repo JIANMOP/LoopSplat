@@ -101,11 +101,11 @@ keyframing:
   w_covis: 1.0
   w_base: 1.0
   w_mot: 2.0
-  score_threshold: 0.5
+  score_threshold: 0.1
   v_max: 0.8
   omega_max: 50.0
   min_keyframe_interval: 1
-  max_keyframe_gap: 30
+  max_keyframe_gap: 10
   use_imu_gyro: false
   fps: 30.0
 

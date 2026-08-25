@@ -433,6 +433,30 @@ def formal_outputs_complete(run_dir):
                 decision = json.loads(line)
                 if "frame_id" not in decision or "selected" not in decision:
                     return False
+            gi_statistics = statistics.get("gi_keyframing")
+            if (not isinstance(gi_statistics, dict)
+                    or gi_statistics.get("enabled") is not True):
+                return False
+            decision_counts = gi_statistics.get("decision_counts")
+            if (not isinstance(decision_counts, dict)
+                    or any(type(value) is not int or value < 0
+                           for value in decision_counts.values())):
+                return False
+            decision_count = sum(decision_counts.values())
+            score_count = decision_counts.get("score", 0)
+            score_ratio = gi_statistics.get("score_selection_ratio")
+            if (gi_statistics.get("decision_count") != decision_count
+                    or gi_statistics.get(
+                        "score_selection_count") != score_count
+                    or decision_count != statistics["frame_count"]
+                    or not isinstance(score_ratio, (int, float))
+                    or not math.isfinite(score_ratio)
+                    or not math.isclose(
+                        score_ratio,
+                        score_count / decision_count,
+                        rel_tol=1e-9,
+                        abs_tol=1e-12)):
+                return False
 
         if trajectory.get("status") == "available":
             trajectory_paths = (

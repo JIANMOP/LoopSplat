@@ -61,11 +61,11 @@ keyframing:
   w_covis: 1.0                # Covisibility weight
   w_base: 1.0                 # Baseline distance weight
   w_mot: 2.0                  # Motion blur penalty weight
-  score_threshold: 0.5        # Minimum score to select a keyframe
+  score_threshold: 0.1        # Minimum score to select a keyframe
   v_max: 0.8                  # Max linear velocity (m/s) before motion blur penalty
   omega_max: 50.0             # Max angular velocity (deg/s) before motion blur penalty
   min_keyframe_interval: 1    # Minimum frames between keyframes
-  max_keyframe_gap: 30        # Force a keyframe after this many frames
+  max_keyframe_gap: 10        # Force a keyframe after this many frames
   use_imu_gyro: False         # Separate ablation switch; TUM has no IMU
   fps: 30.0                   # Fallback FPS (TUM provides timestamps at 30Hz)
 gaussian_pyramid:

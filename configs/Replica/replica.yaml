@@ -66,10 +66,11 @@ keyframing:
   w_covis: 1.0                # Covisibility weight
   w_base: 1.0                 # Baseline distance weight
   w_mot: 2.0                  # Motion blur penalty weight
-  score_threshold: 0.5        # Minimum score to select a keyframe
+  score_threshold: 0.1        # Minimum score to select a keyframe
   v_max: 0.8                  # Max linear velocity (m/s) before motion blur penalty
   omega_max: 50.0             # Max angular velocity (deg/s) before motion blur penalty
   min_keyframe_interval: 1    # Minimum frames between keyframes
+  max_keyframe_gap: 10        # Force a keyframe after this many frames
   fps: 30.0                   # Fallback FPS (Replica has no timestamps)
 gaussian_pyramid:
   enabled: False              # Set True for Photo-SLAM coarse-to-fine pyramid training

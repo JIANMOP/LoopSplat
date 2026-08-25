@@ -394,29 +394,20 @@ def test_formal_matrix_replaces_azure_with_eight_replica_scenes():
         assert merged["evaluation"]["run_reconstruction"] is False
 
 
-def test_every_formal_gi_strategy_caps_keyframe_gap_at_five_frames():
+def test_every_formal_gi_strategy_uses_calibrated_score_and_gap():
     gi_experiments = [
         experiment for experiment in EXPERIMENTS
         if experiment["overrides"].get("keyframing", {}).get(
             "enable_gi_slam", False)
     ]
-    non_gi_experiments = [
-        experiment for experiment in EXPERIMENTS
-        if not experiment["overrides"].get("keyframing", {}).get(
-            "enable_gi_slam", False)
-    ]
-
     assert gi_experiments
     assert all(
-        experiment["overrides"]["keyframing"]["max_keyframe_gap"] == 5
+        experiment["overrides"]["keyframing"]["score_threshold"] == 0.1
         for experiment in gi_experiments
     )
     assert all(
-        deep_merge(
-            load_yaml(experiment["config"]),
-            experiment["overrides"],
-        )["keyframing"].get("max_keyframe_gap", 30) == 30
-        for experiment in non_gi_experiments
+        experiment["overrides"]["keyframing"]["max_keyframe_gap"] == 10
+        for experiment in gi_experiments
     )
 
 
@@ -545,6 +536,8 @@ def test_run_statistics_count_unique_keyframes_and_submaps():
         submap_count=2,
         elapsed_seconds=12.5,
         peak_gpu_memory_bytes=2_000_000_000,
+        gi_keyframing_enabled=True,
+        gi_decision_counts={"first_frame": 1, "score": 2, "max_gap": 3},
     )
 
     assert statistics["mapping_frame_ids"] == [0, 3, 5]
@@ -553,6 +546,30 @@ def test_run_statistics_count_unique_keyframes_and_submaps():
     assert statistics["frame_count"] == 6
     assert statistics["slam_elapsed_seconds"] == 12.5
     assert statistics["slam_peak_gpu_memory_bytes"] == 2_000_000_000
+    assert statistics["gi_keyframing"]["enabled"] is True
+    assert statistics["gi_keyframing"]["decision_counts"] == {
+        "first_frame": 1, "score": 2, "max_gap": 3}
+    assert statistics["gi_keyframing"]["score_selection_count"] == 2
+    assert statistics["gi_keyframing"]["score_selection_ratio"] == pytest.approx(
+        2 / 6)
+
+
+def test_formal_gi_run_requires_decision_audit_statistics(tmp_path):
+    write_valid_formal_outputs(tmp_path)
+    manifest_path = tmp_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["requested_features"]["gi_keyframing"] = True
+    manifest["effective_features"]["gi_keyframing"] = True
+    manifest_path.write_text(json.dumps(manifest))
+    (tmp_path / "keyframe_decisions.jsonl").write_text(json.dumps({
+        "frame_id": 0,
+        "selected": True,
+        "score": 0.2,
+        "reason": "score",
+        "components": {},
+    }) + "\n")
+
+    assert formal_outputs_complete(tmp_path) is False
 
 
 def test_succeeded_status_includes_persisted_run_statistics(tmp_path):
