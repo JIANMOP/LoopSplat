@@ -36,6 +36,17 @@ def should_use_dataset_pose(frame_id, gt_camera, has_ground_truth):
     return frame_id == 0 or (gt_camera and has_ground_truth)
 
 
+def validate_keyframe_intervals(
+        min_interval, max_gap, high_motion_max_gap):
+    intervals = (min_interval, max_gap, high_motion_max_gap)
+    if (any(type(value) is not int or value < 1 for value in intervals)
+            or not min_interval <= high_motion_max_gap <= max_gap):
+        raise ValueError(
+            "keyframe intervals must be positive integers with "
+            "min_keyframe_interval <= high_motion_max_gap "
+            "<= max_keyframe_gap")
+
+
 def build_dataset_config(config):
     dataset_config = {**config["data"], **config["cam"]}
     if "frame_limit" in config:
@@ -72,8 +83,17 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
         min_interval=slam._gi_min_interval,
         max_gap=slam._gi_max_gap,
     )
-    if forced is not None:
+    if forced is not None and not forced.selected:
         return forced
+
+    _, _, depth, _ = slam.dataset[frame_id]
+    if not np.any(np.isfinite(depth) & (depth > 0)):
+        return KeyframeDecision(
+            False, 0.0, "invalid_depth", {"valid_depth_pixels": 0})
+    if forced is not None and forced.reason == "first_frame":
+        return forced
+    if last_keyframe_id is None:
+        return KeyframeDecision(True, 0.0, "no_previous_keyframe", {})
 
     motion = compute_keyframe_motion(
         dataset=slam.dataset,
@@ -88,10 +108,6 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
         motion["linear_velocity_mps"] > slam._gi_v_max
         or motion["angular_velocity_dps"] > slam._gi_omega_max)
     frame_gap = frame_id - last_keyframe_id
-    _, _, depth, _ = slam.dataset[frame_id]
-    if not np.any(np.isfinite(depth) & (depth > 0)):
-        return KeyframeDecision(
-            False, 0.0, "invalid_depth", {"valid_depth_pixels": 0})
     if high_motion and frame_gap >= slam._gi_high_motion_max_gap:
         return KeyframeDecision(
             True,
@@ -103,6 +119,8 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
                 "motion_penalty": slam._gi_w_mot,
             },
         )
+    if forced is not None:
+        return forced
 
     gaussian_xyz = gaussian_model.get_xyz()
     frustum_ids_current = compute_gaussian_frustum_ids(
@@ -247,10 +265,11 @@ class GaussianSLAM(object):
         self._gi_max_gap = kf_cfg.get("max_keyframe_gap", 30)
         if not isinstance(self._gi_use_imu_gyro, bool):
             raise TypeError("keyframing.use_imu_gyro must be bool")
-        if (not isinstance(self._gi_min_interval, int)
-                or not isinstance(self._gi_max_gap, int)
-                or self._gi_min_interval < 1 or self._gi_max_gap < 1):
-            raise ValueError("keyframe intervals must be positive integers")
+        validate_keyframe_intervals(
+            self._gi_min_interval,
+            self._gi_max_gap,
+            self._gi_high_motion_max_gap,
+        )
         self._gi_decisions = {}
         self._gi_decision_counts = {}
         self.tracker = Tracker(config["tracking"], self.dataset, self.logger)

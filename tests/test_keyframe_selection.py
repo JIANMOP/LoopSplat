@@ -42,10 +42,32 @@ class InvalidDepthHighMotionDataset(HighMotionDataset):
         return frame_id, None, np.zeros((2, 2)), np.eye(4)
 
 
+class LongHighMotionDataset(HighMotionDataset):
+    timestamps = np.arange(12, dtype=np.float64) / 30.0
+
+    def __len__(self):
+        return 12
+
+
+class LongInvalidDepthHighMotionDataset(LongHighMotionDataset):
+    def __getitem__(self, frame_id):
+        return frame_id, None, np.zeros((2, 2)), np.eye(4)
+
+
 def translated_pose(x):
     pose = np.eye(4)
     pose[0, 3] = x
     return pose
+
+
+@pytest.mark.parametrize(
+    "intervals",
+    [(1, 10, 0), (1, 10, "3"), (1, 10, 11)],
+)
+def test_keyframe_interval_validation_rejects_invalid_high_motion_gap(
+        intervals):
+    with pytest.raises(ValueError, match="keyframe intervals"):
+        gaussian_slam_module.validate_keyframe_intervals(*intervals)
 
 
 def test_frustum_proxy_uses_c2w_and_keeps_camera_center_ray(cuda_device):
@@ -124,6 +146,9 @@ def test_active_slam_selector_keeps_gyro_disabled():
         slam, 1, EmptyModel(), translated_pose(0.033275))
 
     assert isinstance(decision, KeyframeDecision)
+    assert decision.selected is False
+    assert decision.reason == "below_threshold"
+    assert decision.components["motion_penalty"] == pytest.approx(2.0)
     assert decision.components["gyro_assistance_used"] is False
 
 
@@ -190,6 +215,69 @@ def test_high_motion_guard_does_not_select_invalid_depth_frame():
 
     assert decision.selected is False
     assert decision.reason == "invalid_depth"
+
+
+@pytest.mark.parametrize("frame_id", [10, 11])
+def test_forced_selection_does_not_override_invalid_depth(frame_id):
+    class EmptyModel:
+        def get_xyz(self):
+            return torch.empty((0, 3))
+
+    slam = type("SlamState", (), {})()
+    slam.dataset = LongInvalidDepthHighMotionDataset()
+    slam.dataset.intrinsics = np.eye(3)
+    slam.mapping_frame_ids = [0]
+    slam._gi_min_interval = 1
+    slam._gi_max_gap = 10
+    slam._gi_high_motion_max_gap = 3
+    slam._gi_prev_frame_id = frame_id - 1
+    slam._gi_prev_c2w = np.eye(4)
+    slam._gi_fps = 30.0
+    slam._gi_use_imu_gyro = False
+    slam._gi_kf_c2ws = {0: np.eye(4)}
+    slam._gi_score_threshold = 0.1
+    slam._gi_w_covis = 1.0
+    slam._gi_w_base = 1.0
+    slam._gi_w_mot = 2.0
+    slam._gi_v_max = 0.8
+    slam._gi_omega_max = 50.0
+
+    decision = evaluate_gi_keyframe(
+        slam, frame_id, EmptyModel(), translated_pose(0.1))
+
+    assert decision.selected is False
+    assert decision.reason == "invalid_depth"
+
+
+def test_high_motion_guard_reason_precedes_normal_max_gap():
+    class EmptyModel:
+        def get_xyz(self):
+            return torch.empty((0, 3))
+
+    slam = type("SlamState", (), {})()
+    slam.dataset = LongHighMotionDataset()
+    slam.dataset.intrinsics = np.eye(3)
+    slam.mapping_frame_ids = [0]
+    slam._gi_min_interval = 1
+    slam._gi_max_gap = 10
+    slam._gi_high_motion_max_gap = 3
+    slam._gi_prev_frame_id = 9
+    slam._gi_prev_c2w = np.eye(4)
+    slam._gi_fps = 30.0
+    slam._gi_use_imu_gyro = False
+    slam._gi_kf_c2ws = {0: np.eye(4)}
+    slam._gi_score_threshold = 0.1
+    slam._gi_w_covis = 1.0
+    slam._gi_w_base = 1.0
+    slam._gi_w_mot = 2.0
+    slam._gi_v_max = 0.8
+    slam._gi_omega_max = 50.0
+
+    decision = evaluate_gi_keyframe(
+        slam, 10, EmptyModel(), translated_pose(0.1))
+
+    assert decision.selected is True
+    assert decision.reason == "high_motion_guard"
 
 
 def test_selector_reprojects_same_current_gaussian_set_for_both_views(
