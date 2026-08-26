@@ -397,7 +397,8 @@ def main():
     print(f"{'='*70}")
     if not args.dry_run and completed > 0:
         print("\n  Aggregate results: python scripts/aggregate_results.py")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

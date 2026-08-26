@@ -40,6 +40,9 @@ tracking:
   help_camera_initialization: true
   init_err_ratio: 3
   odometer_method: "hybrid"
+  odometer_cpu_fallback: true
+  odometer_max_translation_m: 0.5
+  odometer_max_rotation_deg: 60.0
   filter_alpha: false
   filter_outlier_depth: false
   alpha_thre: 0.98

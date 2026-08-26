@@ -486,9 +486,65 @@ def test_runner_resolves_output_environment_when_main_starts(
         ["run_ablation.py", "--dry-run", "--experiment", "R1_0",
          "--seeds", "0"])
 
-    run_ablation_module.main()
+    exit_code = run_ablation_module.main()
 
     assert f"Output root: {output_root / 'R1_0'}" in capsys.readouterr().out
+    assert exit_code == 0
+
+
+def test_runner_returns_failure_when_a_job_process_fails(
+        tmp_path, monkeypatch):
+    experiment = {
+        "id": "C2_2",
+        "name": "failure fixture",
+        "desc": "runner exit status",
+        "config": "unused.yaml",
+        "group": "C",
+        "overrides": {},
+    }
+    config = {
+        "dataset_name": "fm_dataset",
+        "data": {"output_path": str(tmp_path / "C2_2")},
+        "tracking": {"use_imu": False},
+        "keyframing": {"enable_gi_slam": True},
+        "gaussian_pyramid": {"enabled": False},
+    }
+
+    class FailedProcess:
+        stdout = ["simulated failure\n"]
+
+        def wait(self):
+            return 1
+
+    def create_run(*args, **kwargs):
+        run_dir = tmp_path / "C2_2" / "seed_0" / "failed"
+        run_dir.mkdir(parents=True)
+        return run_dir
+
+    monkeypatch.setattr(
+        sys, "argv",
+        ["run_ablation.py", "--experiment", "C2_2", "--seeds", "0"])
+    monkeypatch.setattr(
+        run_ablation_module, "build_experiments", lambda: [experiment])
+    monkeypatch.setattr(
+        run_ablation_module, "load_yaml", lambda path: config)
+    monkeypatch.setattr(
+        run_ablation_module, "current_git_commit", lambda: "a" * 40)
+    monkeypatch.setattr(
+        run_ablation_module, "verify_formal_source_state", lambda *args: "1" * 64)
+    monkeypatch.setattr(
+        run_ablation_module, "config_has_results", lambda *args: False)
+    monkeypatch.setattr(
+        run_ablation_module, "create_run_directory", create_run)
+    monkeypatch.setattr(
+        run_ablation_module, "write_manifest", lambda *args: None)
+    monkeypatch.setattr(
+        run_ablation_module, "write_status", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        run_ablation_module.subprocess, "Popen",
+        lambda *args, **kwargs: FailedProcess())
+
+    assert run_ablation_module.main() == 1
 
 
 def test_replica_report_uses_four_strategy_matrix_with_trajectory_columns():
@@ -542,6 +598,11 @@ def test_run_statistics_count_unique_keyframes_and_submaps():
         peak_gpu_memory_bytes=2_000_000_000,
         gi_keyframing_enabled=True,
         gi_decision_counts={"first_frame": 1, "score": 2, "max_gap": 3},
+        odometry_diagnostics={
+            "cpu_fallback_count": 2,
+            "identity_fallback_count": 1,
+            "reason_counts": {"primary_motion_outlier": 2},
+        },
     )
 
     assert statistics["mapping_frame_ids"] == [0, 3, 5]
@@ -556,6 +617,11 @@ def test_run_statistics_count_unique_keyframes_and_submaps():
     assert statistics["gi_keyframing"]["score_selection_count"] == 2
     assert statistics["gi_keyframing"]["score_selection_ratio"] == pytest.approx(
         2 / 6)
+    assert statistics["visual_odometry"] == {
+        "cpu_fallback_count": 2,
+        "identity_fallback_count": 1,
+        "reason_counts": {"primary_motion_outlier": 2},
+    }
 
 
 def test_formal_gi_run_requires_decision_audit_statistics(tmp_path):

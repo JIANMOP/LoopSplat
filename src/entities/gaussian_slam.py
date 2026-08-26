@@ -172,7 +172,8 @@ def mapping_keyframe_decision(slam, frame_id, gaussian_model,
 def build_run_statistics(mapping_frame_ids, frame_count, submap_count,
                          elapsed_seconds, peak_gpu_memory_bytes,
                          gi_keyframing_enabled=False,
-                         gi_decision_counts=None):
+                         gi_decision_counts=None,
+                         odometry_diagnostics=None):
     unique_frame_ids = sorted(set(mapping_frame_ids))
     decision_counts = dict(gi_decision_counts or {})
     decision_count = sum(decision_counts.values())
@@ -184,6 +185,7 @@ def build_run_statistics(mapping_frame_ids, frame_count, submap_count,
         "submap_count": submap_count,
         "slam_elapsed_seconds": elapsed_seconds,
         "slam_peak_gpu_memory_bytes": peak_gpu_memory_bytes,
+        "visual_odometry": dict(odometry_diagnostics or {}),
         "gi_keyframing": {
             "enabled": bool(gi_keyframing_enabled),
             "decision_counts": decision_counts,
@@ -599,6 +601,7 @@ class GaussianSLAM(object):
                     if torch.cuda.is_available() else 0),
                 gi_keyframing_enabled=self._gi_enabled,
                 gi_decision_counts=self._gi_decision_counts,
+                odometry_diagnostics=self.tracker.odometry_diagnostics(),
             ),
             "run_statistics.yaml",
             directory=self.output_path,

@@ -206,6 +206,8 @@ tail -f logs/ablation-replica.log
 python scripts/run_ablation.py --group R --seeds 0 1 2
 ```
 
+组内只要有一个任务失败，命令最终退出码就是非零；已经成功并且输出完整的任务仍会在下次执行相同命令时跳过，失败任务会重新运行。不能只根据外层 tmux/nohup 命令结束判断整组成功，必须同时检查末尾 `SUMMARY` 和各目录的 `status.json`。
+
 `--force` 会创建新的带时间戳目录，不会覆盖旧结果：
 
 ```bash
@@ -230,6 +232,7 @@ python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 | `config.yaml` | SLAM 实际保存的最终配置 |
 | `manifest.json` | Git 提交、实验代码指纹、配置哈希、命令、GPU/CUDA、请求/生效策略 |
 | `status.json` | 成功/失败、帧数、关键帧数、子图数、耗时、显存峰值 |
+| `run_statistics.yaml` | 关键帧/子图/耗时/显存明细，以及视觉里程计 CPU/冻结回退次数、原因和帧号 |
 | `run.log` | 完整标准输出和错误日志 |
 | `effective_features.yaml` | 实际启用的 IMU/Pyramid/GI-KF |
 | `imu_tracking_summary.yaml` | IMU 样本、预测有效性、提交次数，以及最佳位姿上的旋转/平移残差和实际加权 loss |
@@ -392,5 +395,6 @@ python -m pytest -q
 - 汇总报 mixed source fingerprint/hardware/protocol：不能把这些结果放进同一统计组，应统一实验代码与环境后重跑受影响配置；
 - IMU 完整性失败：检查 `imu_tracking_summary.yaml` 的时间覆盖、丢弃行和 `valid_prediction_count`；
 - Pyramid 完整性失败：检查 `enabled` 与 `optimizer_step_count`，不能只看 YAML 开关；
+- FMDataset 出现 `Singular 6x6 linear system`：先查看 `run_statistics.yaml` 的 `visual_odometry`。GPU 异常解会在统一的 0.5 m/帧、60°/帧上限下由 CPU 重算，CPU 仍失败才冻结一帧；所有 C 组策略使用同一套配置。若 `identity_fallback_count` 持续增加或轨迹仍有大跳变，不应把该场景作为成功结果；
 - Azure 缓存异常：检查 `processed_images/redepth/processing_metadata.json`；标定或预处理配置变化后，加载器应自动重建缓存；
 - CUDA OOM：先确认当前代码已使用受限单 GPU FAISS 临时区；仍失败时记录配置与峰值并检查高斯数量。降低并发或只对回环重叠估计做统一的确定性采样，不得单独降低某个消融策略的优化预算。

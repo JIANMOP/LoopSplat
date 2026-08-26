@@ -89,7 +89,15 @@ class Tracker(object):
         self.help_camera_initialization = self.config["help_camera_initialization"]
         self.init_err_ratio = self.config["init_err_ratio"]
         self.enable_exposure = self.config["enable_exposure"]
-        self.odometer = VisualOdometer(self.dataset.intrinsics, self.config["odometer_method"])
+        self.odometer = VisualOdometer(
+            self.dataset.intrinsics,
+            self.config["odometer_method"],
+            cpu_fallback=self.config.get("odometer_cpu_fallback", True),
+            max_translation_m=self.config.get(
+                "odometer_max_translation_m"),
+            max_rotation_deg=self.config.get("odometer_max_rotation_deg"),
+        )
+        self.odometry_fallback_records = []
 
         # IMU loss function configuration (following GI-SLAM paper)
         self.use_imu = self.config.get("use_imu", False)
@@ -161,6 +169,22 @@ class Tracker(object):
         self.imu_constraint_frame_ids = []
         self.imu_prediction_records = []
         self.tracking_loss_records = []
+
+    def estimate_odometry(self, frame_id, image, depth):
+        transform = self.odometer.estimate_rel_pose(image, depth)
+        diagnostic = self.odometer.last_diagnostic
+        if diagnostic["source"] != "primary":
+            self.odometry_fallback_records.append({
+                "frame_id": int(frame_id),
+                **diagnostic,
+            })
+        return transform
+
+    def odometry_diagnostics(self):
+        return {
+            **self.odometer.diagnostics(),
+            "fallback_records": list(self.odometry_fallback_records),
+        }
 
     def compute_losses(self, gaussian_model: GaussianModel, render_settings: dict,
                        opt_cam_rot: torch.Tensor, opt_cam_trans: torch.Tensor,
@@ -451,7 +475,7 @@ class Tracker(object):
         elif self.odometry_type == "const_speed":
             init_c2w = extrapolate_poses(prev_c2ws[1:])
         elif self.odometry_type == "odometer":
-            odometer_rel = self.odometer.estimate_rel_pose(image, depth)
+            odometer_rel = self.estimate_odometry(frame_id, image, depth)
             init_c2w = prev_c2ws[-1] @ odometer_rel
         elif self.odometry_type == "previous":
             init_c2w = prev_c2ws[-1]
@@ -493,7 +517,8 @@ class Tracker(object):
             if self.help_camera_initialization and self.odometry_type != "odometer":
                 _, last_image, last_depth, _ = self.dataset[frame_id - 1]
                 self.odometer.update_last_rgbd(last_image, last_depth)
-                odometer_rel = self.odometer.estimate_rel_pose(image, depth)
+                odometer_rel = self.estimate_odometry(
+                    frame_id, image, depth)
                 init_c2w = last_c2w @ odometer_rel
                 init_rel = init_c2w @ np.linalg.inv(last_c2w)
                 init_rel_w2c = np.linalg.inv(init_rel)
