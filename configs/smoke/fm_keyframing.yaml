@@ -4,7 +4,8 @@ frame_limit: 8
 keyframing:
   enable_gi_slam: true
   use_imu_gyro: false
-  min_keyframe_interval: 1
+  min_keyframe_interval: 2
+  stable_keyframe_gap: 3
   max_keyframe_gap: 10
-  high_motion_max_gap: 1
-  v_max: 0.01
+  v_max: 1.5
+  omega_max: 120.0

@@ -394,7 +394,7 @@ def test_formal_matrix_replaces_azure_with_eight_replica_scenes():
         assert merged["evaluation"]["run_reconstruction"] is False
 
 
-def test_every_formal_gi_strategy_uses_calibrated_score_and_immediate_guard():
+def test_every_formal_gi_strategy_uses_paper_consistent_motion_policy():
     gi_experiments = [
         experiment for experiment in EXPERIMENTS
         if experiment["overrides"].get("keyframing", {}).get(
@@ -410,7 +410,23 @@ def test_every_formal_gi_strategy_uses_calibrated_score_and_immediate_guard():
         for experiment in gi_experiments
     )
     assert all(
-        experiment["overrides"]["keyframing"]["high_motion_max_gap"] == 1
+        experiment["overrides"]["keyframing"]["min_keyframe_interval"] == 2
+        for experiment in gi_experiments
+    )
+    assert all(
+        experiment["overrides"]["keyframing"]["stable_keyframe_gap"] == 3
+        for experiment in gi_experiments
+    )
+    assert all(
+        experiment["overrides"]["keyframing"]["v_max"] == 1.5
+        for experiment in gi_experiments
+    )
+    assert all(
+        experiment["overrides"]["keyframing"]["omega_max"] == 120.0
+        for experiment in gi_experiments
+    )
+    assert all(
+        "high_motion_max_gap" not in experiment["overrides"]["keyframing"]
         for experiment in gi_experiments
     )
 

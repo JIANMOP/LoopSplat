@@ -39,7 +39,9 @@ FMDataset 有相机—IMU标定，使用六策略：
 
 正式 IMU 策略只使用陀螺仪旋转约束：`lambda_imu_rot=0.001`、`lambda_imu_trans=0.0`。当前 FMDataset 没有可靠的逐序列加速度计 bias、长静止初始化窗口和轨迹 GT，直接启用双重积分平移约束会把不确定的速度与重力状态写入正式结论，因此不使用旧的旋转+平移配置。`+IMU` 和 `+ALL` 使用完全相同的 IMU 权重。
 
-FMDataset 的所有 C 组配置（包括 Baseline）固定使用单 OpenMP 线程的 CPU Open3D 视觉里程计（`odometer_device=cpu`、`odometer_omp_threads=1`）。GPU Open3D 以及多线程 CPU Open3D 在相同输入上存在不可忽略的重复运行差异，会把里程计随机性混入策略消融；正式运行器会在启动 C 组子进程前设置 `OMP_NUM_THREADS=1`，GPU 仍用于后续跟踪、渲染和建图。GI-KF 的高运动保护使用 `high_motion_max_gap=1`：线速度超过 `0.8 m/s` 或角速度超过 `50 deg/s` 时，在首个满足有效深度和最小间隔条件的帧立即选为关键帧，不再让运动惩罚连续跳过三个高运动帧。
+FMDataset 的所有 C 组配置（包括 Baseline）固定使用单 OpenMP 线程的 CPU Open3D 视觉里程计（`odometer_device=cpu`、`odometer_omp_threads=1`）。GPU Open3D 以及多线程 CPU Open3D 在相同输入上存在不可忽略的重复运行差异，会把里程计随机性混入策略消融；正式运行器会在启动 C 组子进程前设置 `OMP_NUM_THREADS=1`，GPU 仍用于后续跟踪、渲染和建图。
+
+GI-KF 使用与原论文一致的“高速排除、稳定帧优先”原则，并针对 LoopSplat 增加防饿死兜底。正式参数固定为 `v_max=1.5 m/s`、`omega_max=120 deg/s`、`min_keyframe_interval=2`、`stable_keyframe_gap=3`、`max_keyframe_gap=10`，且 `use_imu_gyro=false`，不会读取或改变正式 IMU 跟踪策略。首尾帧和子图边界帧仍保留；距上一关键帧不足 2 帧时跳过；高速候选在 gap 小于 10 时拒绝；低速候选在 gap 达到 3 时直接选取并跳过高斯视锥 IoU 计算；只有连续高速导致 gap 达到 10 时才以 `emergency_gap` 选入一帧。gap 恰为 2 的低速候选才计算 GI 分数，阈值保持 `0.1`。因此正常关键帧间隔为 2–3 帧，目标关键帧率约为 33%–50%；实际结果必须如实报告，不能把该范围当作通过后删除异常数据的依据。
 
 ### 1.3 场景编号
 
@@ -248,6 +250,8 @@ python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 | `trajectory_status.json` | 轨迹指标可用或无 GT 跳过 |
 | `ate_aligned.json`、`rpe.json`、`trajectory_metrics.json` | 有 GT 数据的 ATE/RPE |
 | `global_refinement_status.json` | 明确记录正式评估未做额外全局细化 |
+
+`keyframe_decisions.jsonl` 中主要原因含义：`min_interval` 为间隔不足而跳过，`high_motion_reject` 为论文式高速排除，`score` 为 gap=2 时通过 GI 分数，`stable_gap` 为稳定候选达到 3 帧间隔，`emergency_gap` 为连续高速达到 10 帧后的防饿死兜底，`submap_boundary`、`first_frame`、`last_frame` 为结构性保留帧。若正式日志仍出现旧的 `high_motion_guard`，说明服务器没有同步到本版代码，该运行不得并入新实验。
 
 ### 5.1 按需导出全局高斯 PLY
 

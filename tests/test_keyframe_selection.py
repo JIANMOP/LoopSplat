@@ -62,9 +62,9 @@ def translated_pose(x):
 
 @pytest.mark.parametrize(
     "intervals",
-    [(1, 10, 0), (1, 10, "3"), (1, 10, 11)],
+    [(1, 0, 10), (1, "3", 10), (1, 11, 10), (3, 2, 10)],
 )
-def test_keyframe_interval_validation_rejects_invalid_high_motion_gap(
+def test_keyframe_interval_validation_rejects_invalid_stable_gap(
         intervals):
     with pytest.raises(ValueError, match="keyframe intervals"):
         gaussian_slam_module.validate_keyframe_intervals(*intervals)
@@ -128,7 +128,7 @@ def test_active_slam_selector_keeps_gyro_disabled():
     slam.mapping_frame_ids = [0]
     slam._gi_min_interval = 1
     slam._gi_max_gap = 30
-    slam._gi_high_motion_max_gap = 3
+    slam._gi_stable_gap = 3
     slam._gi_prev_frame_id = 0
     slam._gi_prev_c2w = np.eye(4)
     slam._gi_fps = 30.0
@@ -138,21 +138,21 @@ def test_active_slam_selector_keeps_gyro_disabled():
     slam._gi_w_covis = 1.0
     slam._gi_w_base = 1.0
     slam._gi_w_mot = 2.0
-    slam._gi_v_max = 0.8
-    slam._gi_omega_max = 50.0
+    slam._gi_v_max = 1.5
+    slam._gi_omega_max = 120.0
     slam.dataset.intrinsics = np.eye(3)
 
     decision = evaluate_gi_keyframe(
-        slam, 1, EmptyModel(), translated_pose(0.033275))
+        slam, 1, EmptyModel(), translated_pose(0.1))
 
     assert isinstance(decision, KeyframeDecision)
     assert decision.selected is False
-    assert decision.reason == "below_threshold"
+    assert decision.reason == "high_motion_reject"
     assert decision.components["motion_penalty"] == pytest.approx(2.0)
     assert decision.components["gyro_assistance_used"] is False
 
 
-def test_high_motion_guard_selects_first_high_motion_frame():
+def test_high_motion_frame_is_rejected_before_emergency_gap():
     class EmptyModel:
         def get_xyz(self):
             return torch.empty((0, 3))
@@ -163,7 +163,7 @@ def test_high_motion_guard_selects_first_high_motion_frame():
     slam.mapping_frame_ids = [0]
     slam._gi_min_interval = 1
     slam._gi_max_gap = 10
-    slam._gi_high_motion_max_gap = 1
+    slam._gi_stable_gap = 3
     slam._gi_prev_frame_id = 0
     slam._gi_prev_c2w = np.eye(4)
     slam._gi_fps = 30.0
@@ -173,20 +173,20 @@ def test_high_motion_guard_selects_first_high_motion_frame():
     slam._gi_w_covis = 1.0
     slam._gi_w_base = 1.0
     slam._gi_w_mot = 2.0
-    slam._gi_v_max = 0.8
-    slam._gi_omega_max = 50.0
+    slam._gi_v_max = 1.5
+    slam._gi_omega_max = 120.0
 
     decision = evaluate_gi_keyframe(
         slam, 1, EmptyModel(), translated_pose(0.1))
 
-    assert decision.selected is True
-    assert decision.reason == "high_motion_guard"
+    assert decision.selected is False
+    assert decision.reason == "high_motion_reject"
     assert decision.components["frame_gap"] == 1
     assert decision.components["linear_velocity_mps"] == pytest.approx(3.0)
     assert decision.components["motion_penalty"] == pytest.approx(2.0)
 
 
-def test_high_motion_guard_does_not_select_invalid_depth_frame():
+def test_high_motion_policy_does_not_select_invalid_depth_frame():
     class EmptyModel:
         def get_xyz(self):
             return torch.empty((0, 3))
@@ -197,7 +197,7 @@ def test_high_motion_guard_does_not_select_invalid_depth_frame():
     slam.mapping_frame_ids = [0]
     slam._gi_min_interval = 1
     slam._gi_max_gap = 10
-    slam._gi_high_motion_max_gap = 3
+    slam._gi_stable_gap = 3
     slam._gi_prev_frame_id = 2
     slam._gi_prev_c2w = np.eye(4)
     slam._gi_fps = 30.0
@@ -207,8 +207,8 @@ def test_high_motion_guard_does_not_select_invalid_depth_frame():
     slam._gi_w_covis = 1.0
     slam._gi_w_base = 1.0
     slam._gi_w_mot = 2.0
-    slam._gi_v_max = 0.8
-    slam._gi_omega_max = 50.0
+    slam._gi_v_max = 1.5
+    slam._gi_omega_max = 120.0
 
     decision = evaluate_gi_keyframe(
         slam, 3, EmptyModel(), translated_pose(0.1))
@@ -229,7 +229,7 @@ def test_forced_selection_does_not_override_invalid_depth(frame_id):
     slam.mapping_frame_ids = [0]
     slam._gi_min_interval = 1
     slam._gi_max_gap = 10
-    slam._gi_high_motion_max_gap = 3
+    slam._gi_stable_gap = 3
     slam._gi_prev_frame_id = frame_id - 1
     slam._gi_prev_c2w = np.eye(4)
     slam._gi_fps = 30.0
@@ -249,7 +249,7 @@ def test_forced_selection_does_not_override_invalid_depth(frame_id):
     assert decision.reason == "invalid_depth"
 
 
-def test_high_motion_guard_reason_precedes_normal_max_gap():
+def test_emergency_gap_selects_after_continuous_high_motion():
     class EmptyModel:
         def get_xyz(self):
             return torch.empty((0, 3))
@@ -260,7 +260,7 @@ def test_high_motion_guard_reason_precedes_normal_max_gap():
     slam.mapping_frame_ids = [0]
     slam._gi_min_interval = 1
     slam._gi_max_gap = 10
-    slam._gi_high_motion_max_gap = 3
+    slam._gi_stable_gap = 3
     slam._gi_prev_frame_id = 9
     slam._gi_prev_c2w = np.eye(4)
     slam._gi_fps = 30.0
@@ -270,14 +270,47 @@ def test_high_motion_guard_reason_precedes_normal_max_gap():
     slam._gi_w_covis = 1.0
     slam._gi_w_base = 1.0
     slam._gi_w_mot = 2.0
-    slam._gi_v_max = 0.8
-    slam._gi_omega_max = 50.0
+    slam._gi_v_max = 1.5
+    slam._gi_omega_max = 120.0
 
     decision = evaluate_gi_keyframe(
         slam, 10, EmptyModel(), translated_pose(0.1))
 
     assert decision.selected is True
-    assert decision.reason == "high_motion_guard"
+    assert decision.reason == "emergency_gap"
+
+
+def test_stable_gap_selects_without_expensive_frustum_scoring():
+    class ModelWhoseAccessRaises:
+        def get_xyz(self):
+            raise AssertionError("stable-gap selection must skip IoU scoring")
+
+    slam = type("SlamState", (), {})()
+    slam.dataset = HighMotionDataset()
+    slam.dataset.intrinsics = np.eye(3)
+    slam.mapping_frame_ids = [0]
+    slam._gi_min_interval = 2
+    slam._gi_stable_gap = 3
+    slam._gi_max_gap = 10
+    slam._gi_prev_frame_id = 2
+    slam._gi_prev_c2w = np.eye(4)
+    slam._gi_fps = 30.0
+    slam._gi_use_imu_gyro = False
+    slam._gi_kf_c2ws = {0: np.eye(4)}
+    slam._gi_score_threshold = 0.1
+    slam._gi_w_covis = 1.0
+    slam._gi_w_base = 1.0
+    slam._gi_w_mot = 2.0
+    slam._gi_v_max = 1.5
+    slam._gi_omega_max = 120.0
+
+    decision = evaluate_gi_keyframe(
+        slam, 3, ModelWhoseAccessRaises(), translated_pose(0.01))
+
+    assert decision.selected is True
+    assert decision.reason == "stable_gap"
+    assert decision.components["frame_gap"] == 3
+    assert decision.components["motion_penalty"] == pytest.approx(0.0)
 
 
 def test_selector_reprojects_same_current_gaussian_set_for_both_views(
@@ -303,7 +336,7 @@ def test_selector_reprojects_same_current_gaussian_set_for_both_views(
     slam.mapping_frame_ids = [0]
     slam._gi_min_interval = 1
     slam._gi_max_gap = 30
-    slam._gi_high_motion_max_gap = 3
+    slam._gi_stable_gap = 3
     slam._gi_prev_frame_id = 0
     slam._gi_prev_c2w = np.eye(4)
     slam._gi_fps = 30.0
@@ -313,8 +346,8 @@ def test_selector_reprojects_same_current_gaussian_set_for_both_views(
     slam._gi_w_covis = 1.0
     slam._gi_w_base = 1.0
     slam._gi_w_mot = 2.0
-    slam._gi_v_max = 0.8
-    slam._gi_omega_max = 50.0
+    slam._gi_v_max = 1.5
+    slam._gi_omega_max = 120.0
 
     decision = evaluate_gi_keyframe(
         slam, 1, Model(), translated_pose(0.033275))

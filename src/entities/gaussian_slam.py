@@ -36,14 +36,13 @@ def should_use_dataset_pose(frame_id, gt_camera, has_ground_truth):
     return frame_id == 0 or (gt_camera and has_ground_truth)
 
 
-def validate_keyframe_intervals(
-        min_interval, max_gap, high_motion_max_gap):
-    intervals = (min_interval, max_gap, high_motion_max_gap)
+def validate_keyframe_intervals(min_interval, stable_gap, max_gap):
+    intervals = (min_interval, stable_gap, max_gap)
     if (any(type(value) is not int or value < 1 for value in intervals)
-            or not min_interval <= high_motion_max_gap <= max_gap):
+            or not min_interval <= stable_gap <= max_gap):
         raise ValueError(
             "keyframe intervals must be positive integers with "
-            "min_keyframe_interval <= high_motion_max_gap "
+            "min_keyframe_interval <= stable_keyframe_gap "
             "<= max_keyframe_gap")
 
 
@@ -90,7 +89,7 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
     if not np.any(np.isfinite(depth) & (depth > 0)):
         return KeyframeDecision(
             False, 0.0, "invalid_depth", {"valid_depth_pixels": 0})
-    if forced is not None and forced.reason == "first_frame":
+    if forced is not None and forced.reason in {"first_frame", "last_frame"}:
         return forced
     if last_keyframe_id is None:
         return KeyframeDecision(True, 0.0, "no_previous_keyframe", {})
@@ -108,19 +107,20 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
         motion["linear_velocity_mps"] > slam._gi_v_max
         or motion["angular_velocity_dps"] > slam._gi_omega_max)
     frame_gap = frame_id - last_keyframe_id
-    if high_motion and frame_gap >= slam._gi_high_motion_max_gap:
+    motion_components = {
+        **motion,
+        "frame_gap": frame_gap,
+        "motion_penalty": slam._gi_w_mot if high_motion else 0.0,
+    }
+    if high_motion:
+        if forced is not None and forced.reason == "max_gap":
+            return KeyframeDecision(
+                True, 0.0, "emergency_gap", motion_components)
         return KeyframeDecision(
-            True,
-            0.0,
-            "high_motion_guard",
-            {
-                **motion,
-                "frame_gap": frame_gap,
-                "motion_penalty": slam._gi_w_mot,
-            },
-        )
-    if forced is not None:
-        return forced
+            False, 0.0, "high_motion_reject", motion_components)
+    if frame_gap >= slam._gi_stable_gap:
+        return KeyframeDecision(
+            True, 0.0, "stable_gap", motion_components)
 
     gaussian_xyz = gaussian_model.get_xyz()
     frustum_ids_current = compute_gaussian_frustum_ids(
@@ -230,11 +230,10 @@ class GaussianSLAM(object):
         self._gi_w_base = kf_cfg.get("w_base", 1.0)
         self._gi_w_mot = kf_cfg.get("w_mot", 2.0)
         self._gi_score_threshold = kf_cfg.get("score_threshold", 0.5)
-        self._gi_v_max = kf_cfg.get("v_max", 0.8)
-        self._gi_omega_max = kf_cfg.get("omega_max", 50.0)
-        self._gi_min_interval = kf_cfg.get("min_keyframe_interval", 1)
-        self._gi_high_motion_max_gap = kf_cfg.get(
-            "high_motion_max_gap", 1)
+        self._gi_v_max = kf_cfg.get("v_max", 1.5)
+        self._gi_omega_max = kf_cfg.get("omega_max", 120.0)
+        self._gi_min_interval = kf_cfg.get("min_keyframe_interval", 2)
+        self._gi_stable_gap = kf_cfg.get("stable_keyframe_gap", 3)
         self._gi_fps = kf_cfg.get("fps", 30.0)  # fallback when no timestamps
 
         # Pre-compute mapping frame IDs (may be overridden dynamically by GI-SLAM)
@@ -264,13 +263,13 @@ class GaussianSLAM(object):
             config["mapping"], config.get("gaussian_pyramid", {}),
             self.dataset, self.logger)
         self._gi_use_imu_gyro = kf_cfg.get("use_imu_gyro", False)
-        self._gi_max_gap = kf_cfg.get("max_keyframe_gap", 30)
+        self._gi_max_gap = kf_cfg.get("max_keyframe_gap", 10)
         if not isinstance(self._gi_use_imu_gyro, bool):
             raise TypeError("keyframing.use_imu_gyro must be bool")
         validate_keyframe_intervals(
             self._gi_min_interval,
+            self._gi_stable_gap,
             self._gi_max_gap,
-            self._gi_high_motion_max_gap,
         )
         self._gi_decisions = {}
         self._gi_decision_counts = {}
