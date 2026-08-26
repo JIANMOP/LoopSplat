@@ -234,7 +234,7 @@ class GaussianSLAM(object):
         self._gi_omega_max = kf_cfg.get("omega_max", 50.0)
         self._gi_min_interval = kf_cfg.get("min_keyframe_interval", 1)
         self._gi_high_motion_max_gap = kf_cfg.get(
-            "high_motion_max_gap", 3)
+            "high_motion_max_gap", 1)
         self._gi_fps = kf_cfg.get("fps", 30.0)  # fallback when no timestamps
 
         # Pre-compute mapping frame IDs (may be overridden dynamically by GI-SLAM)

@@ -39,6 +39,8 @@ FMDataset 有相机—IMU标定，使用六策略：
 
 正式 IMU 策略只使用陀螺仪旋转约束：`lambda_imu_rot=0.001`、`lambda_imu_trans=0.0`。当前 FMDataset 没有可靠的逐序列加速度计 bias、长静止初始化窗口和轨迹 GT，直接启用双重积分平移约束会把不确定的速度与重力状态写入正式结论，因此不使用旧的旋转+平移配置。`+IMU` 和 `+ALL` 使用完全相同的 IMU 权重。
 
+FMDataset 的所有 C 组配置（包括 Baseline）固定使用单 OpenMP 线程的 CPU Open3D 视觉里程计（`odometer_device=cpu`、`odometer_omp_threads=1`）。GPU Open3D 以及多线程 CPU Open3D 在相同输入上存在不可忽略的重复运行差异，会把里程计随机性混入策略消融；正式运行器会在启动 C 组子进程前设置 `OMP_NUM_THREADS=1`，GPU 仍用于后续跟踪、渲染和建图。GI-KF 的高运动保护使用 `high_motion_max_gap=1`：线速度超过 `0.8 m/s` 或角速度超过 `50 deg/s` 时，在首个满足有效深度和最小间隔条件的帧立即选为关键帧，不再让运动惩罚连续跳过三个高运动帧。
+
 ### 1.3 场景编号
 
 | 组 | 编号与场景 |
@@ -110,10 +112,12 @@ python -m compileall -q src scripts run_slam.py run_slam_azure.py
 export DISABLE_WANDB=true
 
 # FM：分别验证基线、IMU、Pyramid 和 GI-KF
+export OMP_NUM_THREADS=1
 python run_slam.py configs/smoke/fm_baseline.yaml
 python run_slam.py configs/smoke/fm_imu.yaml
 python run_slam.py configs/smoke/fm_pyramid.yaml
 python run_slam.py configs/smoke/fm_keyframing.yaml
+unset OMP_NUM_THREADS
 
 # 有 GT 的公开数据
 python run_slam.py configs/smoke/tum_baseline.yaml
@@ -232,7 +236,7 @@ python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 | `config.yaml` | SLAM 实际保存的最终配置 |
 | `manifest.json` | Git 提交、实验代码指纹、配置哈希、命令、GPU/CUDA、请求/生效策略 |
 | `status.json` | 成功/失败、帧数、关键帧数、子图数、耗时、显存峰值 |
-| `run_statistics.yaml` | 关键帧/子图/耗时/显存明细，以及视觉里程计 CPU/冻结回退次数、原因和帧号 |
+| `run_statistics.yaml` | 关键帧/子图/耗时/显存明细，以及视觉里程计冻结次数、原因和帧号；C 组以 CPU 为主设备，因此正常情况下 CPU 二次回退次数为 0 |
 | `run.log` | 完整标准输出和错误日志 |
 | `effective_features.yaml` | 实际启用的 IMU/Pyramid/GI-KF |
 | `imu_tracking_summary.yaml` | IMU 样本、预测有效性、提交次数，以及最佳位姿上的旋转/平移残差和实际加权 loss |
@@ -395,6 +399,6 @@ python -m pytest -q
 - 汇总报 mixed source fingerprint/hardware/protocol：不能把这些结果放进同一统计组，应统一实验代码与环境后重跑受影响配置；
 - IMU 完整性失败：检查 `imu_tracking_summary.yaml` 的时间覆盖、丢弃行和 `valid_prediction_count`；
 - Pyramid 完整性失败：检查 `enabled` 与 `optimizer_step_count`，不能只看 YAML 开关；
-- FMDataset 出现 `Singular 6x6 linear system`：先查看 `run_statistics.yaml` 的 `visual_odometry`。GPU 异常解会在统一的 0.5 m/帧、60°/帧上限下由 CPU 重算，CPU 仍失败才冻结一帧；所有 C 组策略使用同一套配置。若 `identity_fallback_count` 持续增加或轨迹仍有大跳变，不应把该场景作为成功结果；
+- FMDataset 出现 `Singular 6x6 linear system`：先查看 `run_statistics.yaml` 的 `visual_odometry`。C 组固定由 CPU 求解，并统一使用 0.5 m/帧、60°/帧上限；CPU 求解失败或越界时冻结一帧。若 `identity_fallback_count` 持续增加或轨迹仍有大跳变，不应把该场景作为成功结果；
 - Azure 缓存异常：检查 `processed_images/redepth/processing_metadata.json`；标定或预处理配置变化后，加载器应自动重建缓存；
 - CUDA OOM：先确认当前代码已使用受限单 GPU FAISS 临时区；仍失败时记录配置与峰值并检查高斯数量。降低并发或只对回环重叠估计做统一的确定性采样，不得单独降低某个消融策略的优化预算。

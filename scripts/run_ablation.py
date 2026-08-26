@@ -60,7 +60,7 @@ STRATEGIES_A = [
      {"keyframing": {"enable_gi_slam": True, "score_threshold": 0.1,
                      "w_covis": 1.0, "w_base": 1.0, "w_mot": 2.0,
                      "max_keyframe_gap": 10,
-                     "high_motion_max_gap": 3},
+                     "high_motion_max_gap": 1},
       "gaussian_pyramid": {"enabled": False}}),
     ("_2", "+Pyramid",            "Photo-SLAM Gaussian Pyramid ON",
      {"keyframing": {"enable_gi_slam": False},
@@ -70,7 +70,7 @@ STRATEGIES_A = [
      {"keyframing": {"enable_gi_slam": True, "score_threshold": 0.1,
                      "w_covis": 1.0, "w_base": 1.0, "w_mot": 2.0,
                      "max_keyframe_gap": 10,
-                     "high_motion_max_gap": 3},
+                     "high_motion_max_gap": 1},
       "gaussian_pyramid": {"enabled": True,
                            "num_sub_levels": 2, "uses_per_level": 8}}),
 ]
@@ -90,7 +90,7 @@ STRATEGIES_BC = [
      {"keyframing": {"enable_gi_slam": True, "score_threshold": 0.1,
                      "w_covis": 1.0, "w_base": 1.0, "w_mot": 2.0,
                      "max_keyframe_gap": 10,
-                     "high_motion_max_gap": 3},
+                     "high_motion_max_gap": 1},
       "gaussian_pyramid": {"enabled": False},
       "tracking": {"use_imu": False}}),
     ("_3", "+Pyramid",              "Photo-SLAM pyramid only",
@@ -102,7 +102,7 @@ STRATEGIES_BC = [
      {"keyframing": {"enable_gi_slam": True, "score_threshold": 0.1,
                      "w_covis": 1.0, "w_base": 1.0, "w_mot": 2.0,
                      "max_keyframe_gap": 10,
-                     "high_motion_max_gap": 3},
+                     "high_motion_max_gap": 1},
       "gaussian_pyramid": {"enabled": True,
                            "num_sub_levels": 2, "uses_per_level": 8},
       "tracking": {"use_imu": False}}),
@@ -110,7 +110,7 @@ STRATEGIES_BC = [
      {"keyframing": {"enable_gi_slam": True, "score_threshold": 0.1,
                      "w_covis": 1.0, "w_base": 1.0, "w_mot": 2.0,
                      "max_keyframe_gap": 10,
-                     "high_motion_max_gap": 3},
+                     "high_motion_max_gap": 1},
       "gaussian_pyramid": {"enabled": True,
                            "num_sub_levels": 2, "uses_per_level": 8},
       "tracking": {"use_imu": True,
@@ -357,13 +357,23 @@ def main():
         print(f"      Running {runner} ...")
         t0 = time.time()
         try:
+            process_environment = os.environ.copy()
+            odometer_threads = merged.get("tracking", {}).get(
+                "odometer_omp_threads")
+            if odometer_threads is not None:
+                if type(odometer_threads) is not int or odometer_threads < 1:
+                    raise ValueError(
+                        "tracking.odometer_omp_threads must be a positive integer")
+                process_environment["OMP_NUM_THREADS"] = str(
+                    odometer_threads)
             with open(
                     run_dir / "run.log", "w", buffering=1,
                     encoding="utf-8") as log_file:
                 process = subprocess.Popen(
                     command, cwd=PROJECT_ROOT, stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, text=True, bufsize=1,
-                    encoding="utf-8", errors="replace")
+                    encoding="utf-8", errors="replace",
+                    env=process_environment)
                 for line in process.stdout:
                     print(line, end="")
                     log_file.write(line)

@@ -13,6 +13,7 @@ from src.entities.tracker import (
     mean_over_valid_tracking_pixels,
     relative_camera_motion_from_tracking,
 )
+from src.utils.io_utils import load_config
 
 
 class IntervalDataset:
@@ -30,6 +31,18 @@ class IntervalDataset:
             valid=True,
             reason="",
         )
+
+
+class IntrinsicsDataset:
+    intrinsics = np.eye(3)
+
+
+def test_fm_tracker_uses_cpu_visual_odometry(cuda_device):
+    config = load_config("configs/FMDataset/dorm1_fast1.yaml")["tracking"]
+
+    tracker = Tracker(config, IntrinsicsDataset(), logger=None)
+
+    assert str(tracker.odometer.device) == "CPU:0"
 
 
 def make_tracker(device):

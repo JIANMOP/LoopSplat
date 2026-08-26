@@ -394,7 +394,7 @@ def test_formal_matrix_replaces_azure_with_eight_replica_scenes():
         assert merged["evaluation"]["run_reconstruction"] is False
 
 
-def test_every_formal_gi_strategy_uses_calibrated_score_and_gap():
+def test_every_formal_gi_strategy_uses_calibrated_score_and_immediate_guard():
     gi_experiments = [
         experiment for experiment in EXPERIMENTS
         if experiment["overrides"].get("keyframing", {}).get(
@@ -410,7 +410,7 @@ def test_every_formal_gi_strategy_uses_calibrated_score_and_gap():
         for experiment in gi_experiments
     )
     assert all(
-        experiment["overrides"]["keyframing"]["high_motion_max_gap"] == 3
+        experiment["overrides"]["keyframing"]["high_motion_max_gap"] == 1
         for experiment in gi_experiments
     )
 
@@ -433,6 +433,20 @@ def test_formal_imu_strategy_uses_weak_rotation_only_prior():
         experiment["overrides"]["tracking"]["lambda_imu_rot"] == 0.001
         for experiment in imu_experiments
     )
+
+
+def test_every_formal_fm_experiment_uses_single_thread_cpu_odometry():
+    fm_experiments = [
+        experiment for experiment in EXPERIMENTS
+        if experiment["group"] == "C"
+    ]
+
+    assert fm_experiments
+    for experiment in fm_experiments:
+        merged = deep_merge(
+            load_yaml(experiment["config"]), experiment["overrides"])
+        assert merged["tracking"]["odometer_device"] == "cpu"
+        assert merged["tracking"]["odometer_omp_threads"] == 1
 
 
 def test_formal_matrix_routes_every_experiment_to_selected_output_root(
@@ -505,7 +519,11 @@ def test_runner_returns_failure_when_a_job_process_fails(
     config = {
         "dataset_name": "fm_dataset",
         "data": {"output_path": str(tmp_path / "C2_2")},
-        "tracking": {"use_imu": False},
+        "tracking": {
+            "use_imu": False,
+            "odometer_device": "cpu",
+            "odometer_omp_threads": 1,
+        },
         "keyframing": {"enable_gi_slam": True},
         "gaussian_pyramid": {"enabled": False},
     }
@@ -540,11 +558,17 @@ def test_runner_returns_failure_when_a_job_process_fails(
         run_ablation_module, "write_manifest", lambda *args: None)
     monkeypatch.setattr(
         run_ablation_module, "write_status", lambda *args, **kwargs: None)
+    process_kwargs = {}
+
+    def start_process(*args, **kwargs):
+        process_kwargs.update(kwargs)
+        return FailedProcess()
+
     monkeypatch.setattr(
-        run_ablation_module.subprocess, "Popen",
-        lambda *args, **kwargs: FailedProcess())
+        run_ablation_module.subprocess, "Popen", start_process)
 
     assert run_ablation_module.main() == 1
+    assert process_kwargs["env"]["OMP_NUM_THREADS"] == "1"
 
 
 def test_replica_report_uses_four_strategy_matrix_with_trajectory_columns():

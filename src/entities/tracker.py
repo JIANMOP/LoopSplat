@@ -92,6 +92,7 @@ class Tracker(object):
         self.odometer = VisualOdometer(
             self.dataset.intrinsics,
             self.config["odometer_method"],
+            device=self.config.get("odometer_device", "cuda"),
             cpu_fallback=self.config.get("odometer_cpu_fallback", True),
             max_translation_m=self.config.get(
                 "odometer_max_translation_m"),
