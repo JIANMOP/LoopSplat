@@ -152,7 +152,7 @@ def test_active_slam_selector_keeps_gyro_disabled():
     assert decision.components["gyro_assistance_used"] is False
 
 
-def test_high_motion_frame_is_rejected_before_emergency_gap():
+def test_high_motion_frame_is_rejected_before_coverage_rescue_gap():
     class EmptyModel:
         def get_xyz(self):
             return torch.empty((0, 3))
@@ -164,7 +164,7 @@ def test_high_motion_frame_is_rejected_before_emergency_gap():
     slam._gi_min_interval = 1
     slam._gi_max_gap = 10
     slam._gi_stable_gap = 3
-    slam._gi_prev_frame_id = 0
+    slam._gi_prev_frame_id = 1
     slam._gi_prev_c2w = np.eye(4)
     slam._gi_fps = 30.0
     slam._gi_use_imu_gyro = False
@@ -177,11 +177,11 @@ def test_high_motion_frame_is_rejected_before_emergency_gap():
     slam._gi_omega_max = 120.0
 
     decision = evaluate_gi_keyframe(
-        slam, 1, EmptyModel(), translated_pose(0.1))
+        slam, 2, EmptyModel(), translated_pose(0.1))
 
     assert decision.selected is False
     assert decision.reason == "high_motion_reject"
-    assert decision.components["frame_gap"] == 1
+    assert decision.components["frame_gap"] == 2
     assert decision.components["linear_velocity_mps"] == pytest.approx(3.0)
     assert decision.components["motion_penalty"] == pytest.approx(2.0)
 
@@ -249,10 +249,10 @@ def test_forced_selection_does_not_override_invalid_depth(frame_id):
     assert decision.reason == "invalid_depth"
 
 
-def test_emergency_gap_selects_after_continuous_high_motion():
-    class EmptyModel:
+def test_coverage_rescue_selects_third_continuous_high_motion_frame():
+    class ModelWhoseAccessRaises:
         def get_xyz(self):
-            return torch.empty((0, 3))
+            raise AssertionError("coverage rescue must skip IoU scoring")
 
     slam = type("SlamState", (), {})()
     slam.dataset = LongHighMotionDataset()
@@ -261,7 +261,7 @@ def test_emergency_gap_selects_after_continuous_high_motion():
     slam._gi_min_interval = 1
     slam._gi_max_gap = 10
     slam._gi_stable_gap = 3
-    slam._gi_prev_frame_id = 9
+    slam._gi_prev_frame_id = 2
     slam._gi_prev_c2w = np.eye(4)
     slam._gi_fps = 30.0
     slam._gi_use_imu_gyro = False
@@ -274,10 +274,12 @@ def test_emergency_gap_selects_after_continuous_high_motion():
     slam._gi_omega_max = 120.0
 
     decision = evaluate_gi_keyframe(
-        slam, 10, EmptyModel(), translated_pose(0.1))
+        slam, 3, ModelWhoseAccessRaises(), translated_pose(0.1))
 
     assert decision.selected is True
-    assert decision.reason == "emergency_gap"
+    assert decision.reason == "high_motion_coverage_rescue"
+    assert decision.components["frame_gap"] == 3
+    assert decision.components["motion_penalty"] == pytest.approx(2.0)
 
 
 def test_stable_gap_selects_without_expensive_frustum_scoring():

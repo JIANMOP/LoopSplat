@@ -113,9 +113,10 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
         "motion_penalty": slam._gi_w_mot if high_motion else 0.0,
     }
     if high_motion:
-        if forced is not None and forced.reason == "max_gap":
+        if frame_gap >= slam._gi_stable_gap:
             return KeyframeDecision(
-                True, 0.0, "emergency_gap", motion_components)
+                True, 0.0, "high_motion_coverage_rescue",
+                motion_components)
         return KeyframeDecision(
             False, 0.0, "high_motion_reject", motion_components)
     if frame_gap >= slam._gi_stable_gap:

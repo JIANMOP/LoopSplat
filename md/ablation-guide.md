@@ -41,7 +41,7 @@ FMDataset 有相机—IMU标定，使用六策略：
 
 FMDataset 的所有 C 组配置（包括 Baseline）固定使用单 OpenMP 线程的 CPU Open3D 视觉里程计（`odometer_device=cpu`、`odometer_omp_threads=1`）。GPU Open3D 以及多线程 CPU Open3D 在相同输入上存在不可忽略的重复运行差异，会把里程计随机性混入策略消融；正式运行器会在启动 C 组子进程前设置 `OMP_NUM_THREADS=1`，GPU 仍用于后续跟踪、渲染和建图。
 
-GI-KF 使用与原论文一致的“高速排除、稳定帧优先”原则，并针对 LoopSplat 增加防饿死兜底。正式参数固定为 `v_max=1.5 m/s`、`omega_max=120 deg/s`、`min_keyframe_interval=2`、`stable_keyframe_gap=3`、`max_keyframe_gap=10`，且 `use_imu_gyro=false`，不会读取或改变正式 IMU 跟踪策略。首尾帧和子图边界帧仍保留；距上一关键帧不足 2 帧时跳过；高速候选在 gap 小于 10 时拒绝；低速候选在 gap 达到 3 时直接选取并跳过高斯视锥 IoU 计算；只有连续高速导致 gap 达到 10 时才以 `emergency_gap` 选入一帧。gap 恰为 2 的低速候选才计算 GI 分数，阈值保持 `0.1`。因此正常关键帧间隔为 2–3 帧，目标关键帧率约为 33%–50%；实际结果必须如实报告，不能把该范围当作通过后删除异常数据的依据。
+GI-KF 使用“高速排除、稳定帧优先”原则，并针对 LoopSplat 的在线地图跟踪增加稀疏覆盖兜底。正式参数固定为 `v_max=1.5 m/s`、`omega_max=120 deg/s`、`min_keyframe_interval=2`、`stable_keyframe_gap=3`、`max_keyframe_gap=10`，且 `use_imu_gyro=false`，不会读取或改变正式 IMU 跟踪策略。首尾帧和子图边界帧仍保留；距上一关键帧不足 2 帧时跳过；gap=2 的高速候选拒绝；连续高速达到 gap=3 时以 `high_motion_coverage_rescue` 稀疏选入一帧，防止 LoopSplat 因地图覆盖长期不更新而跟踪失稳；低速候选在 gap 达到 3 时以 `stable_gap` 直接选取。两种 gap=3 分支都跳过高斯视锥 IoU 计算，只有 gap=2 的低速候选计算 GI 分数，阈值保持 `0.1`。因此正常关键帧间隔为 2–3 帧，目标关键帧率约为 33%–50%；实际结果必须如实报告，不能把该范围当作通过后删除异常数据的依据。
 
 ### 1.3 场景编号
 
@@ -251,7 +251,7 @@ python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 | `ate_aligned.json`、`rpe.json`、`trajectory_metrics.json` | 有 GT 数据的 ATE/RPE |
 | `global_refinement_status.json` | 明确记录正式评估未做额外全局细化 |
 
-`keyframe_decisions.jsonl` 中主要原因含义：`min_interval` 为间隔不足而跳过，`high_motion_reject` 为论文式高速排除，`score` 为 gap=2 时通过 GI 分数，`stable_gap` 为稳定候选达到 3 帧间隔，`emergency_gap` 为连续高速达到 10 帧后的防饿死兜底，`submap_boundary`、`first_frame`、`last_frame` 为结构性保留帧。若正式日志仍出现旧的 `high_motion_guard`，说明服务器没有同步到本版代码，该运行不得并入新实验。
+`keyframe_decisions.jsonl` 中主要原因含义：`min_interval` 为间隔不足而跳过，`high_motion_reject` 为 gap=2 时的高速排除，`score` 为 gap=2 时通过 GI 分数，`stable_gap` 为稳定候选达到 3 帧间隔，`high_motion_coverage_rescue` 为连续高速达到 3 帧后的 LoopSplat 稀疏覆盖兜底，`submap_boundary`、`first_frame`、`last_frame` 为结构性保留帧。若正式日志仍出现旧的 `high_motion_guard` 或 `emergency_gap`，说明服务器没有同步到本版代码，该运行不得并入新实验。
 
 ### 5.1 按需导出全局高斯 PLY
 
