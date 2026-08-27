@@ -41,7 +41,7 @@ FMDataset 有相机—IMU标定，使用六策略：
 
 FMDataset 的所有 C 组配置（包括 Baseline）固定使用单 OpenMP 线程的 CPU Open3D 视觉里程计（`odometer_device=cpu`、`odometer_omp_threads=1`）。GPU Open3D 以及多线程 CPU Open3D 在相同输入上存在不可忽略的重复运行差异，会把里程计随机性混入策略消融；正式运行器会在启动 C 组子进程前设置 `OMP_NUM_THREADS=1`，GPU 仍用于后续跟踪、渲染和建图。
 
-GI-KF 使用“持久关键帧 + 瞬时跟踪支撑”的双层策略。正式参数固定为 `v_max=1.5 m/s`、`omega_max=120 deg/s`、`min_keyframe_interval=2`、`stable_keyframe_gap=3`、`max_keyframe_gap=10`、`support_update_iterations=20`，且 `use_imu_gyro=false`，不会读取或改变正式 IMU 跟踪策略。首尾帧和子图边界帧仍作为持久关键帧保留；距上一持久关键帧不足 2 帧时跳过；gap=2 的 `below_threshold` 或 `high_motion_reject` 候选不持久保存，但使用当前全分辨率 RGB-D 视图执行 20 次轻量高斯优化，给下一帧跟踪提供地图支撑；连续高速达到 gap=3 时以 `high_motion_coverage_rescue` 稀疏选入持久关键帧，低速候选达到 gap=3 时以 `stable_gap` 选入。两种 gap=3 分支都跳过高斯视锥 IoU 计算，只有 gap=2 的低速候选计算 GI 分数，阈值保持 `0.1`。
+GI-KF 使用“持久关键帧 + 瞬时跟踪支撑”的双层策略。正式参数固定为 `v_max=1.5 m/s`、`omega_max=120 deg/s`、`min_keyframe_interval=2`、`stable_keyframe_gap=3`、`max_keyframe_gap=10`、`support_update_iterations=20`，且 `use_imu_gyro=false`，不会读取或改变正式 IMU 跟踪策略。首尾帧和子图边界帧仍作为持久关键帧保留；gap=1 的 `min_interval` 帧不持久保存，但在其跟踪完成后立即执行支撑更新，使 gap=2 帧能使用刚更新的地图；gap=2 的 `below_threshold` 或 `high_motion_reject` 候选也不持久保存并执行相同支撑；连续高速达到 gap=3 时以 `high_motion_coverage_rescue` 稀疏选入持久关键帧，低速候选达到 gap=3 时以 `stable_gap` 选入。两种 gap=3 分支都跳过高斯视锥 IoU 计算，只有 gap=2 的低速候选计算 GI 分数，阈值保持 `0.1`。无有效深度的帧不执行持久映射或支撑更新。
 
 瞬时支撑更新不播种或增长高斯、不剪枝、不构建或推进 Gaussian Pyramid、不写入 Mapper 持久关键帧窗口、子图 checkpoint、GI 参考缓存或闭环输入。因此论文中的 `keyframe_count` 只统计持久关键帧；支撑更新次数和耗时必须另外报告。正常持久关键帧间隔为 2–3 帧，目标持久关键帧率约为 33%–50%；实际结果必须如实报告，不能把该范围当作通过后删除异常数据的依据。
 
@@ -253,7 +253,7 @@ python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 | `ate_aligned.json`、`rpe.json`、`trajectory_metrics.json` | 有 GT 数据的 ATE/RPE |
 | `global_refinement_status.json` | 明确记录正式评估未做额外全局细化 |
 
-`keyframe_decisions.jsonl` 中主要原因含义：`min_interval` 为间隔不足而跳过，`high_motion_reject` 为 gap=2 时的高速排除，`score` 为 gap=2 时通过 GI 分数，`stable_gap` 为稳定候选达到 3 帧间隔，`high_motion_coverage_rescue` 为连续高速达到 3 帧后的 LoopSplat 稀疏覆盖兜底，`submap_boundary`、`first_frame`、`last_frame` 为结构性保留帧。`support_update=true` 只允许与 gap=2 的 `below_threshold` 或 `high_motion_reject` 同时出现，且此时 `selected=false`。若正式日志仍出现旧的 `high_motion_guard` 或 `emergency_gap`，说明服务器没有同步到本版代码，该运行不得并入新实验。
+`keyframe_decisions.jsonl` 中主要原因含义：`min_interval` 为 gap=1 时不持久保存但执行支撑，`high_motion_reject` 为 gap=2 时的高速排除与支撑，`score` 为 gap=2 时通过 GI 分数，`stable_gap` 为稳定候选达到 3 帧间隔，`high_motion_coverage_rescue` 为连续高速达到 3 帧后的 LoopSplat 稀疏覆盖兜底，`submap_boundary`、`first_frame`、`last_frame` 为结构性保留帧。`support_update=true` 只允许与有效深度的 gap=1 `min_interval`、gap=2 `below_threshold` 或 gap=2 `high_motion_reject` 同时出现，且此时 `selected=false`。若正式日志仍出现旧的 `high_motion_guard` 或 `emergency_gap`，说明服务器没有同步到本版代码，该运行不得并入新实验。
 
 检查支撑预算、数量以及与持久关键帧是否互斥：
 

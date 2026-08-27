@@ -55,8 +55,13 @@ def validate_support_update_iterations(iterations):
 def should_run_tracking_support(decision):
     return (
         not decision.selected
-        and decision.reason in {"below_threshold", "high_motion_reject"}
-        and decision.components.get("frame_gap") == 2
+        and (
+            (decision.reason == "min_interval"
+             and decision.components.get("frame_gap") == 1)
+            or (decision.reason in {
+                "below_threshold", "high_motion_reject"}
+                and decision.components.get("frame_gap") == 2)
+        )
     )
 
 
@@ -98,13 +103,13 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
         min_interval=slam._gi_min_interval,
         max_gap=slam._gi_max_gap,
     )
-    if forced is not None and not forced.selected:
-        return forced
 
     _, _, depth, _ = slam.dataset[frame_id]
     if not np.any(np.isfinite(depth) & (depth > 0)):
         return KeyframeDecision(
             False, 0.0, "invalid_depth", {"valid_depth_pixels": 0})
+    if forced is not None and not forced.selected:
+        return forced
     if forced is not None and forced.reason in {"first_frame", "last_frame"}:
         return forced
     if last_keyframe_id is None:

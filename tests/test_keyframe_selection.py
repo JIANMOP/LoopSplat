@@ -124,6 +124,8 @@ def test_submap_boundary_is_the_single_primary_selection_reason():
         (KeyframeDecision(
             False, 0.0, "below_threshold", {"frame_gap": 1}), False),
         (KeyframeDecision(
+            False, 0.0, "min_interval", {"frame_gap": 1}), True),
+        (KeyframeDecision(
             False, 0.0, "min_interval", {"frame_gap": 2}), False),
         (KeyframeDecision(
             False, 0.0, "invalid_depth", {"frame_gap": 2}), False),
@@ -135,6 +137,21 @@ def test_submap_boundary_is_the_single_primary_selection_reason():
 )
 def test_tracking_support_eligibility(decision, expected):
     assert should_run_tracking_support(decision) is expected
+
+
+def test_invalid_depth_at_minimum_interval_never_receives_support():
+    slam = type("SlamState", (), {})()
+    slam.dataset = InvalidDepthHighMotionDataset()
+    slam.mapping_frame_ids = [0]
+    slam._gi_min_interval = 2
+    slam._gi_max_gap = 10
+
+    decision = evaluate_gi_keyframe(
+        slam, 1, object(), translated_pose(0.01))
+
+    assert decision.selected is False
+    assert decision.reason == "invalid_depth"
+    assert should_run_tracking_support(decision) is False
 
 
 def test_decision_audit_keeps_support_separate_from_selection(tmp_path):

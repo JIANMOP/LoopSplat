@@ -42,18 +42,19 @@ is rejected.
 
 ### C. Add a transient lightweight tracking-support update
 
-This is the selected approach. A skipped GI candidate at persistent gap 2 gets
-a small current-view-only Gaussian optimization. It does not grow or prune
-Gaussians, is not retained in any keyframe window, and bypasses Gaussian
+This is the selected approach. A valid non-persistent candidate at gap 1 or
+gap 2 gets a small current-view-only Gaussian optimization. It does not grow or
+prune Gaussians, is not retained in any keyframe window, and bypasses Gaussian
 Pyramid. The following frame can still be selected as a persistent keyframe by
-the unchanged GI policy at gap 3.
+the unchanged GI policy.
 
 ## 3. Decision model
 
 The GI keyframe decision remains authoritative for persistent storage:
 
 - first frame, last frame, and submap boundaries are persistent;
-- persistent gap 1 is skipped by `min_interval`;
+- persistent gap 1 is not retained by `min_interval` but receives one
+  tracking-support update after its pose is estimated;
 - at persistent gap 2, a frame selected by GI score is persistent;
 - at persistent gap 2, `below_threshold` or `high_motion_reject` remains
   non-persistent but receives one tracking-support update;
@@ -62,8 +63,11 @@ The GI keyframe decision remains authoritative for persistent storage:
 - invalid-depth frames never receive persistent or support mapping.
 
 Support eligibility is therefore deterministic and does not introduce a new
-motion threshold. It depends only on the existing decision, valid depth, and
-the gap already recorded by GI-KF.
+motion threshold. It covers valid gap-1 `min_interval` decisions as well as
+valid gap-2 `below_threshold` and `high_motion_reject` decisions. The gap-1
+update ensures that the gap-2 tracker consumes a recently adapted map; this
+revision was approved after the gap-2-only pilot improved efficiency but still
+showed six adjacent translation jumps above 1 m.
 
 The formal support budget is `support_update_iterations: 20`. It is explicit in
 every formal GI strategy and validated as a positive integer. This is one fifth
@@ -161,7 +165,7 @@ The pilot passes only if all conditions hold:
 - adjacent translation P95 is at most 0.089 m;
 - at most one adjacent translation jump exceeds 1 m.
 
-If trajectory stability still fails, no further interval or threshold tweak is
-allowed. The GI-KF adaptation will be treated as incompatible with the current
-LoopSplat tracking architecture until a separately approved redesign is made.
-
+If trajectory stability still fails after adding gap-1 support, no further
+interval or threshold tweak is allowed. The GI-KF adaptation will be treated as
+incompatible with the current LoopSplat tracking architecture for the formal
+paper experiments.
