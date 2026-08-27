@@ -7,5 +7,6 @@ keyframing:
   min_keyframe_interval: 2
   stable_keyframe_gap: 3
   max_keyframe_gap: 10
+  support_update_iterations: 20
   v_max: 1.5
   omega_max: 120.0

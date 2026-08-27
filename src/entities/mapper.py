@@ -182,7 +182,53 @@ class Mapper(object):
         sample_ids = sample_ids[non_zero_depth_mask[sample_ids]]
         return pts[sample_ids, :].astype(np.float32)
 
-    def optimize_submap(self, keyframes: list, gaussian_model: GaussianModel, iterations: int = 100) -> dict:
+    def _build_keyframe(self, frame_id: int, estimate_c2w: np.ndarray,
+                        exposure_ab=None, include_pyramid: bool = True):
+        _, gt_color, gt_depth, _ = self.dataset[frame_id]
+        valid_depth = np.isfinite(gt_depth) & (gt_depth > 0)
+        if not np.any(valid_depth):
+            raise ValueError(
+                f"mapping frame {frame_id} has no valid depth pixels")
+
+        estimate_w2c = np.linalg.inv(estimate_c2w)
+        color_transform = torchvision.transforms.ToTensor()
+        keyframe = {
+            "color": color_transform(gt_color).cuda(),
+            "depth": np2torch(gt_depth, device="cuda"),
+            "render_settings": get_render_settings(
+                self.dataset.width, self.dataset.height,
+                self.dataset.intrinsics, estimate_w2c),
+            "exposure_ab": exposure_ab,
+        }
+
+        if include_pyramid and self._pyramid_enabled:
+            keyframe["pyramid_colors"] = build_image_pyramid(
+                keyframe["color"], self._pyramid_num_sub_levels)
+            depth_levels = build_depth_pyramid(
+                keyframe["depth"], torch.isfinite(keyframe["depth"])
+                & (keyframe["depth"] > 0),
+                self._pyramid_num_sub_levels)
+            keyframe["pyramid_depths"] = [
+                level_depth for level_depth, _ in depth_levels]
+            keyframe["pyramid_valid_masks"] = [
+                level_valid for _, level_valid in depth_levels]
+            keyframe["pyramid_render_settings"] = []
+            for level in range(self._pyramid_num_sub_levels):
+                width, height = get_pyramid_level_dims(
+                    self.dataset.width, self.dataset.height,
+                    level, self._pyramid_num_sub_levels)
+                render_settings = get_pyramid_render_settings(
+                    keyframe["render_settings"], width, height)
+                keyframe["pyramid_render_settings"].append(render_settings)
+            self._pyramid_step_counts.setdefault(frame_id, 0)
+
+        return gt_color, gt_depth, keyframe
+
+    def optimize_submap(self, keyframes: list,
+                        gaussian_model: GaussianModel,
+                        iterations: int = 100,
+                        use_pyramid: bool = True,
+                        prune: bool = True) -> dict:
         """
         Optimizes the submap by refining the parameters of the 3D Gaussian based on the observations
         from keyframes observing the submap.
@@ -208,7 +254,7 @@ class Mapper(object):
             frame_id, keyframe = keyframes[keyframe_id]
 
             # ── Photo-SLAM pyramid-level rendering ──────────────────
-            if self._pyramid_enabled:
+            if self._pyramid_enabled and use_pyramid:
                 level = self._current_pyramid_level(frame_id)
                 if level < self._pyramid_num_sub_levels:
                     cur_render_settings = keyframe["pyramid_render_settings"][level]
@@ -260,7 +306,9 @@ class Mapper(object):
 
             with torch.no_grad():
 
-                if iteration == iterations // 2 or iteration == iterations:
+                if (prune and (
+                        iteration == iterations // 2
+                        or iteration == iterations)):
                     prune_mask = (gaussian_model.get_opacity()
                                   < self.pruning_thre).squeeze()
                     gaussian_model.prune_points(prune_mask)
@@ -268,7 +316,7 @@ class Mapper(object):
                 # Optimizer step
                 if iteration < iterations:
                     gaussian_model.optimizer.step()
-                    if self._pyramid_enabled:
+                    if self._pyramid_enabled and use_pyramid:
                         self._advance_pyramid_level(frame_id, level)
                 gaussian_model.optimizer.zero_grad(set_to_none=True)
 
@@ -276,7 +324,7 @@ class Mapper(object):
         optimization_time = time.time() - start_time
         losses_dict["optimization_time"] = optimization_time
         losses_dict["optimization_iter_time"] = optimization_time / iterations
-        if self._pyramid_enabled:
+        if self._pyramid_enabled and use_pyramid:
             losses_dict["pyramid_usage"] = self.pyramid_usage_summary()
         return losses_dict
 
@@ -326,43 +374,8 @@ class Mapper(object):
             opt_dict: Dictionary with statistics about the optimization process
         """
 
-        _, gt_color, gt_depth, _ = self.dataset[frame_id]
-        valid_depth = np.isfinite(gt_depth) & (gt_depth > 0)
-        if not np.any(valid_depth):
-            raise ValueError(
-                f"mapping frame {frame_id} has no valid depth pixels")
-        estimate_w2c = np.linalg.inv(estimate_c2w)
-
-        color_transform = torchvision.transforms.ToTensor()
-        keyframe = {
-            "color": color_transform(gt_color).cuda(),
-            "depth": np2torch(gt_depth, device="cuda"),
-            "render_settings": get_render_settings(
-                self.dataset.width, self.dataset.height, self.dataset.intrinsics, estimate_w2c),
-            "exposure_ab": exposure_ab}
-
-        # ── Photo-SLAM: build Gaussian pyramid for this keyframe ──────
-        if self._pyramid_enabled:
-            keyframe["pyramid_colors"] = build_image_pyramid(
-                keyframe["color"], self._pyramid_num_sub_levels)
-            depth_levels = build_depth_pyramid(
-                keyframe["depth"], torch.isfinite(keyframe["depth"])
-                & (keyframe["depth"] > 0),
-                self._pyramid_num_sub_levels)
-            keyframe["pyramid_depths"] = [
-                level_depth for level_depth, _ in depth_levels]
-            keyframe["pyramid_valid_masks"] = [
-                level_valid for _, level_valid in depth_levels]
-            keyframe["pyramid_render_settings"] = []
-            for l in range(self._pyramid_num_sub_levels):
-                w_l, h_l = get_pyramid_level_dims(
-                    self.dataset.width, self.dataset.height,
-                    l, self._pyramid_num_sub_levels)
-                rs = get_pyramid_render_settings(
-                    keyframe["render_settings"], w_l, h_l)
-                keyframe["pyramid_render_settings"].append(rs)
-            self._pyramid_step_counts.setdefault(frame_id, 0)
-        # ────────────────────────────────────────────────────────────────
+        gt_color, gt_depth, keyframe = self._build_keyframe(
+            frame_id, estimate_c2w, exposure_ab)
 
         seeding_mask = self.compute_seeding_mask(gaussian_model, keyframe, is_new_submap)
         pts = self.seed_new_gaussians(
@@ -403,3 +416,15 @@ class Mapper(object):
         self.logger.log_mapping_iteration(frame_id, new_pts_num, gaussian_model.get_size(),
                                           optimization_time/max_iterations, opt_dict)
         return opt_dict
+
+    def support_update(self, frame_id: int, estimate_c2w: np.ndarray,
+                       gaussian_model: GaussianModel, iterations: int,
+                       exposure_ab=None) -> dict:
+        if type(iterations) is not int or iterations < 1:
+            raise ValueError(
+                "support update iterations must be a positive integer")
+        _, _, keyframe = self._build_keyframe(
+            frame_id, estimate_c2w, exposure_ab, include_pyramid=False)
+        return self.optimize_submap(
+            [(frame_id, keyframe)], gaussian_model, iterations,
+            use_pyramid=False, prune=False)

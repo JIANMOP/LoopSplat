@@ -46,6 +46,20 @@ def validate_keyframe_intervals(min_interval, stable_gap, max_gap):
             "<= max_keyframe_gap")
 
 
+def validate_support_update_iterations(iterations):
+    if type(iterations) is not int or iterations < 1:
+        raise ValueError(
+            "keyframing.support_update_iterations must be a positive integer")
+
+
+def should_run_tracking_support(decision):
+    return (
+        not decision.selected
+        and decision.reason in {"below_threshold", "high_motion_reject"}
+        and decision.components.get("frame_gap") == 2
+    )
+
+
 def build_dataset_config(config):
     dataset_config = {**config["data"], **config["cam"]}
     if "frame_limit" in config:
@@ -53,7 +67,8 @@ def build_dataset_config(config):
     return dataset_config
 
 
-def _record_keyframe_decision(slam, frame_id, decision):
+def _record_keyframe_decision(slam, frame_id, decision,
+                              support_update=False):
     previous = slam._gi_decisions.get(frame_id)
     if previous is not None:
         slam._gi_decision_counts[previous.reason] -= 1
@@ -63,6 +78,7 @@ def _record_keyframe_decision(slam, frame_id, decision):
     record = {
         "frame_id": frame_id,
         "selected": decision.selected,
+        "support_update": bool(support_update),
         "score": decision.score,
         "reason": decision.reason,
         "components": decision.components,
@@ -151,6 +167,7 @@ def evaluate_gi_keyframe(slam, frame_id, gaussian_model, estimated_c2w):
     components = {
         **decision.components,
         **motion,
+        "frame_gap": frame_gap,
         "reference_keyframe_id": last_keyframe_id,
         "reference_policy": "temporal_last",
     }
@@ -174,8 +191,12 @@ def build_run_statistics(mapping_frame_ids, frame_count, submap_count,
                          elapsed_seconds, peak_gpu_memory_bytes,
                          gi_keyframing_enabled=False,
                          gi_decision_counts=None,
-                         odometry_diagnostics=None):
+                         odometry_diagnostics=None,
+                         support_mapping_frame_ids=None,
+                         support_update_iterations=0,
+                         support_update_elapsed_seconds=0.0):
     unique_frame_ids = sorted(set(mapping_frame_ids))
+    unique_support_ids = sorted(set(support_mapping_frame_ids or []))
     decision_counts = dict(gi_decision_counts or {})
     decision_count = sum(decision_counts.values())
     score_selection_count = decision_counts.get("score", 0)
@@ -195,6 +216,10 @@ def build_run_statistics(mapping_frame_ids, frame_count, submap_count,
             "score_selection_ratio": (
                 score_selection_count / decision_count
                 if decision_count else 0.0),
+            "support_mapping_frame_ids": unique_support_ids,
+            "support_update_count": len(unique_support_ids),
+            "support_update_iterations": support_update_iterations,
+            "support_update_elapsed_seconds": support_update_elapsed_seconds,
         },
     }
 
@@ -236,6 +261,9 @@ class GaussianSLAM(object):
         self._gi_min_interval = kf_cfg.get("min_keyframe_interval", 2)
         self._gi_stable_gap = kf_cfg.get("stable_keyframe_gap", 3)
         self._gi_fps = kf_cfg.get("fps", 30.0)  # fallback when no timestamps
+        self._gi_support_iterations = kf_cfg.get(
+            "support_update_iterations", 20)
+        validate_support_update_iterations(self._gi_support_iterations)
 
         # Pre-compute mapping frame IDs (may be overridden dynamically by GI-SLAM)
         if self._gi_enabled:
@@ -248,6 +276,8 @@ class GaussianSLAM(object):
         self._gi_kf_c2ws = {}         # frame_id → np.ndarray (4, 4) estimated c2w
         self._gi_prev_c2w = None      # previous frame c2w for velocity computation
         self._gi_prev_frame_id = None # previous frame id for dt computation
+        self.support_mapping_frame_ids = []
+        self._gi_support_elapsed_seconds = 0.0
         # ────────────────────────────────────────────────────────────────
 
         self.keyframes_info = {}
@@ -447,6 +477,8 @@ class GaussianSLAM(object):
 
         for frame_id in range(len(self.dataset)):
 
+            run_support_update = False
+
             use_dataset_pose = should_use_dataset_pose(
                 frame_id,
                 self.config["tracking"].get("gt_camera", False),
@@ -470,7 +502,10 @@ class GaussianSLAM(object):
                 decision = mapping_keyframe_decision(
                     self, frame_id, gaussian_model, estimated_c2w,
                     starts_new_submap)
-                _record_keyframe_decision(self, frame_id, decision)
+                run_support_update = should_run_tracking_support(decision)
+                _record_keyframe_decision(
+                    self, frame_id, decision,
+                    support_update=run_support_update)
                 if decision.selected:
                     self.mapping_frame_ids.append(frame_id)
             # ──────────────────────────────────────────────────────────
@@ -517,6 +552,21 @@ class GaussianSLAM(object):
                         self, frame_id,
                         torch2np(self.estimated_c2ws[frame_id]))
                 # ───────────────────────────────────────────────────────────────────
+
+            elif run_support_update:
+                print("\nTracking-support update frame", frame_id)
+                support_started = time.perf_counter()
+                gaussian_model.training_setup(self.opt, exposure_ab)
+                self.mapper.support_update(
+                    frame_id,
+                    torch2np(self.estimated_c2ws[frame_id]),
+                    gaussian_model,
+                    self._gi_support_iterations,
+                    exposure_ab,
+                )
+                self.support_mapping_frame_ids.append(frame_id)
+                self._gi_support_elapsed_seconds += (
+                    time.perf_counter() - support_started)
 
             if frame_id == len(self.dataset) - 1 and self.config['lc']['final']:
                 print("\n Final loop closure ...")
@@ -602,6 +652,10 @@ class GaussianSLAM(object):
                 gi_keyframing_enabled=self._gi_enabled,
                 gi_decision_counts=self._gi_decision_counts,
                 odometry_diagnostics=self.tracker.odometry_diagnostics(),
+                support_mapping_frame_ids=self.support_mapping_frame_ids,
+                support_update_iterations=self._gi_support_iterations,
+                support_update_elapsed_seconds=(
+                    self._gi_support_elapsed_seconds),
             ),
             "run_statistics.yaml",
             directory=self.output_path,

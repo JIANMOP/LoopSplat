@@ -429,18 +429,49 @@ def formal_outputs_complete(run_dir):
             decisions_path = run_dir / "keyframe_decisions.jsonl"
             if not decisions_path.exists() or not decisions_path.read_text().strip():
                 return False
+            decisions = []
             for line in decisions_path.read_text().splitlines():
                 decision = json.loads(line)
-                if "frame_id" not in decision or "selected" not in decision:
+                if (type(decision.get("frame_id")) is not int
+                        or type(decision.get("selected")) is not bool
+                        or type(decision.get("support_update")) is not bool
+                        or not isinstance(decision.get("reason"), str)):
                     return False
+                decisions.append(decision)
             gi_statistics = statistics.get("gi_keyframing")
             if (not isinstance(gi_statistics, dict)
                     or gi_statistics.get("enabled") is not True):
+                return False
+            frame_count = statistics["frame_count"]
+            decision_frame_ids = [
+                decision["frame_id"] for decision in decisions]
+            if decision_frame_ids != list(range(frame_count)):
+                return False
+            persistent_ids = statistics.get("mapping_frame_ids")
+            if (not isinstance(persistent_ids, list)
+                    or any(type(frame_id) is not int
+                           for frame_id in persistent_ids)
+                    or persistent_ids != sorted(set(persistent_ids))
+                    or any(frame_id < 0 or frame_id >= frame_count
+                           for frame_id in persistent_ids)
+                    or statistics["keyframe_count"] != len(persistent_ids)):
+                return False
+            selected_ids = [
+                decision["frame_id"] for decision in decisions
+                if decision["selected"]]
+            if selected_ids != persistent_ids:
                 return False
             decision_counts = gi_statistics.get("decision_counts")
             if (not isinstance(decision_counts, dict)
                     or any(type(value) is not int or value < 0
                            for value in decision_counts.values())):
+                return False
+            logged_decision_counts = {}
+            for decision in decisions:
+                reason = decision["reason"]
+                logged_decision_counts[reason] = (
+                    logged_decision_counts.get(reason, 0) + 1)
+            if decision_counts != logged_decision_counts:
                 return False
             decision_count = sum(decision_counts.values())
             score_count = decision_counts.get("score", 0)
@@ -456,6 +487,31 @@ def formal_outputs_complete(run_dir):
                         score_count / decision_count,
                         rel_tol=1e-9,
                         abs_tol=1e-12)):
+                return False
+            support_ids = gi_statistics.get("support_mapping_frame_ids")
+            logged_support_ids = [
+                decision["frame_id"] for decision in decisions
+                if decision["support_update"]]
+            if (not isinstance(support_ids, list)
+                    or any(type(frame_id) is not int
+                           for frame_id in support_ids)
+                    or support_ids != sorted(set(support_ids))
+                    or any(frame_id < 0 or frame_id >= frame_count
+                           for frame_id in support_ids)
+                    or set(support_ids) & set(persistent_ids)
+                    or support_ids != logged_support_ids
+                    or gi_statistics.get(
+                        "support_update_count") != len(support_ids)):
+                return False
+            support_iterations = gi_statistics.get(
+                "support_update_iterations")
+            support_elapsed = gi_statistics.get(
+                "support_update_elapsed_seconds")
+            if (type(support_iterations) is not int
+                    or support_iterations < 1
+                    or type(support_elapsed) not in (int, float)
+                    or not math.isfinite(support_elapsed)
+                    or support_elapsed < 0):
                 return False
 
         if trajectory.get("status") == "available":

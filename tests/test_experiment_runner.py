@@ -84,6 +84,57 @@ def write_valid_formal_outputs(run_dir):
     }))
 
 
+def write_valid_gi_outputs(run_dir):
+    write_valid_formal_outputs(run_dir)
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["requested_features"]["gi_keyframing"] = True
+    manifest["effective_features"]["gi_keyframing"] = True
+    manifest_path.write_text(json.dumps(manifest))
+    decisions = [
+        {
+            "frame_id": 0,
+            "selected": True,
+            "support_update": False,
+            "score": 0.0,
+            "reason": "first_frame",
+            "components": {},
+        },
+        {
+            "frame_id": 1,
+            "selected": False,
+            "support_update": True,
+            "score": 0.0,
+            "reason": "below_threshold",
+            "components": {"frame_gap": 2},
+        },
+    ]
+    (run_dir / "keyframe_decisions.jsonl").write_text(
+        "".join(json.dumps(record) + "\n" for record in decisions))
+    (run_dir / "run_statistics.yaml").write_text(yaml.safe_dump({
+        "frame_count": 2,
+        "mapping_frame_ids": [0],
+        "keyframe_count": 1,
+        "submap_count": 1,
+        "slam_elapsed_seconds": 1.0,
+        "slam_peak_gpu_memory_bytes": 100,
+        "gi_keyframing": {
+            "enabled": True,
+            "decision_counts": {
+                "first_frame": 1,
+                "below_threshold": 1,
+            },
+            "decision_count": 2,
+            "score_selection_count": 0,
+            "score_selection_ratio": 0.0,
+            "support_mapping_frame_ids": [1],
+            "support_update_count": 1,
+            "support_update_iterations": 20,
+            "support_update_elapsed_seconds": 0.25,
+        },
+    }))
+
+
 def test_two_runs_never_share_a_directory(tmp_path):
     fixed_time = datetime(2026, 8, 22, 4, 0, tzinfo=timezone.utc)
 
@@ -426,6 +477,11 @@ def test_every_formal_gi_strategy_uses_paper_consistent_motion_policy():
         for experiment in gi_experiments
     )
     assert all(
+        experiment["overrides"]["keyframing"][
+            "support_update_iterations"] == 20
+        for experiment in gi_experiments
+    )
+    assert all(
         "high_motion_max_gap" not in experiment["overrides"]["keyframing"]
         for experiment in gi_experiments
     )
@@ -638,6 +694,9 @@ def test_run_statistics_count_unique_keyframes_and_submaps():
         peak_gpu_memory_bytes=2_000_000_000,
         gi_keyframing_enabled=True,
         gi_decision_counts={"first_frame": 1, "score": 2, "max_gap": 3},
+        support_mapping_frame_ids=[2, 2, 4],
+        support_update_iterations=20,
+        support_update_elapsed_seconds=1.25,
         odometry_diagnostics={
             "cpu_fallback_count": 2,
             "identity_fallback_count": 1,
@@ -657,6 +716,11 @@ def test_run_statistics_count_unique_keyframes_and_submaps():
     assert statistics["gi_keyframing"]["score_selection_count"] == 2
     assert statistics["gi_keyframing"]["score_selection_ratio"] == pytest.approx(
         2 / 6)
+    assert statistics["gi_keyframing"]["support_mapping_frame_ids"] == [2, 4]
+    assert statistics["gi_keyframing"]["support_update_count"] == 2
+    assert statistics["gi_keyframing"]["support_update_iterations"] == 20
+    assert statistics["gi_keyframing"][
+        "support_update_elapsed_seconds"] == 1.25
     assert statistics["visual_odometry"] == {
         "cpu_fallback_count": 2,
         "identity_fallback_count": 1,
@@ -678,6 +742,73 @@ def test_formal_gi_run_requires_decision_audit_statistics(tmp_path):
         "reason": "score",
         "components": {},
     }) + "\n")
+
+    assert formal_outputs_complete(tmp_path) is False
+
+
+def test_formal_gi_support_audit_accepts_consistent_outputs(tmp_path):
+    write_valid_gi_outputs(tmp_path)
+
+    assert formal_outputs_complete(tmp_path) is True
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "duplicate_support_id",
+        "negative_support_id",
+        "out_of_range_support_id",
+        "persistent_overlap",
+        "count_mismatch",
+        "log_mismatch",
+        "zero_iteration_budget",
+        "boolean_iteration_budget",
+        "negative_elapsed",
+        "nonfinite_elapsed",
+        "missing_support_flag",
+        "nonboolean_support_flag",
+    ],
+)
+def test_formal_gi_support_audit_rejects_inconsistent_outputs(
+        tmp_path, mutation):
+    write_valid_gi_outputs(tmp_path)
+    statistics_path = tmp_path / "run_statistics.yaml"
+    decisions_path = tmp_path / "keyframe_decisions.jsonl"
+    statistics = yaml.safe_load(statistics_path.read_text())
+    gi_statistics = statistics["gi_keyframing"]
+    decisions = [
+        json.loads(line) for line in decisions_path.read_text().splitlines()]
+
+    if mutation == "duplicate_support_id":
+        gi_statistics["support_mapping_frame_ids"] = [1, 1]
+        gi_statistics["support_update_count"] = 2
+    elif mutation == "negative_support_id":
+        gi_statistics["support_mapping_frame_ids"] = [-1]
+    elif mutation == "out_of_range_support_id":
+        gi_statistics["support_mapping_frame_ids"] = [2]
+    elif mutation == "persistent_overlap":
+        gi_statistics["support_mapping_frame_ids"] = [0]
+    elif mutation == "count_mismatch":
+        gi_statistics["support_update_count"] = 2
+    elif mutation == "log_mismatch":
+        gi_statistics["support_mapping_frame_ids"] = []
+        gi_statistics["support_update_count"] = 0
+    elif mutation == "zero_iteration_budget":
+        gi_statistics["support_update_iterations"] = 0
+    elif mutation == "boolean_iteration_budget":
+        gi_statistics["support_update_iterations"] = True
+    elif mutation == "negative_elapsed":
+        gi_statistics["support_update_elapsed_seconds"] = -1.0
+    elif mutation == "nonfinite_elapsed":
+        gi_statistics["support_update_elapsed_seconds"] = float("nan")
+    elif mutation == "missing_support_flag":
+        del decisions[0]["support_update"]
+    elif mutation == "nonboolean_support_flag":
+        decisions[1]["support_update"] = "yes"
+
+    statistics_path.write_text(yaml.safe_dump(statistics))
+    decisions_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in decisions))
 
     assert formal_outputs_complete(tmp_path) is False
 

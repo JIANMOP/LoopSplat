@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pytest
 import torch
@@ -6,6 +8,7 @@ import src.entities.gaussian_slam as gaussian_slam_module
 from src.entities.gaussian_slam import (
     evaluate_gi_keyframe,
     mapping_keyframe_decision,
+    should_run_tracking_support,
 )
 from src.utils.keyframe_selection import (
     KeyframeDecision,
@@ -70,6 +73,16 @@ def test_keyframe_interval_validation_rejects_invalid_stable_gap(
         gaussian_slam_module.validate_keyframe_intervals(*intervals)
 
 
+@pytest.mark.parametrize("iterations", [0, -1, 1.5, True])
+def test_support_iteration_validation_rejects_invalid_budget(iterations):
+    with pytest.raises(ValueError, match="support_update_iterations"):
+        gaussian_slam_module.validate_support_update_iterations(iterations)
+
+
+def test_support_iteration_validation_accepts_positive_integer():
+    gaussian_slam_module.validate_support_update_iterations(20)
+
+
 def test_frustum_proxy_uses_c2w_and_keeps_camera_center_ray(cuda_device):
     c2w = translated_pose(10.0)
     intrinsics = np.array([
@@ -99,6 +112,46 @@ def test_submap_boundary_is_the_single_primary_selection_reason():
 
     assert decision == KeyframeDecision(
         True, 0.0, "submap_boundary", {})
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected"),
+    [
+        (KeyframeDecision(
+            False, 0.0, "below_threshold", {"frame_gap": 2}), True),
+        (KeyframeDecision(
+            False, 0.0, "high_motion_reject", {"frame_gap": 2}), True),
+        (KeyframeDecision(
+            False, 0.0, "below_threshold", {"frame_gap": 1}), False),
+        (KeyframeDecision(
+            False, 0.0, "min_interval", {"frame_gap": 2}), False),
+        (KeyframeDecision(
+            False, 0.0, "invalid_depth", {"frame_gap": 2}), False),
+        (KeyframeDecision(
+            True, 0.7, "score", {"frame_gap": 2}), False),
+        (KeyframeDecision(
+            True, 0.0, "stable_gap", {"frame_gap": 3}), False),
+    ],
+)
+def test_tracking_support_eligibility(decision, expected):
+    assert should_run_tracking_support(decision) is expected
+
+
+def test_decision_audit_keeps_support_separate_from_selection(tmp_path):
+    slam = type("SlamState", (), {})()
+    slam.output_path = tmp_path
+    slam._gi_decisions = {}
+    slam._gi_decision_counts = {}
+    decision = KeyframeDecision(
+        False, 0.0, "below_threshold", {"frame_gap": 2})
+
+    gaussian_slam_module._record_keyframe_decision(
+        slam, 2, decision, support_update=True)
+
+    record = json.loads(
+        (tmp_path / "keyframe_decisions.jsonl").read_text())
+    assert record["selected"] is False
+    assert record["support_update"] is True
 
 
 def test_gi_kf_does_not_read_gyro_when_keyframe_imu_is_disabled():
@@ -358,6 +411,7 @@ def test_selector_reprojects_same_current_gaussian_set_for_both_views(
     assert calls[0][0] is current_gaussians
     assert calls[1][0] is current_gaussians
     assert decision.components["frustum_center_iou"] == pytest.approx(1.0)
+    assert decision.components["frame_gap"] == 1
 
 
 def test_frustum_visibility_is_empty_for_all_invalid_depth():

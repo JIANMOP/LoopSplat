@@ -41,7 +41,9 @@ FMDataset 有相机—IMU标定，使用六策略：
 
 FMDataset 的所有 C 组配置（包括 Baseline）固定使用单 OpenMP 线程的 CPU Open3D 视觉里程计（`odometer_device=cpu`、`odometer_omp_threads=1`）。GPU Open3D 以及多线程 CPU Open3D 在相同输入上存在不可忽略的重复运行差异，会把里程计随机性混入策略消融；正式运行器会在启动 C 组子进程前设置 `OMP_NUM_THREADS=1`，GPU 仍用于后续跟踪、渲染和建图。
 
-GI-KF 使用“高速排除、稳定帧优先”原则，并针对 LoopSplat 的在线地图跟踪增加稀疏覆盖兜底。正式参数固定为 `v_max=1.5 m/s`、`omega_max=120 deg/s`、`min_keyframe_interval=2`、`stable_keyframe_gap=3`、`max_keyframe_gap=10`，且 `use_imu_gyro=false`，不会读取或改变正式 IMU 跟踪策略。首尾帧和子图边界帧仍保留；距上一关键帧不足 2 帧时跳过；gap=2 的高速候选拒绝；连续高速达到 gap=3 时以 `high_motion_coverage_rescue` 稀疏选入一帧，防止 LoopSplat 因地图覆盖长期不更新而跟踪失稳；低速候选在 gap 达到 3 时以 `stable_gap` 直接选取。两种 gap=3 分支都跳过高斯视锥 IoU 计算，只有 gap=2 的低速候选计算 GI 分数，阈值保持 `0.1`。因此正常关键帧间隔为 2–3 帧，目标关键帧率约为 33%–50%；实际结果必须如实报告，不能把该范围当作通过后删除异常数据的依据。
+GI-KF 使用“持久关键帧 + 瞬时跟踪支撑”的双层策略。正式参数固定为 `v_max=1.5 m/s`、`omega_max=120 deg/s`、`min_keyframe_interval=2`、`stable_keyframe_gap=3`、`max_keyframe_gap=10`、`support_update_iterations=20`，且 `use_imu_gyro=false`，不会读取或改变正式 IMU 跟踪策略。首尾帧和子图边界帧仍作为持久关键帧保留；距上一持久关键帧不足 2 帧时跳过；gap=2 的 `below_threshold` 或 `high_motion_reject` 候选不持久保存，但使用当前全分辨率 RGB-D 视图执行 20 次轻量高斯优化，给下一帧跟踪提供地图支撑；连续高速达到 gap=3 时以 `high_motion_coverage_rescue` 稀疏选入持久关键帧，低速候选达到 gap=3 时以 `stable_gap` 选入。两种 gap=3 分支都跳过高斯视锥 IoU 计算，只有 gap=2 的低速候选计算 GI 分数，阈值保持 `0.1`。
+
+瞬时支撑更新不播种或增长高斯、不剪枝、不构建或推进 Gaussian Pyramid、不写入 Mapper 持久关键帧窗口、子图 checkpoint、GI 参考缓存或闭环输入。因此论文中的 `keyframe_count` 只统计持久关键帧；支撑更新次数和耗时必须另外报告。正常持久关键帧间隔为 2–3 帧，目标持久关键帧率约为 33%–50%；实际结果必须如实报告，不能把该范围当作通过后删除异常数据的依据。
 
 ### 1.3 场景编号
 
@@ -238,12 +240,12 @@ python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 | `config.yaml` | SLAM 实际保存的最终配置 |
 | `manifest.json` | Git 提交、实验代码指纹、配置哈希、命令、GPU/CUDA、请求/生效策略 |
 | `status.json` | 成功/失败、帧数、关键帧数、子图数、耗时、显存峰值 |
-| `run_statistics.yaml` | 关键帧/子图/耗时/显存明细，以及视觉里程计冻结次数、原因和帧号；C 组以 CPU 为主设备，因此正常情况下 CPU 二次回退次数为 0 |
+| `run_statistics.yaml` | 持久关键帧/支撑更新/子图/耗时/显存明细，以及视觉里程计冻结次数、原因和帧号；C 组以 CPU 为主设备，因此正常情况下 CPU 二次回退次数为 0 |
 | `run.log` | 完整标准输出和错误日志 |
 | `effective_features.yaml` | 实际启用的 IMU/Pyramid/GI-KF |
 | `imu_tracking_summary.yaml` | IMU 样本、预测有效性、提交次数，以及最佳位姿上的旋转/平移残差和实际加权 loss |
 | `gaussian_pyramid_summary.yaml` | Pyramid 是否生效及优化步数 |
-| `keyframe_decisions.jsonl` | GI-KF 每帧的选择记录，仅 GI-KF 开启时要求 |
+| `keyframe_decisions.jsonl` | GI-KF 每帧的持久选择与 `support_update` 布尔记录，仅 GI-KF 开启时要求 |
 | `evaluation_protocol.json` | 固定评估帧、地图来源、是否全局细化 |
 | `evaluation_frame_ids.json` | 固定观测视角帧号 |
 | `rendering_metrics_observed_view.json` | PSNR/SSIM/LPIPS/Depth-L1 |
@@ -251,7 +253,31 @@ python scripts/run_ablation.py --experiment R1_0 --seeds 0 --force
 | `ate_aligned.json`、`rpe.json`、`trajectory_metrics.json` | 有 GT 数据的 ATE/RPE |
 | `global_refinement_status.json` | 明确记录正式评估未做额外全局细化 |
 
-`keyframe_decisions.jsonl` 中主要原因含义：`min_interval` 为间隔不足而跳过，`high_motion_reject` 为 gap=2 时的高速排除，`score` 为 gap=2 时通过 GI 分数，`stable_gap` 为稳定候选达到 3 帧间隔，`high_motion_coverage_rescue` 为连续高速达到 3 帧后的 LoopSplat 稀疏覆盖兜底，`submap_boundary`、`first_frame`、`last_frame` 为结构性保留帧。若正式日志仍出现旧的 `high_motion_guard` 或 `emergency_gap`，说明服务器没有同步到本版代码，该运行不得并入新实验。
+`keyframe_decisions.jsonl` 中主要原因含义：`min_interval` 为间隔不足而跳过，`high_motion_reject` 为 gap=2 时的高速排除，`score` 为 gap=2 时通过 GI 分数，`stable_gap` 为稳定候选达到 3 帧间隔，`high_motion_coverage_rescue` 为连续高速达到 3 帧后的 LoopSplat 稀疏覆盖兜底，`submap_boundary`、`first_frame`、`last_frame` 为结构性保留帧。`support_update=true` 只允许与 gap=2 的 `below_threshold` 或 `high_motion_reject` 同时出现，且此时 `selected=false`。若正式日志仍出现旧的 `high_motion_guard` 或 `emergency_gap`，说明服务器没有同步到本版代码，该运行不得并入新实验。
+
+检查支撑预算、数量以及与持久关键帧是否互斥：
+
+```bash
+RUN_DIR=/root/autodl-fs/output/ablation/C2_2/seed_0/<run-dir>
+python - "$RUN_DIR" <<'PY'
+import sys
+import yaml
+from pathlib import Path
+
+run_dir = Path(sys.argv[1])
+stats = yaml.safe_load((run_dir / "run_statistics.yaml").read_text())
+gi = stats["gi_keyframing"]
+persistent = set(stats["mapping_frame_ids"])
+support = set(gi["support_mapping_frame_ids"])
+print("persistent_keyframes:", len(persistent))
+print("support_updates:", gi["support_update_count"])
+print("support_iterations:", gi["support_update_iterations"])
+print("support_elapsed_seconds:", gi["support_update_elapsed_seconds"])
+print("disjoint:", persistent.isdisjoint(support))
+PY
+```
+
+正式运行必须输出 `support_iterations: 20` 和 `disjoint: True`；目标 pilot 还要求 `support_updates` 大于 0。
 
 ### 5.1 按需导出全局高斯 PLY
 
@@ -287,7 +313,7 @@ python scripts/export_gaussian_ply.py "$RUN_DIR" \
 - 正式地图统一来自未额外细化的全局高斯拼接；
 - IMU 开启时至少一条有效预测，且数据异常行没有超过阈值；
 - Pyramid 开启时确实执行了优化步；
-- GI-KF 开启时确实记录了关键帧决策；
+- GI-KF 开启时确实记录了每帧持久选择和支撑决策，且两类 ID 唯一、有效、互斥并与统计文件一致；
 - 指标有限且深度有效像素数大于 0；
 - 有 GT 时 ATE/RPE 文件齐全，无 GT 时状态明确为跳过。
 
