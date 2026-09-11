@@ -1,113 +1,72 @@
-# Loop-Closure Memory Residency Design
+# 回环闭合显存驻留方案设计
 
-## Goal
+## 目标
 
-Remove the loop-closure GPU-memory growth that prevents long TUM and Replica
-sequences from completing, while preserving the existing LoopSplat algorithm,
-configuration, registration budget, selected views, losses, and evaluation
-protocol.
+解决长序列 TUM 和 Replica 实验因回环闭合显存持续增长而无法完成的问题，同时保持现有 LoopSplat 算法、配置、配准预算、视角选择、损失函数和评价协议不变。
 
-## Scope
+## 修改范围
 
-This change is limited to the lifetime and placement of loop-closure camera
-observations:
+本次修改仅调整回环闭合相机观测数据的生命周期和存放位置：
 
-- historical RGB observations remain on CPU while the pose graph is built;
-- pose-graph analysis cameras do not retain RGB, depth, or gradient masks;
-- GSR selects registration views from the unchanged descriptors before camera
-  copies are created;
-- only the selected source and target cameras are materialized on GPU.
+- 构建位姿图时，历史 RGB 观测始终驻留在 CPU；
+- 用于位姿图优化分析的相机不保留 RGB、深度或梯度掩码；
+- GSR 首先使用原有描述子选出配准视角，然后才创建相机副本；
+- 只有最终选中的源相机和目标相机会被加载到 GPU。
 
-The implementation must not change IMU tracking, Gaussian-pyramid scheduling,
-GI-KF selection, loop-candidate detection, GSR iteration counts, registration
-losses, or formal evaluation outputs.
+本次实现不得修改 IMU 跟踪、高斯金字塔调度、GI-KF 选择、回环候选检测、GSR 迭代次数、配准损失函数或正式评价输出。
 
-## Current Failure
+## 当前故障
 
-`Loop_closure.construct_pose_graph()` loads every historical keyframe camera.
-For datasets without `get_processed_image_paths`, `_make_camera()` immediately
-moves each RGB observation and its gradient mask to CUDA. The method then makes
-a deep copy of every camera for `cam_dict`. Finally,
-`gaussian_registration()` deep-copies the complete camera lists for the source
-and target submaps before selecting at most two views from each list.
+`Loop_closure.construct_pose_graph()` 会加载每一个历史关键帧相机。对于没有 `get_processed_image_paths` 方法的数据集，`_make_camera()` 会立即将每个 RGB 观测及其梯度掩码移动到 CUDA。随后，该方法为 `cam_dict` 深拷贝每一个相机。最后，`gaussian_registration()` 在选取每侧最多两个视角之前，再次深拷贝源子图和目标子图的完整相机列表。
 
-On TUM `fr2/xyz`, the failed runs contained about 3,000 keyframes. The duplicate
-camera observations filled 31.45 GiB before GSR requested its next 20 MiB CUDA
-allocation.
+在 TUM `fr2/xyz` 中，失败实验包含约 3000 个关键帧。重复的相机观测占用了 31.45 GiB 显存，导致 GSR 再申请 20 MiB CUDA 显存时失败。
 
-## Design
+## 设计方案
 
-### CPU-resident observations
+### CPU 驻留观测数据
 
-For datasets whose observations are returned as arrays, `_make_camera()` stores
-the RGB observation as a contiguous CPU tensor and keeps depth on CPU. It does
-not compute the gradient mask at construction time. Path-backed datasets retain
-their existing path-based behavior.
+对于以数组形式返回观测的数据集，`_make_camera()` 将 RGB 观测保存为连续的 CPU 张量，并将深度数据保留在 CPU。相机创建时不计算梯度掩码。基于文件路径加载的数据集继续保持现有行为。
 
-`Camera.load_rgb()` gains the ability to materialize an existing CPU RGB tensor
-on CUDA. Integer observations are converted to the same float32 `[0, 1]` range
-used by the current implementation. The gradient mask is computed only after
-the selected camera reaches CUDA. Existing path-backed loading remains
-unchanged.
+`Camera.load_rgb()` 增加从已有 CPU RGB 张量加载到 CUDA 的能力。整数类型观测将转换为与当前实现相同的 float32 `[0, 1]` 数值范围。只有被选中的相机加载到 CUDA 后，才计算梯度掩码。现有的路径加载行为保持不变。
 
-### Pose-only analysis cameras
+### 仅保留位姿的分析相机
 
-`construct_pose_graph()` continues to build `cam_dict`, because PGO analysis
-updates those poses. Each entry is still an independent camera copy, but its
-RGB, depth, and gradient-mask fields are cleared immediately. This preserves
-pose mutation isolation without duplicating observations.
+`construct_pose_graph()` 继续创建 `cam_dict`，因为位姿图优化分析需要独立更新其中的相机位姿。每个条目仍然是独立的相机副本，但副本中的 RGB、深度和梯度掩码字段会立即清除。这样既保留位姿修改隔离，又不会重复保存观测数据。
 
-### Select before copying
+### 先选择、后复制
 
-`gaussian_registration()` computes exactly the current descriptor similarity
-matrix and top-k indices before copying cameras. It then deep-copies only the
-selected source and target cameras. The Gaussian models remain independent
-copies as in the current code, and localization, rendering, loss construction,
-iteration count, probability weighting, and transformation estimation remain
-unchanged.
+`gaussian_registration()` 先按照当前公式计算描述子相似度矩阵和 top-k 索引，再复制相机。随后只深拷贝最终选中的源相机和目标相机。高斯模型仍然保持当前的独立副本；定位、渲染、损失构造、迭代次数、概率加权和变换估计全部保持不变。
 
-At most two source and two target observations are resident on CUDA for a
-registration pair. Temporary selected views are released when registration
-returns.
+每次配准最多只有两个源观测和两个目标观测驻留在 CUDA。配准返回后释放这些临时视角。
 
-## Compatibility and Provenance
+## 兼容性与实验溯源
 
-The change is an implementation-level memory optimization, but it changes the
-formal source fingerprint. Existing successful runs remain preserved under
-their original manifests. A short completed scene will be rerun to compare the
-old and new outputs before formal A4 experiments begin.
+这是一项工程层面的显存优化，但会改变正式实验的源代码指纹。以前成功的实验继续按照各自原有的清单文件保留。在正式运行 A4 之前，将重新运行一个已经成功的短场景，对比标签版本和新版本的输出。
 
-A4's four configurations will be rerun on the same new source and the same GPU.
-Replica will only be scheduled after the A4 validation passes.
+A4 的四个配置将使用相同的新代码和同一块 GPU 重新运行。只有 A4 验证通过后，才会安排 Replica 实验。
 
-## Error Handling
+## 异常处理
 
-- CPU observations must have a supported tensor or NumPy representation.
-- `Camera.load_rgb()` must reject unsupported shapes or dtypes rather than
-  silently changing pixels.
-- Selected camera copies remain isolated so a failed or completed localizer
-  cannot mutate the historical pose-graph cameras.
-- CUDA cache clearing may be used after references are released, but it is not
-  treated as the primary fix.
+- CPU 观测必须是受支持的张量或 NumPy 数组；
+- `Camera.load_rgb()` 遇到不支持的形状或数据类型时必须明确报错，不能静默改变像素；
+- 被选中的相机副本必须相互独立，确保定位成功或失败都不会修改历史位姿图相机；
+- 可以在引用释放后清理 CUDA 缓存，但不能把清理缓存作为主要修复手段。
 
-## Verification
+## 验证方案
 
-1. Unit-test CPU observation residency and CUDA materialization.
-2. Unit-test that view selection preserves the existing top-k UIDs and copies
-   only selected cameras.
-3. Unit-test that `cam_dict` entries are observation-free and pose-independent.
-4. Run the complete local test suite and compile checks.
-5. Run a local GPU smoke test.
-6. On the server, rerun a short old-success scene and compare loop decisions and
-   evaluation metrics with the tagged implementation.
-7. Run A4_0, A4_1, A4_2, and A4_3 sequentially in a visible tmux session and
-   audit formal outputs, peak GPU memory, and error logs.
+1. 单元测试验证观测数据驻留在 CPU，以及按需加载到 CUDA 的行为；
+2. 单元测试验证视角选择得到与原实现相同的 top-k 相机编号，并且只复制被选中的相机；
+3. 单元测试验证 `cam_dict` 条目不包含观测数据，且位姿与原相机相互独立；
+4. 运行完整的本地测试套件和编译检查；
+5. 运行本机 GPU 冒烟测试；
+6. 在服务器重新运行一个旧版本已经成功的短场景，对比回环决策和评价指标；
+7. 在可见的 tmux 会话中依次运行 A4_0、A4_1、A4_2 和 A4_3，并审计正式输出、显存峰值和错误日志。
 
-## Non-goals
+## 非目标
 
-- changing the number or definition of keyframes;
-- reducing image resolution;
-- changing the number of submaps or loop candidates;
-- changing GSR optimization or evaluation settings;
-- modifying IMU, Gaussian-pyramid, or GI-KF strategy behavior;
-- deleting prior experiment outputs.
+- 不改变关键帧数量或关键帧定义；
+- 不降低图像分辨率；
+- 不改变子图数量或回环候选；
+- 不改变 GSR 优化或评价设置；
+- 不修改 IMU、高斯金字塔或 GI-KF 策略行为；
+- 不删除以前的实验输出。
