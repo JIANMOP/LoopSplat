@@ -171,11 +171,31 @@ class Camera(nn.Module):
         return T
 
     def load_rgb(self, image=None):
-        
-        if image==None and hasattr(self, "rgb_path"):
-            self.original_image = torch.from_numpy(np.array(Image.open(self.rgb_path))).permute(2, 0, 1).cuda().float() / 255.0
-            self.compute_grad_mask(self.config)
-            
         if image is not None:
             self.original_image = image
             self.compute_grad_mask(self.config)
+            return
+
+        if hasattr(self, "rgb_path"):
+            self.original_image = (
+                torch.from_numpy(np.array(Image.open(self.rgb_path)))
+                .permute(2, 0, 1)
+                .to(device=self.device, dtype=torch.float32)
+                / 255.0
+            )
+            self.compute_grad_mask(self.config)
+            return
+
+        rgb = self.original_image
+        if not torch.is_tensor(rgb):
+            raise TypeError("RGB observation must be a torch.Tensor")
+        if rgb.ndim != 3 or rgb.shape[0] != 3:
+            raise ValueError("RGB observation must have shape (3, H, W)")
+        if rgb.dtype == torch.uint8:
+            rgb = rgb.to(device=self.device, dtype=torch.float32) / 255.0
+        elif rgb.is_floating_point():
+            rgb = rgb.to(device=self.device, dtype=torch.float32)
+        else:
+            raise TypeError("RGB observation must be uint8 or floating point")
+        self.original_image = rgb
+        self.compute_grad_mask(self.config)
