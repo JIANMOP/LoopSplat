@@ -107,6 +107,32 @@ def viewpoint_localizer(viewpoint, gaussians, base_lr: float=1e-3,
     
     return converged, rel_tsfm, loss_residual, loss_log
 
+
+def select_registration_views(src_dict, tgt_dict, device=None):
+    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    src_desc = src_dict["kf_desc"].to(device)
+    tgt_desc = tgt_dict["kf_desc"].to(device)
+
+    score_cross = torch.einsum("id,jd->ij", src_desc, tgt_desc)
+    score_best_src, _ = score_cross.topk(1)
+    _, src_indices = score_best_src.view(-1).topk(
+        min(2, score_best_src.numel()))
+
+    score_best_tgt, _ = score_cross.T.topk(1)
+    _, tgt_indices = score_best_tgt.view(-1).topk(
+        min(2, score_best_tgt.numel()))
+
+    src_views = [
+        copy.deepcopy(src_dict["cameras"][index.item()])
+        for index in src_indices
+    ]
+    tgt_views = [
+        copy.deepcopy(tgt_dict["cameras"][index.item()])
+        for index in tgt_indices
+    ]
+    return src_views, tgt_views
+
+
 def gaussian_registration(src_dict, tgt_dict, config: dict, visualize=False):
     """_summary_
 
@@ -130,8 +156,10 @@ def gaussian_registration(src_dict, tgt_dict, config: dict, visualize=False):
             "overlap": init_overlap.item()
         }
     
-    src_3dgs, src_view_list = copy.deepcopy(src_dict['gaussians']), copy.deepcopy(src_dict['cameras'])
-    tgt_3dgs, tgt_view_list = copy.deepcopy(tgt_dict['gaussians']), copy.deepcopy(tgt_dict['cameras'])
+    src_view_list, tgt_view_list = select_registration_views(
+        src_dict, tgt_dict)
+    src_3dgs = copy.deepcopy(src_dict['gaussians'])
+    tgt_3dgs = copy.deepcopy(tgt_dict['gaussians'])
     
     # compute gt tsfm
     src_keyframe= src_dict['cameras'][0].get_T.detach()
@@ -141,22 +169,6 @@ def gaussian_registration(src_dict, tgt_dict, config: dict, visualize=False):
     delta_src = src_gt.inverse() @ src_keyframe
     delta_tgt = tgt_gt.inverse() @ tgt_keyframe
     gt_tsfm = delta_tgt.inverse() @ delta_src
-    
-    # similarity choosing
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    src_desc, tgt_desc = src_dict['kf_desc'], tgt_dict['kf_desc']
-    
-    score_cross = torch.einsum("id,jd->ij", src_desc.to(device), tgt_desc.to(device))
-    score_best_src, _ = score_cross.topk(1)
-    k_src = min(2, score_best_src.numel())
-    _, ii = score_best_src.view(-1).topk(k_src)
-
-    score_best_tgt, _ = score_cross.T.topk(1)
-    k_tgt = min(2, score_best_tgt.numel())
-    _, jj = score_best_tgt.view(-1).topk(k_tgt)
-
-    src_view_list = [src_view_list[i.item()] for i in ii]
-    tgt_view_list = [tgt_view_list[j.item()] for j in jj]
     
     pred_list, residual_list, converged_list, loss_log_list = [], [], [], []
     

@@ -4,6 +4,7 @@ import torch
 from types import SimpleNamespace
 
 import src.entities.lc as loop_closure_module
+import src.gsr.solver as solver_module
 from src.entities.lc import Loop_closure
 from src.gsr.camera import Camera
 
@@ -106,3 +107,38 @@ def test_pose_only_camera_copy_drops_observations_and_isolates_pose(
     assert clone.depth is None
     assert clone.grad_mask is None
     assert not torch.equal(clone.T, camera.T)
+
+
+class CopyTrackedCamera:
+    def __init__(self, uid):
+        self.uid = uid
+        self.copy_count = 0
+
+    def __deepcopy__(self, memo):
+        self.copy_count += 1
+        return CopyTrackedCamera(self.uid)
+
+
+def tracked_submap(descriptors, prefix):
+    return {
+        "kf_desc": torch.tensor(descriptors, dtype=torch.float32),
+        "cameras": [
+            CopyTrackedCamera(f"{prefix}{index}")
+            for index in range(len(descriptors))
+        ],
+    }
+
+
+def test_registration_view_selection_preserves_topk_and_limits_copies():
+    source = tracked_submap(
+        [[1.0, 0.0], [0.0, 1.0], [0.8, 0.2]], "s")
+    target = tracked_submap(
+        [[1.0, 0.0], [0.0, 0.9], [0.7, 0.7]], "t")
+
+    src_views, tgt_views = solver_module.select_registration_views(
+        source, target, device="cpu")
+
+    assert [camera.uid for camera in src_views] == ["s0", "s1"]
+    assert [camera.uid for camera in tgt_views] == ["t0", "t1"]
+    assert sum(camera.copy_count for camera in source["cameras"]) == 2
+    assert sum(camera.copy_count for camera in target["cameras"]) == 2
