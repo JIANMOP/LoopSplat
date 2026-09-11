@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 import torch
+from types import SimpleNamespace
 
+import src.entities.lc as loop_closure_module
+from src.entities.lc import Loop_closure
 from src.gsr.camera import Camera
 
 
@@ -55,3 +58,51 @@ def test_camera_rejects_invalid_cpu_rgb_shape(cuda_device):
 
     with pytest.raises(ValueError, match="RGB observation"):
         camera.load_rgb()
+
+
+def make_loop_closer(cuda_device):
+    loop_closer = Loop_closure.__new__(Loop_closure)
+    loop_closer.device = str(cuda_device)
+    loop_closer.config = replica_gradient_config()
+    loop_closer.proj_matrix = torch.eye(4, device=cuda_device)
+    loop_closer.dataset = SimpleNamespace(
+        intrinsics=np.eye(3),
+        fovx=1.0,
+        fovy=1.0,
+        height=4,
+        width=5,
+    )
+    return loop_closer
+
+
+def test_loop_camera_keeps_array_observation_on_cpu(cuda_device):
+    loop_closer = make_loop_closer(cuda_device)
+    rgb = np.arange(3 * 4 * 5, dtype=np.uint8).reshape(4, 5, 3)
+    depth = np.ones((4, 5), dtype=np.float32)
+
+    camera = loop_closer._make_camera(
+        0, np.eye(4, dtype=np.float32), torch.eye(4), depth, rgb)
+
+    assert camera.original_image.device.type == "cpu"
+    assert camera.original_image.dtype == torch.uint8
+    assert camera.original_image.shape == (3, 4, 5)
+    assert camera.grad_mask is None
+
+
+def test_pose_only_camera_copy_drops_observations_and_isolates_pose(
+        cuda_device):
+    camera = make_camera(
+        torch.zeros((3, 2, 2), dtype=torch.uint8), cuda_device)
+    camera.depth = np.ones((2, 2), dtype=np.float32)
+    camera.grad_mask = torch.ones((1, 2, 2), device=cuda_device)
+
+    clone = loop_closure_module.pose_only_camera_copy(camera)
+    clone.update_RT(
+        torch.eye(3, device=cuda_device),
+        torch.ones(3, device=cuda_device),
+    )
+
+    assert clone.original_image is None
+    assert clone.depth is None
+    assert clone.grad_mask is None
+    assert not torch.equal(clone.T, camera.T)

@@ -46,6 +46,12 @@ class PGO_Edge:
     
     def __repr__(self) -> str:
         return self.__str__()
+
+
+def pose_only_camera_copy(camera):
+    clone = copy.deepcopy(camera)
+    clone.clean()
+    return clone
     
 class Loop_closure(object):
     def __init__(self, config: dict, dataset: BaseDataset, logger: Logger) -> None:
@@ -226,15 +232,21 @@ class Loop_closure(object):
             cam_i.rgb_path = rgb_path
             cam_i.depth_path = depth_path
         elif preloaded:
-            # rgb is already a (C,H,W) GPU tensor from cache
+            # rgb is already a (C,H,W) CPU tensor from cache
             cam_i.depth = depth
-            cam_i.original_image = rgb.cuda()
-            cam_i.compute_grad_mask(self.config)
+            if not torch.is_tensor(rgb):
+                raise TypeError("Cached RGB observation must be a torch.Tensor")
+            cam_i.original_image = rgb.detach().cpu().contiguous()
+            cam_i.grad_mask = None
         else:
             # rgb is a numpy (H,W,3) uint8 from dataset[kf_id]
-            cam_i.depth = depth
-            cam_i.original_image = (torch.from_numpy(rgb).float().cuda() / 255.0).permute(2, 0, 1)
-            cam_i.compute_grad_mask(self.config)
+            cam_i.depth = np.asarray(depth)
+            cam_i.original_image = (
+                torch.from_numpy(np.ascontiguousarray(rgb))
+                .permute(2, 0, 1)
+                .contiguous()
+            )
+            cam_i.grad_mask = None
         cam_i.config = self.config
         return cam_i
 
@@ -328,7 +340,7 @@ class Loop_closure(object):
             for cam in submap['cameras']:
                 self.kf_submap_ids.append(submap["submap_id"])
                 self.kf_ids.append(cam.uid)
-                self.cam_dict[cam.uid] = copy.deepcopy(cam)
+                self.cam_dict[cam.uid] = pose_only_camera_copy(cam)
         self.kf_submap_ids = np.array(self.kf_submap_ids)
         
         odometry_edges, loop_edges = [], []
