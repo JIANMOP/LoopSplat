@@ -207,7 +207,7 @@ class Loop_closure(object):
     
     def _make_camera(self, kf_id, c2w_gt, c2w_est, depth, rgb, preloaded=False):
         """Create a Camera object. ``preloaded=True`` means rgb is already a
-        (C,H,W) GPU tensor and depth is a numpy array (used from cache)."""
+        (C,H,W) CPU tensor and depth is a numpy array (used from cache)."""
         T_gt = torch.from_numpy(c2w_gt).to(self.device).inverse()
         T_est = torch.linalg.inv(c2w_est).to(self.device)
 
