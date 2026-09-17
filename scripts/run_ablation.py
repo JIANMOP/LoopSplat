@@ -79,6 +79,39 @@ STRATEGIES_A = [
                            "num_sub_levels": 2, "uses_per_level": 8}}),
 ]
 
+# Replica already maps every five frames. Its GI-KF policy therefore starts
+# scoring at the baseline cadence and may defer one frame when information
+# gain is low. Transient support updates are disabled because the baseline
+# tracker is already stable across this interval.
+STRATEGIES_R = [
+    ("_0", "Baseline",            "All OFF",
+     {"keyframing": {"enable_gi_slam": False},
+      "gaussian_pyramid": {"enabled": False}}),
+    ("_1", "+GI-KF",              "budget-matched GI keyframe selection ON",
+     {"keyframing": {"enable_gi_slam": True, "score_threshold": 0.1,
+                     "w_covis": 1.0, "w_base": 1.0, "w_mot": 2.0,
+                     "v_max": 1.5, "omega_max": 120.0,
+                     "min_keyframe_interval": 5,
+                     "stable_keyframe_gap": 6, "max_keyframe_gap": 10,
+                     "support_update_enabled": False,
+                     "support_update_iterations": 20},
+      "gaussian_pyramid": {"enabled": False}}),
+    ("_2", "+Pyramid",            "Photo-SLAM Gaussian Pyramid ON",
+     {"keyframing": {"enable_gi_slam": False},
+      "gaussian_pyramid": {"enabled": True,
+                           "num_sub_levels": 2, "uses_per_level": 8}}),
+    ("_3", "+GI-KF+Pyramid",      "budget-matched GI-KF + Pyramid",
+     {"keyframing": {"enable_gi_slam": True, "score_threshold": 0.1,
+                     "w_covis": 1.0, "w_base": 1.0, "w_mot": 2.0,
+                     "v_max": 1.5, "omega_max": 120.0,
+                     "min_keyframe_interval": 5,
+                     "stable_keyframe_gap": 6, "max_keyframe_gap": 10,
+                     "support_update_enabled": False,
+                     "support_update_iterations": 20},
+      "gaussian_pyramid": {"enabled": True,
+                           "num_sub_levels": 2, "uses_per_level": 8}}),
+]
+
 # Group C: calibrated IMU — all three strategies available
 STRATEGIES_BC = [
     ("_0", "Baseline",              "All OFF",
@@ -188,7 +221,7 @@ def build_experiments(output_root=None):
             })
 
     for scene_id, scene_name, config_path in SCENES_R:
-        for suffix, sname, sdesc, overrides in STRATEGIES_A:
+        for suffix, sname, sdesc, overrides in STRATEGIES_R:
             eid = scene_id + suffix
             exps.append({
                 "id": eid,

@@ -1,0 +1,15 @@
+inherit_from: configs/smoke/replica_baseline.yaml
+experiment_id: smoke_replica_keyframing
+frame_limit: 12
+data:
+  output_path: output/smoke/replica_keyframing
+keyframing:
+  enable_gi_slam: true
+  score_threshold: 0.1
+  min_keyframe_interval: 5
+  stable_keyframe_gap: 6
+  max_keyframe_gap: 10
+  support_update_enabled: false
+  support_update_iterations: 20
+  v_max: 1.5
+  omega_max: 120.0

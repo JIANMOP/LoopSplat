@@ -52,9 +52,10 @@ def validate_support_update_iterations(iterations):
             "keyframing.support_update_iterations must be a positive integer")
 
 
-def should_run_tracking_support(decision):
+def should_run_tracking_support(decision, enabled=True):
     return (
-        not decision.selected
+        enabled
+        and not decision.selected
         and (
             (decision.reason == "min_interval"
              and decision.components.get("frame_gap") == 1)
@@ -268,6 +269,8 @@ class GaussianSLAM(object):
         self._gi_fps = kf_cfg.get("fps", 30.0)  # fallback when no timestamps
         self._gi_support_iterations = kf_cfg.get(
             "support_update_iterations", 20)
+        self._gi_support_enabled = kf_cfg.get(
+            "support_update_enabled", True)
         validate_support_update_iterations(self._gi_support_iterations)
 
         # Pre-compute mapping frame IDs (may be overridden dynamically by GI-SLAM)
@@ -507,7 +510,8 @@ class GaussianSLAM(object):
                 decision = mapping_keyframe_decision(
                     self, frame_id, gaussian_model, estimated_c2w,
                     starts_new_submap)
-                run_support_update = should_run_tracking_support(decision)
+                run_support_update = should_run_tracking_support(
+                    decision, enabled=self._gi_support_enabled)
                 _record_keyframe_decision(
                     self, frame_id, decision,
                     support_update=run_support_update)

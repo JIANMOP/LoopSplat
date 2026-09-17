@@ -139,6 +139,13 @@ def test_tracking_support_eligibility(decision, expected):
     assert should_run_tracking_support(decision) is expected
 
 
+def test_tracking_support_can_be_disabled_for_budget_matched_datasets():
+    decision = KeyframeDecision(
+        False, 0.0, "below_threshold", {"frame_gap": 2})
+
+    assert should_run_tracking_support(decision, enabled=False) is False
+
+
 def test_invalid_depth_at_minimum_interval_never_receives_support():
     slam = type("SlamState", (), {})()
     slam.dataset = InvalidDepthHighMotionDataset()

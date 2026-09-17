@@ -23,6 +23,7 @@ from scripts.run_ablation import (
     load_yaml,
 )
 from src.entities.gaussian_slam import build_run_statistics
+from src.utils.io_utils import load_config
 from src.utils.experiment_utils import (
     create_run_directory,
     config_sha256,
@@ -445,9 +446,10 @@ def test_formal_matrix_replaces_azure_with_eight_replica_scenes():
         assert merged["evaluation"]["run_reconstruction"] is False
 
 
-def test_every_formal_gi_strategy_uses_paper_consistent_motion_policy():
+def test_validated_tum_and_fm_gi_strategies_keep_tracking_support_policy():
     gi_experiments = [
         experiment for experiment in EXPERIMENTS
+        if experiment["group"] in {"A", "C"}
         if experiment["overrides"].get("keyframing", {}).get(
             "enable_gi_slam", False)
     ]
@@ -482,9 +484,53 @@ def test_every_formal_gi_strategy_uses_paper_consistent_motion_policy():
         for experiment in gi_experiments
     )
     assert all(
+        experiment["overrides"]["keyframing"].get(
+            "support_update_enabled", True) is True
+        for experiment in gi_experiments
+    )
+    assert all(
         "high_motion_max_gap" not in experiment["overrides"]["keyframing"]
         for experiment in gi_experiments
     )
+
+
+def test_replica_gi_strategy_matches_baseline_budget_without_support_updates():
+    gi_experiments = [
+        experiment for experiment in EXPERIMENTS
+        if experiment["group"] == "R"
+        and experiment["overrides"].get("keyframing", {}).get(
+            "enable_gi_slam", False)
+    ]
+
+    assert len(gi_experiments) == 16
+    for experiment in gi_experiments:
+        keyframing = experiment["overrides"]["keyframing"]
+        assert keyframing["score_threshold"] == 0.1
+        assert keyframing["min_keyframe_interval"] == 5
+        assert keyframing["stable_keyframe_gap"] == 6
+        assert keyframing["max_keyframe_gap"] == 10
+        assert keyframing["support_update_enabled"] is False
+        assert keyframing["support_update_iterations"] == 20
+
+
+def test_replica_gi_smoke_uses_the_formal_budget_matched_policy():
+    config = load_config("configs/smoke/replica_keyframing.yaml")
+
+    assert config["dataset_name"] == "replica"
+    assert config["frame_limit"] == 12
+    expected_keyframing = {
+        "enable_gi_slam": True,
+        "score_threshold": 0.1,
+        "min_keyframe_interval": 5,
+        "stable_keyframe_gap": 6,
+        "max_keyframe_gap": 10,
+        "support_update_enabled": False,
+        "support_update_iterations": 20,
+    }
+    assert {
+        key: config["keyframing"][key]
+        for key in expected_keyframing
+    } == expected_keyframing
 
 
 def test_formal_imu_strategy_uses_weak_rotation_only_prior():
