@@ -46,3 +46,11 @@ Compare strategies only when the data, evaluation frames, base parameters, strat
 ## Internal-only provenance records from run manifests
 
 For each included run, collect and retain internally: Git commit, experiment source fingerprint, configuration hash and experiment-configuration hash, command, seed, Git-clean status, GPU/CUDA environment, requested/effective feature flags, evaluation-frame IDs, and formal-run status. Retain associated `effective_features.yaml`, `run_statistics.yaml`, `gaussian_pyramid_summary.yaml`, `imu_summary.yaml`, `rendering_metrics_observed_view.json`, and, where ground truth exists, trajectory metric files. These records never enter the manuscript, tables, supplementary package, or submission attachment.
+
+## Verified extraction snapshot (2026-09-19)
+
+The no-GPU extraction selected the latest successful finite-metric run for each available experiment/seed pair under `/root/autodl-fs/output/ablation`. It produced 70 records: 20 TUM RGB-D records (five scenes × four strategies), 32 Replica records (eight scenes × four strategies), and 18 FMDataset records (three scenes × six strategies). Every selected record uses the same fixed seed (`0`). This permits per-scene reporting and unweighted cross-scene macro averages, but not seed variance or statistical-significance claims.
+
+Three source records were independently checked against their JSON manifests and metric files: `A1_0`, `R1_3`, and `C1_5`. The extracted keyframe counts, elapsed times, peak memory, rendering metrics, and available trajectory metrics matched the source values. All 18 FMDataset records correctly retain blank ATE/RPE fields because this experiment set has no trajectory ground truth. The complete internal mapping from record to run directory, environment, and source identifier is stored in `result-source-audit.json`; manuscript-facing CSV files omit the internal source identifier.
+
+The selected runs include RTX 2080 Ti and RTX 4080 SUPER environments. Runtime and peak-memory comparisons are therefore made only between strategies for the same scene when the recorded GPU/CUDA environment is compatible. Cross-hardware aggregate values are descriptive and are not attributed solely to an algorithmic strategy.

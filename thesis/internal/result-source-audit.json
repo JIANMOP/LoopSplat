@@ -1,0 +1,562 @@
+[
+  {
+    "experiment_id": "A1_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A1_0/seed_0/20260827T144551Z_0455eb5a",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A1_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A1_1/seed_0/20260827T161721Z_9ff7acf6",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A1_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A1_2/seed_0/20260827T173710Z_65324c5a",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A1_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A1_3/seed_0/20260827T191211Z_15b5acbc",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A2_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A2_0/seed_0/20260827T203334Z_555547ec",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A2_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A2_1/seed_0/20260827T221623Z_e1354687",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A2_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A2_2/seed_0/20260827T234606Z_859d76d0",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A2_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A2_3/seed_0/20260828T012847Z_36a65540",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A3_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A3_0/seed_0/20260828T025543Z_8d50e2d7",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A3_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A3_1/seed_0/20260828T063934Z_58895ea1",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A3_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A3_2/seed_0/20260828T100958Z_39eee1b6",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A3_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A3_3/seed_0/20260828T135010Z_eb85b73a",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A4_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A4_0/seed_0/20260911T100314Z_4817cbd8",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A4_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A4_1/seed_0/20260911T174728Z_8ad7150b",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A4_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A4_2/seed_0/20260912T003048Z_86b24695",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A4_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A4_3/seed_0/20260912T080849Z_d883eb5b",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A5_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A5_0/seed_0/20260829T150030Z_229242b8",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A5_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A5_1/seed_0/20260829T211814Z_1ea357ea",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A5_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A5_2/seed_0/20260830T023831Z_d671281a",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "A5_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/A5_3/seed_0/20260830T084313Z_3be48ae9",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C1_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C1_0/seed_0/20260903T002542Z_a251ecec",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C1_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C1_1/seed_0/20260903T032128Z_b666d497",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C1_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C1_2/seed_0/20260903T063633Z_8ec9c9b7",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C1_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C1_3/seed_0/20260903T090238Z_acf8c2d8",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C1_4",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C1_4/seed_0/20260903T115935Z_db7780ca",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C1_5",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C1_5/seed_0/20260903T142926Z_905dfaa5",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C2_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C2_0/seed_0/20260903T171201Z_45db2c00",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C2_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C2_1/seed_0/20260903T200448Z_47ba2dc5",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C2_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C2_2/seed_0/20260827T110650Z_902c8cba",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C2_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C2_3/seed_0/20260903T232623Z_2da86f54",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C2_4",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C2_4/seed_0/20260904T023419Z_285a8501",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C2_5",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C2_5/seed_0/20260904T045605Z_7659234b",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C3_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C3_0/seed_0/20260904T074810Z_f095086e",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C3_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C3_1/seed_0/20260904T095341Z_935b698d",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C3_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C3_2/seed_0/20260904T121759Z_43f93029",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C3_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C3_3/seed_0/20260904T141855Z_7ecec23d",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C3_4",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C3_4/seed_0/20260904T163219Z_ff133d52",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "C3_5",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/C3_5/seed_0/20260904T183310Z_c4a9dafe",
+    "internal_source_id": "453d5a7b7be8714e5fd83cd90af5ef11d1cfff7ddf9b1baf80c060d62a393521",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R1_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R1_0/seed_0/20260913T050131Z_82498a60",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R1_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R1_1/seed_0/20260917T103556Z_9eaee847",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R1_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R1_2/seed_0/20260913T094247Z_ce3dddbb",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R1_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R1_3/seed_0/20260918T142136Z_c88b2082",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R2_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R2_0/seed_0/20260913T140504Z_5b509ef6",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R2_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R2_1/seed_0/20260918T020001Z_732f97d6",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R2_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R2_2/seed_0/20260913T183020Z_527f6eef",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R2_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R2_3/seed_0/20260918T161243Z_3678ae9f",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R3_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R3_0/seed_0/20260913T224543Z_f7a6f459",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R3_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R3_1/seed_0/20260918T035950Z_96ceb22b",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R3_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R3_2/seed_0/20260914T030120Z_199a6007",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R3_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R3_3/seed_0/20260918T180250Z_7b35e3fe",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R4_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R4_0/seed_0/20260914T073707Z_3a492b1a",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R4_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R4_1/seed_0/20260918T054343Z_005c5b59",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R4_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R4_2/seed_0/20260914T131442Z_5499edfe",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R4_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R4_3/seed_0/20260918T194750Z_296763e5",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R5_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R5_0/seed_0/20260914T181842Z_c5341632",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R5_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R5_1/seed_0/20260917T123006Z_6f74d0f0",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R5_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R5_2/seed_0/20260915T001119Z_459e2a03",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R5_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R5_3/seed_0/20260918T213900Z_9a40628c",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R6_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R6_0/seed_0/20260915T062315Z_f8912347",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R6_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R6_1/seed_0/20260918T073054Z_0e5e12f7",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R6_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R6_2/seed_0/20260915T103644Z_c4429284",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R6_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R6_3/seed_0/20260919T002538Z_18866713",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R7_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R7_0/seed_0/20260915T144745Z_be4393bc",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R7_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R7_1/seed_0/20260918T091025Z_1405e6bf",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R7_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R7_2/seed_0/20260916T062350Z_fa213b79",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R7_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R7_3/seed_0/20260919T021140Z_de769c79",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R8_0",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R8_0/seed_0/20260916T141727Z_f11a4fab",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R8_1",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R8_1/seed_0/20260917T151821Z_8eb34ba9",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R8_2",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R8_2/seed_0/20260916T182808Z_04d67831",
+    "internal_source_id": "24c5e18c9a859e5d2e7aee55b29f1c39880a54056077348d26fe0e277192f170",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  },
+  {
+    "experiment_id": "R8_3",
+    "seed": 0,
+    "run_dir": "/root/autodl-fs/output/ablation/R8_3/seed_0/20260919T051811Z_c05ac76c",
+    "internal_source_id": "775c1a40b8c34f6e41dc4a46864d151e5d5b6dd6355273d68cf5a533884da3c1",
+    "gpu_name": "NVIDIA GeForce RTX 4080 SUPER",
+    "cuda_runtime": "12.1"
+  }
+]
