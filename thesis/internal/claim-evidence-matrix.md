@@ -69,6 +69,7 @@ Each row covers the aligned English and Chinese sentence group in the listed sec
 | Q19 | §5.4 FMDataset ALL time/memory/keyframe values and IMU overhead | thesis/tables/efficiency-results.md C1–C3 Baseline, IMU, and ALL rows; thesis/tables/dataset-summary.csv corresponding C rows |
 | Q20 | §5.4 dataset-level submap counts | thesis/tables/dataset-summary.csv submap_count for R and A strategies |
 | Q21 | §5.6 70 controlled configurations | thesis/internal/experiment-audit.md “Verified extraction snapshot”; thesis/tables/result-source.csv |
+| Q22 | Abstract and §7 repeated TUM, Replica, and FMDataset headline values | Recomputed from thesis/tables/dataset-summary.csv using the same Baseline/strategy row pairs documented in Q06, Q10, and Q13 |
 
 ## Global wording warnings
 
