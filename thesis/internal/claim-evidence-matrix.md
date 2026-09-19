@@ -42,6 +42,34 @@ The English and Chinese method masters use the same equation numbers. The follow
 | (10) | Per-keyframe image-pyramid schedule | src/entities/mapper.py pyramid state and level selection; src/utils/mapper_utils.py build_image_pyramid, build_depth_pyramid, and render-setting scaling | Two sublevels and eight uses per sublevel are fixed in formal ablations. |
 | (11) | Mapping loss and scale consistency | src/entities/mapper.py map optimization; src/entities/losses.py scale regularization; [@wang2004_ssim] | The scale term is a soft penalty and does not change the Gaussian parameterization. |
 
+## Quantitative prose audit
+
+Each row covers the aligned English and Chinese sentence group in the listed section. Values must be updated from the named generated asset rather than edited independently.
+
+| audit_id | section and bounded sentence group | exact numeric source |
+|---|---|---|
+| Q01 | §4.1 TUM scene list and 8,454 processed frames | thesis/tables/result-source.csv, group A frame_count summed once per Baseline scene; thesis/internal/experiment-audit.md scene mapping |
+| Q02 | §4.1 Replica scene list and 16,000 processed frames | thesis/tables/result-source.csv, group R frame_count summed once per Baseline scene; thesis/internal/experiment-audit.md scene mapping |
+| Q03 | §4.1 FMDataset scene list and 2,340 processed frames | thesis/tables/result-source.csv, group C frame_count summed once per Baseline scene; thesis/internal/experiment-audit.md scene mapping |
+| Q04 | §4.2 GI-KF interval values, score/pyramid settings, and IMU weights | scripts/run_ablation.py STRATEGIES_A, STRATEGIES_R, and STRATEGIES_BC |
+| Q05 | §4.3 70 total configurations and 20/32/18 group split | thesis/internal/experiment-audit.md “Verified extraction snapshot”; thesis/tables/result-source.csv |
+| Q06 | §5.1 TUM GI-KF+Pyramid macro keyframe, quality, and trajectory changes | thesis/tables/dataset-summary.csv rows A/Baseline and A/GI-KF+Pyramid; rounded display in thesis/tables/tum-results.md |
+| Q07 | §5.1 A2 and A4 GI-KF+Pyramid comparisons | thesis/tables/tum-results.md rows A2/Baseline, A2/GI-KF+Pyramid, A4/Baseline, and A4/GI-KF+Pyramid |
+| Q08 | §5.1 A3 Baseline, GI-KF, Pyramid, and combination failure values | thesis/tables/tum-results.md A3 rows |
+| Q09 | §5.1 GI-KF TUM macro rendering and ATE values | thesis/tables/dataset-summary.csv rows A/Baseline and A/GI-KF; rounded display in thesis/tables/tum-results.md |
+| Q10 | §5.2 Replica combined macro keyframe, trajectory, and quality changes | thesis/tables/dataset-summary.csv rows R/Baseline and R/GI-KF+Pyramid; rounded display in thesis/tables/replica-results.md |
+| Q11 | §5.2 Replica per-scene counts and R5 changes | thesis/tables/replica-results.md, all Baseline and GI-KF+Pyramid rows, especially R5 |
+| Q12 | §5.2 Replica Pyramid and GI-KF macro comparisons | thesis/tables/dataset-summary.csv R/Pyramid and R/GI-KF; rounded display in thesis/tables/replica-results.md |
+| Q13 | §5.3 FMDataset ALL macro quality and keyframe changes | thesis/tables/dataset-summary.csv rows C/Baseline and C/ALL; rounded display in thesis/tables/fm-results.md |
+| Q14 | §5.3 FMDataset C1 and C3 per-scene comparisons | thesis/tables/fm-results.md C1 and C3 rows |
+| Q15 | §5.3 IMU-only macro and scene-level mixed response | thesis/tables/dataset-summary.csv C/Baseline and C/IMU; thesis/tables/fm-results.md Baseline and IMU rows |
+| Q16 | §5.3 FMDataset GI-KF, Pyramid, GI-KF+Pyramid, and ALL comparisons | thesis/tables/dataset-summary.csv corresponding C rows; rounded display in thesis/tables/fm-results.md |
+| Q17 | §5.4 TUM paired keyframe, time, and peak-memory reduction ranges | thesis/tables/efficiency-results.md A1–A5 Baseline and GI-KF+Pyramid rows |
+| Q18 | §5.4 Replica paired ranges and macro memory | thesis/tables/efficiency-results.md R1–R8 Baseline and GI-KF+Pyramid rows; thesis/tables/dataset-summary.csv R rows |
+| Q19 | §5.4 FMDataset ALL time/memory/keyframe values and IMU overhead | thesis/tables/efficiency-results.md C1–C3 Baseline, IMU, and ALL rows; thesis/tables/dataset-summary.csv corresponding C rows |
+| Q20 | §5.4 dataset-level submap counts | thesis/tables/dataset-summary.csv submap_count for R and A strategies |
+| Q21 | §5.6 70 controlled configurations | thesis/internal/experiment-audit.md “Verified extraction snapshot”; thesis/tables/result-source.csv |
+
 ## Global wording warnings
 
 The manuscript must not claim a complete tightly coupled visual–inertial estimator, state-of-the-art performance, the first IMU use in 3DGS-SLAM, an isotropic Gaussian map, real-time mobile operation, or a guarantee across all scenes. These strings may occur here only as warnings or in the `prohibited_extension` field.
