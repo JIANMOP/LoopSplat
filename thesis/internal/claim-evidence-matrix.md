@@ -24,6 +24,24 @@ This matrix is the wording contract for the manuscript masters. A later drafting
 | C08 | 5.3 FMDataset and inertial ablation | FMDataset has no trajectory ground truth and supports only observed-view image/depth quality and efficiency reporting in the formal ablation. | FMDataset protocol and design | `md/ablation-guide.md` §7.2; design §3.3 | “FMDataset results exclude trajectory metrics because no trajectory ground truth is available.” | “FMDataset 缺少轨迹真值，因此结果不包含轨迹指标。” | ATE/RPE, novel-view synthesis, or a trajectory-accuracy claim for FMDataset. |
 | C09 | 5.6 Azure Kinect qualitative example | Azure Kinect material is for engineering usability and qualitative illustration only. | Design and experiment protocol | `md/ablation-guide.md` §1.4; design §§2.3, 3.3 | “Azure Kinect sequences are used only for qualitative engineering examples.” | “Azure Kinect 序列仅用于工程定性示例。” | Formal ablation, ATE/RPE, rigorous IMU validation, or a quantitative generalization claim. |
 
+## Method equation trace
+
+The English and Chinese method masters use the same equation numbers. The following rows record the implementation or canonical source that bounds each mathematical description.
+
+| equation | manuscript content | implementation or literature trace | scope note |
+|---|---|---|---|
+| (1) | Gaussian parameters and covariance | src/entities/gaussian_model.py Gaussian parameter initialization and covariance accessors; src/utils/gaussian_model_utils.py build_scaling_rotation; [@kerbl2023_3dgs] | Three scale components remain trainable. |
+| (2) | Color/depth alpha compositing | src/utils/utils.py render_gaussian_model; [@kerbl2023_3dgs] | Describes the renderer shared by tracking and mapping. |
+| (3) | RGB-D visual tracking loss | src/entities/tracker.py tracking-loss construction and valid masks | Dataset configuration supplies the color/depth balance and masking options. |
+| (4) | Gyroscope midpoint preintegration | src/entities/imu_preintegration.py preintegrate_imu; [@forster2017_preintegration] | Bias is configured and fixed; this is not joint bias estimation. |
+| (5) | Rotation disagreement on SO(3) | src/entities/tracker.py compute_imu_loss_terms; src/entities/imu_preintegration.py so3_log | Residual scale is 0.01 rad in the formal configuration. |
+| (6) | Robust weak rotation penalty | src/entities/tracker.py _huber_loss and compute_imu_loss_terms; [@huber1964_robust] | Formal rotation weight is 0.001 and Huber threshold is 0.1 rad. |
+| (7) | Combined tracking objective | src/entities/tracker.py tracking objective; scripts/run_ablation.py STRATEGIES_BC | Formal translational IMU weight is zero. |
+| (8) | Visibility/baseline/motion information score | src/utils/keyframe_selection.py gi_slam_keyframe_decision; src/utils/mapper_utils.py visibility and velocity helpers; [@liu2025_gislam] | Formal GI-KF motion is visual because use_imu_gyro remains false. |
+| (9) | Interval safeguards and support trigger | src/utils/keyframe_selection.py forced_keyframe_decision; src/entities/gaussian_slam.py evaluate_gi_keyframe and should_run_tracking_support; scripts/run_ablation.py strategy overrides | The equation is a compact summary of ordered code branches; support observations are not persistent records. |
+| (10) | Per-keyframe image-pyramid schedule | src/entities/mapper.py pyramid state and level selection; src/utils/mapper_utils.py build_image_pyramid, build_depth_pyramid, and render-setting scaling | Two sublevels and eight uses per sublevel are fixed in formal ablations. |
+| (11) | Mapping loss and scale consistency | src/entities/mapper.py map optimization; src/entities/losses.py scale regularization; [@wang2004_ssim] | The scale term is a soft penalty and does not change the Gaussian parameterization. |
+
 ## Global wording warnings
 
 The manuscript must not claim a complete tightly coupled visual–inertial estimator, state-of-the-art performance, the first IMU use in 3DGS-SLAM, an isotropic Gaussian map, real-time mobile operation, or a guarantee across all scenes. These strings may occur here only as warnings or in the `prohibited_extension` field.

@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" role="img" aria-labelledby="title desc">
+  <title id="title">GI-KF persistent-keyframe and support-update decision flow</title>
+  <desc id="desc">A decision chart distinguishes persistent keyframe admission, short-term tracking support, and skipped observations.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34495e"/>
+    </marker>
+    <style>
+      .title{font:700 30px Arial,sans-serif;fill:#17202a}
+      .label{font:600 19px Arial,sans-serif;fill:#17202a}
+      .small{font:15px Arial,sans-serif;fill:#273746}
+      .tiny{font:14px Arial,sans-serif;fill:#34495e}
+      .proc{fill:#f4f6f7;stroke:#5d6d7e;stroke-width:2.5}
+      .decision{fill:#fdf0df;stroke:#dc7633;stroke-width:2.5}
+      .persist{fill:#eaf3fb;stroke:#2e86c1;stroke-width:3}
+      .support{fill:#fff8e7;stroke:#b9770e;stroke-width:2.5;stroke-dasharray:9 6}
+      .skip{fill:#f2f3f4;stroke:#7b7d7d;stroke-width:2.5}
+      .line{fill:none;stroke:#34495e;stroke-width:2.8;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1400" height="900" fill="#ffffff"/>
+  <text x="700" y="45" text-anchor="middle" class="title">GI-KF Admission and Tracking-Support Flow</text>
+
+  <rect x="535" y="75" width="330" height="65" rx="14" class="proc"/>
+  <text x="700" y="115" text-anchor="middle" class="label">Tracked RGB-D observation at frame t</text>
+
+  <polygon points="700,175 875,245 700,315 525,245" class="decision"/>
+  <text x="700" y="229" text-anchor="middle" class="label">Forced frame?</text>
+  <text x="700" y="255" text-anchor="middle" class="small">first / last / submap boundary</text>
+  <text x="700" y="278" text-anchor="middle" class="small">or gap ≥ maximum</text>
+
+  <polygon points="700,350 875,420 700,490 525,420" class="decision"/>
+  <text x="700" y="410" text-anchor="middle" class="label">Gap below minimum?</text>
+  <text x="700" y="437" text-anchor="middle" class="small">A,C: 2 frames; Replica: 5</text>
+
+  <polygon points="700,525 875,595 700,665 525,595" class="decision"/>
+  <text x="700" y="577" text-anchor="middle" class="label">High motion before stable gap?</text>
+  <text x="700" y="604" text-anchor="middle" class="small">visual velocity threshold</text>
+  <text x="700" y="627" text-anchor="middle" class="small">stable gap: A,C = 3; Replica = 6</text>
+
+  <polygon points="700,700 875,770 700,840 525,770" class="decision"/>
+  <text x="700" y="752" text-anchor="middle" class="label">Stable gap reached or S<tspan baseline-shift="sub" font-size="13">t</tspan> &gt; τ?</text>
+  <text x="700" y="780" text-anchor="middle" class="small">visibility novelty + normalized baseline</text>
+  <text x="700" y="805" text-anchor="middle" class="small">with motion safeguard</text>
+
+  <rect x="1030" y="330" width="310" height="175" rx="16" class="persist"/>
+  <text x="1185" y="370" text-anchor="middle" class="label">Persistent keyframe</text>
+  <text x="1185" y="402" text-anchor="middle" class="small">append mapping-frame record</text>
+  <text x="1185" y="430" text-anchor="middle" class="small">normal mapping + pruning</text>
+  <text x="1185" y="458" text-anchor="middle" class="small">advance pyramid counter</text>
+  <text x="1185" y="486" text-anchor="middle" class="small">eligible for submap / loop path</text>
+
+  <polygon points="305,570 450,635 305,700 160,635" class="decision"/>
+  <text x="305" y="622" text-anchor="middle" class="label">Support trigger?</text>
+  <text x="305" y="649" text-anchor="middle" class="small">enabled + designated</text>
+  <text x="305" y="672" text-anchor="middle" class="small">rejection gap/reason</text>
+
+  <rect x="45" y="735" width="325" height="125" rx="16" class="support"/>
+  <text x="207" y="776" text-anchor="middle" class="label">Tracking-support update</text>
+  <text x="207" y="807" text-anchor="middle" class="small">20 iterations at full resolution</text>
+  <text x="207" y="834" text-anchor="middle" class="small">no pruning; no persistent record</text>
+
+  <rect x="390" y="735" width="250" height="125" rx="16" class="skip"/>
+  <text x="515" y="785" text-anchor="middle" class="label">Skip observation</text>
+  <text x="515" y="817" text-anchor="middle" class="small">no map update</text>
+
+  <path d="M700 140 V175" class="line"/>
+  <path d="M875 245 H1185 V330" class="line"/>
+  <text x="930" y="232" class="tiny">yes</text>
+  <path d="M700 315 V350" class="line"/>
+  <text x="713" y="338" class="tiny">no</text>
+  <path d="M700 490 V525" class="line"/>
+  <text x="713" y="512" class="tiny">no</text>
+  <path d="M875 420 H950 V570 H450" class="line"/>
+  <text x="900" y="408" class="tiny">yes: reject</text>
+  <path d="M525 595 H450" class="line"/>
+  <text x="462" y="581" class="tiny">yes: reject</text>
+  <path d="M700 665 V700" class="line"/>
+  <text x="713" y="687" class="tiny">no</text>
+  <path d="M875 770 H980 V505 H1185" class="line"/>
+  <text x="900" y="758" class="tiny">yes</text>
+  <path d="M525 770 H450 V700" class="line"/>
+  <text x="463" y="758" class="tiny">no: reject</text>
+  <path d="M305 700 V735 H207" class="line"/>
+  <text x="318" y="724" class="tiny">yes</text>
+  <path d="M450 635 H515 V735" class="line"/>
+  <text x="461" y="622" class="tiny">no</text>
+
+  <text x="965" y="530" class="tiny">At the stable gap, high motion is admitted by coverage rescue.</text>
+  <text x="965" y="554" class="tiny">Replica disables the support branch.</text>
+</svg>

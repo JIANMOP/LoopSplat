@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="780" viewBox="0 0 1400 780" role="img" aria-labelledby="title desc">
+  <title id="title">System overview of the three LoopSplat extensions</title>
+  <desc id="desc">RGB-D and IMU inputs feed tracking, keyframe selection, persistent mapping, short-term support updates, and the inherited LoopSplat backend.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34495e"/>
+    </marker>
+    <style>
+      .title{font:700 30px Arial,sans-serif;fill:#17202a}
+      .label{font:600 20px Arial,sans-serif;fill:#17202a}
+      .small{font:16px Arial,sans-serif;fill:#273746}
+      .tiny{font:14px Arial,sans-serif;fill:#34495e}
+      .base{fill:#eaf3fb;stroke:#2e86c1;stroke-width:3}
+      .new{fill:#fdf0df;stroke:#dc7633;stroke-width:3}
+      .input{fill:#f4f6f7;stroke:#5d6d7e;stroke-width:2.5}
+      .support{fill:#fff8e7;stroke:#b9770e;stroke-width:2.5;stroke-dasharray:9 6}
+      .line{fill:none;stroke:#34495e;stroke-width:3;marker-end:url(#arrow)}
+      .dash{fill:none;stroke:#7f8c8d;stroke-width:2.5;stroke-dasharray:9 6;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1400" height="780" fill="#ffffff"/>
+  <text x="700" y="48" text-anchor="middle" class="title">LoopSplat with IMU Rotation Regularization, GI-KF, and Image-Pyramid Mapping</text>
+
+  <rect x="45" y="125" width="190" height="95" rx="16" class="input"/>
+  <text x="140" y="163" text-anchor="middle" class="label">RGB-D stream</text>
+  <text x="140" y="193" text-anchor="middle" class="small">color, depth, time</text>
+
+  <rect x="45" y="280" width="190" height="95" rx="16" class="input"/>
+  <text x="140" y="318" text-anchor="middle" class="label">IMU interval</text>
+  <text x="140" y="348" text-anchor="middle" class="small">FMDataset only</text>
+
+  <rect x="310" y="125" width="260" height="125" rx="16" class="base"/>
+  <text x="440" y="167" text-anchor="middle" class="label">RGB-D tracker</text>
+  <text x="440" y="198" text-anchor="middle" class="small">render-and-compare</text>
+  <text x="440" y="225" text-anchor="middle" class="tiny">camera pose candidate</text>
+
+  <rect x="310" y="300" width="260" height="110" rx="16" class="new"/>
+  <text x="440" y="340" text-anchor="middle" class="label">Weak IMU rotation term</text>
+  <text x="440" y="370" text-anchor="middle" class="small">gyro preintegration; λ<tspan baseline-shift="sub" font-size="12">T</tspan> = 0</text>
+  <text x="440" y="397" text-anchor="middle" class="tiny">added to tracking objective</text>
+
+  <rect x="650" y="125" width="285" height="140" rx="16" class="new"/>
+  <text x="792" y="165" text-anchor="middle" class="label">GI-KF decision</text>
+  <text x="792" y="198" text-anchor="middle" class="small">visibility + baseline + motion</text>
+  <text x="792" y="228" text-anchor="middle" class="tiny">interval safeguards</text>
+  <text x="792" y="250" text-anchor="middle" class="tiny">persistent / support / skip</text>
+
+  <rect x="1010" y="95" width="330" height="150" rx="16" class="new"/>
+  <text x="1175" y="137" text-anchor="middle" class="label">Persistent mapping</text>
+  <text x="1175" y="169" text-anchor="middle" class="small">0.25× → 0.5× → full</text>
+  <text x="1175" y="199" text-anchor="middle" class="tiny">per-keyframe pyramid counter</text>
+  <text x="1175" y="222" text-anchor="middle" class="tiny">normal optimization and pruning</text>
+
+  <rect x="1010" y="315" width="330" height="140" rx="16" class="support"/>
+  <text x="1175" y="357" text-anchor="middle" class="label">Tracking-support update</text>
+  <text x="1175" y="389" text-anchor="middle" class="small">20 iterations, full resolution</text>
+  <text x="1175" y="418" text-anchor="middle" class="tiny">no pruning; observation discarded</text>
+  <text x="1175" y="441" text-anchor="middle" class="tiny">not a persistent keyframe</text>
+
+  <rect x="600" y="540" width="340" height="135" rx="16" class="base"/>
+  <text x="770" y="582" text-anchor="middle" class="label">Active Gaussian submap</text>
+  <text x="770" y="614" text-anchor="middle" class="small">shared anisotropic primitives</text>
+  <text x="770" y="643" text-anchor="middle" class="tiny">rendered by tracking and mapping</text>
+
+  <rect x="1010" y="535" width="330" height="145" rx="16" class="base"/>
+  <text x="1175" y="576" text-anchor="middle" class="label">Inherited LoopSplat backend</text>
+  <text x="1175" y="609" text-anchor="middle" class="small">submap checkpoint</text>
+  <text x="1175" y="636" text-anchor="middle" class="small">GS–GS loop registration</text>
+  <text x="1175" y="663" text-anchor="middle" class="small">pose-graph correction</text>
+
+  <path d="M235 172 H310" class="line"/>
+  <path d="M235 327 H310" class="line"/>
+  <path d="M440 300 V250" class="line"/>
+  <path d="M570 188 H650" class="line"/>
+  <path d="M935 175 H1010" class="line"/>
+  <path d="M935 220 C970 220 970 385 1010 385" class="dash"/>
+  <path d="M1175 245 V535" class="line"/>
+  <path d="M1010 385 C930 385 930 585 940 585" class="dash"/>
+  <path d="M1010 170 C960 170 960 608 940 608" class="line"/>
+  <path d="M940 608 H1010" class="line"/>
+  <path d="M770 540 C770 460 440 460 440 250" class="line"/>
+
+  <text x="964" y="151" class="tiny">selected</text>
+  <text x="957" y="333" class="tiny">designated rejection</text>
+  <text x="958" y="508" class="tiny">persistent path only</text>
+
+  <rect x="45" y="695" width="28" height="22" rx="4" class="base"/>
+  <text x="84" y="712" class="tiny">inherited component</text>
+  <rect x="245" y="695" width="28" height="22" rx="4" class="new"/>
+  <text x="284" y="712" class="tiny">evaluated addition</text>
+  <rect x="440" y="695" width="28" height="22" rx="4" class="support"/>
+  <text x="479" y="712" class="tiny">non-persistent support path</text>
+</svg>
