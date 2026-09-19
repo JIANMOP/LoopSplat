@@ -21,13 +21,13 @@ Source: `scripts/run_ablation.py` scene definitions and `md/ablation-guide.md` �
 | A, R | `_2` | +Pyramid | off | on | off |
 | A, R | `_3` | +GI-KF+Pyramid | on | on | off |
 | C | `_0` | Baseline | off | off | off |
-| C | `_1` | +IMU | off | off | weak rotation-only |
+| C | `_1` | +IMU | off | off | preintegration-derived weak gyroscope rotation regularizer |
 | C | `_2` | +GI-KF | on | off | off |
 | C | `_3` | +Pyramid | off | on | off |
 | C | `_4` | +GI-KF+Pyramid | on | on | off |
-| C | `_5` | +ALL | on | on | weak rotation-only |
+| C | `_5` | +ALL | on | on | preintegration-derived weak gyroscope rotation regularizer |
 
-For IMU-enabled C strategies, `lambda_imu_rot=0.001` and `lambda_imu_trans=0.0`; the configuration does not jointly estimate visual–inertial translation, velocity, bias, or gravity state. Replica GI-KF uses the budget-matched schedule in `scripts/run_ablation.py` `STRATEGIES_R`.
+For IMU-enabled C strategies, the IMU term is a preintegration-derived weak gyroscope rotation regularizer (陀螺仪预积分导出的弱旋转正则): `lambda_imu_rot=0.001` and `lambda_imu_trans=0.0`. The configuration does not jointly estimate visual–inertial translation, velocity, bias, or gravity state. Replica GI-KF uses the budget-matched schedule in `scripts/run_ablation.py` `STRATEGIES_R`.
 
 ## Available metrics and reporting limits
 
