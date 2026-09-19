@@ -1,4 +1,4 @@
-| Scene | Strategy | ATE (cm) ↓ | RPE-t (m) ↓ | RPE-r (°) ↓ | PSNR (dB) ↑ | SSIM ↑ | LPIPS ↓ | Depth L1 ↓ | Keyframes ↓ |
+| Scene | Strategy | ATE (cm) ↓ | RPE-t (m) ↓ | RPE-r (°) ↓ | PSNR (dB) ↑ | MS-SSIM ↑ | LPIPS ↓ | Depth L1 ↓ | Keyframes ↓ |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | R1 | Baseline | 0.292 | 0.0005 | 0.022 | 33.657 | 0.9620 | 0.0719 | 0.0147 | 423 |
 | R1 | GI-KF | 0.379 | 0.0004 | 0.034 | 33.705 | 0.9627 | 0.0676 | 0.0140 | 355 |

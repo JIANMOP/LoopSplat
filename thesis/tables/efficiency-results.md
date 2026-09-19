@@ -1,74 +1,74 @@
-| Dataset | Scene | Strategy | GPU | Time (h) ↓ | Time Δ (%) ↓ | Peak GPU (GiB) ↓ | Keyframes ↓ | Keyframe Δ (%) ↓ |
-|---|---|---|---|---:|---:|---:|---:|---:|
-| A | A1 | Baseline | NVIDIA GeForce RTX 2080 Ti | 1.517 | 0.0 | 4.980 | 592 | 0.0 |
-| A | A1 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 1.323 | -12.8 | 2.948 | 245 | -58.6 |
-| A | A1 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 1.576 | 3.9 | 4.450 | 592 | 0.0 |
-| A | A1 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 1.348 | -11.1 | 2.600 | 243 | -59.0 |
-| A | A2 | Baseline | NVIDIA GeForce RTX 2080 Ti | 1.704 | 0.0 | 6.240 | 635 | 0.0 |
-| A | A2 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 1.486 | -12.8 | 3.397 | 286 | -55.0 |
-| A | A2 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 1.700 | -0.2 | 5.042 | 635 | 0.0 |
-| A | A2 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 1.437 | -15.7 | 2.889 | 286 | -55.0 |
-| A | A3 | Baseline | NVIDIA GeForce RTX 2080 Ti | 3.715 | 0.0 | 9.097 | 1315 | 0.0 |
-| A | A3 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 3.438 | -7.4 | 4.426 | 609 | -53.7 |
-| A | A3 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 3.629 | -2.3 | 8.796 | 1315 | 0.0 |
-| A | A3 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 2.931 | -21.1 | 4.167 | 533 | -59.5 |
-| A | A4 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 7.725 | 0.0 | 8.005 | 3397 | 0.0 |
-| A | A4 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 6.711 | -13.1 | 3.241 | 1137 | -66.5 |
-| A | A4 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 7.621 | -1.3 | 10.317 | 3397 | 0.0 |
-| A | A4 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 7.028 | -9.0 | 4.025 | 1136 | -66.6 |
-| A | A5 | Baseline | NVIDIA GeForce RTX 2080 Ti | 6.270 | 0.0 | 17.271 | 2515 | 0.0 |
-| A | A5 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 5.314 | -15.2 | 7.200 | 858 | -65.9 |
-| A | A5 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 6.056 | -3.4 | 17.390 | 2515 | 0.0 |
-| A | A5 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 5.176 | -17.4 | 8.565 | 854 | -66.0 |
-| C | C1 | Baseline | NVIDIA GeForce RTX 2080 Ti | 2.900 | 0.0 | 7.742 | 869 | 0.0 |
-| C | C1 | IMU | NVIDIA GeForce RTX 2080 Ti | 3.219 | 11.0 | 8.291 | 869 | 0.0 |
-| C | C1 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 2.402 | -17.2 | 3.728 | 347 | -60.1 |
-| C | C1 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 2.917 | 0.6 | 7.904 | 869 | 0.0 |
-| C | C1 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 2.466 | -15.0 | 3.718 | 348 | -60.0 |
-| C | C1 | ALL | NVIDIA GeForce RTX 2080 Ti | 2.683 | -7.5 | 3.732 | 344 | -60.4 |
-| C | C2 | Baseline | NVIDIA GeForce RTX 2080 Ti | 2.855 | 0.0 | 7.584 | 823 | 0.0 |
-| C | C2 | IMU | NVIDIA GeForce RTX 2080 Ti | 3.319 | 16.3 | 7.879 | 823 | 0.0 |
-| C | C2 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 2.316 | -18.9 | 3.826 | 346 | -58.0 |
-| C | C2 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 3.106 | 8.8 | 7.835 | 823 | 0.0 |
-| C | C2 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 2.337 | -18.1 | 3.847 | 349 | -57.6 |
-| C | C2 | ALL | NVIDIA GeForce RTX 2080 Ti | 2.837 | -0.6 | 3.979 | 349 | -57.6 |
-| C | C3 | Baseline | NVIDIA GeForce RTX 2080 Ti | 2.066 | 0.0 | 6.267 | 648 | 0.0 |
-| C | C3 | IMU | NVIDIA GeForce RTX 2080 Ti | 2.355 | 14.0 | 7.031 | 648 | 0.0 |
-| C | C3 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 1.960 | -5.1 | 3.319 | 278 | -57.1 |
-| C | C3 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 2.160 | 4.6 | 6.629 | 648 | 0.0 |
-| C | C3 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 1.959 | -5.2 | 3.575 | 274 | -57.7 |
-| C | C3 | ALL | NVIDIA GeForce RTX 2080 Ti | 2.207 | 6.9 | 3.600 | 282 | -56.5 |
-| R | R1 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 2.209 | 0.0 | 8.033 | 423 | 0.0 |
-| R | R1 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.882 | -14.8 | 8.034 | 355 | -16.1 |
-| R | R1 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.927 | -12.8 | 7.655 | 424 | 0.2 |
-| R | R1 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.830 | -17.2 | 7.817 | 355 | -16.1 |
-| R | R2 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 2.053 | 0.0 | 5.727 | 410 | 0.0 |
-| R | R2 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.981 | -3.5 | 5.713 | 346 | -15.6 |
-| R | R2 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.953 | -4.9 | 5.473 | 410 | 0.0 |
-| R | R2 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.817 | -11.5 | 5.404 | 345 | -15.9 |
-| R | R3 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 1.810 | 0.0 | 5.930 | 434 | 0.0 |
-| R | R3 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.704 | -5.9 | 5.944 | 364 | -16.1 |
-| R | R3 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.807 | -0.2 | 5.878 | 434 | 0.0 |
-| R | R3 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.727 | -4.6 | 5.941 | 364 | -16.1 |
-| R | R4 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 2.264 | 0.0 | 5.755 | 437 | 0.0 |
-| R | R4 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.758 | -22.4 | 5.720 | 362 | -17.2 |
-| R | R4 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 2.298 | 1.5 | 5.765 | 437 | 0.0 |
-| R | R4 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.829 | -19.2 | 5.766 | 362 | -17.2 |
-| R | R5 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 2.827 | 0.0 | 9.327 | 431 | 0.0 |
-| R | R5 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 2.777 | -1.8 | 9.357 | 364 | -15.5 |
-| R | R5 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 2.901 | 2.6 | 9.290 | 434 | 0.7 |
-| R | R5 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 2.757 | -2.5 | 9.346 | 364 | -15.5 |
-| R | R6 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 1.859 | 0.0 | 7.036 | 433 | 0.0 |
-| R | R6 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.631 | -12.3 | 7.240 | 353 | -18.5 |
-| R | R6 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.863 | 0.2 | 7.181 | 433 | 0.0 |
-| R | R6 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.745 | -6.1 | 7.240 | 352 | -18.7 |
-| R | R7 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 3.859 | 0.0 | 8.745 | 418 | 0.0 |
-| R | R7 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 3.275 | -15.1 | 8.732 | 357 | -14.6 |
-| R | R7 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 4.008 | 3.9 | 8.480 | 418 | 0.0 |
-| R | R7 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 3.086 | -20.0 | 8.513 | 356 | -14.8 |
-| R | R8 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 1.871 | 0.0 | 5.022 | 426 | 0.0 |
-| R | R8 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.552 | -17.0 | 5.012 | 357 | -16.2 |
-| R | R8 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.879 | 0.5 | 4.980 | 427 | 0.2 |
-| R | R8 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.722 | -7.9 | 4.976 | 358 | -16.0 |
+| Dataset | Scene | Strategy | GPU | Time (h) ↓ | Time Δ (%) ↓ | Peak PyTorch allocation (GiB) ↓ | Keyframes ↓ | Keyframe Δ (%) ↓ | Support updates | Support time (s) |
+|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| A | A1 | Baseline | NVIDIA GeForce RTX 2080 Ti | 1.517 | 0.0 | 4.980 | 592 | 0.0 | 0 | 0.000 |
+| A | A1 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 1.323 | -12.8 | 2.948 | 245 | -58.6 | 347 | 105.965 |
+| A | A1 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 1.576 | 3.9 | 4.450 | 592 | 0.0 | 0 | 0.000 |
+| A | A1 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 1.348 | -11.1 | 2.600 | 243 | -59.0 | 349 | 107.961 |
+| A | A2 | Baseline | NVIDIA GeForce RTX 2080 Ti | 1.704 | 0.0 | 6.240 | 635 | 0.0 | 0 | 0.000 |
+| A | A2 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 1.486 | -12.8 | 3.397 | 286 | -55.0 | 349 | 108.521 |
+| A | A2 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 1.700 | -0.2 | 5.042 | 635 | 0.0 | 0 | 0.000 |
+| A | A2 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 1.437 | -15.7 | 2.889 | 286 | -55.0 | 349 | 109.345 |
+| A | A3 | Baseline | NVIDIA GeForce RTX 2080 Ti | 3.715 | 0.0 | 9.097 | 1315 | 0.0 | 0 | 0.000 |
+| A | A3 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 3.438 | -7.4 | 4.426 | 609 | -53.7 | 706 | 224.836 |
+| A | A3 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 3.629 | -2.3 | 8.796 | 1315 | 0.0 | 0 | 0.000 |
+| A | A3 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 2.931 | -21.1 | 4.167 | 533 | -59.5 | 782 | 255.427 |
+| A | A4 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 7.725 | 0.0 | 8.005 | 3397 | 0.0 | 0 | 0.000 |
+| A | A4 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 6.711 | -13.1 | 3.241 | 1137 | -66.5 | 2260 | 750.767 |
+| A | A4 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 7.621 | -1.3 | 10.317 | 3397 | 0.0 | 0 | 0.000 |
+| A | A4 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 7.028 | -9.0 | 4.025 | 1136 | -66.6 | 2261 | 770.029 |
+| A | A5 | Baseline | NVIDIA GeForce RTX 2080 Ti | 6.270 | 0.0 | 17.271 | 2515 | 0.0 | 0 | 0.000 |
+| A | A5 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 5.314 | -15.2 | 7.200 | 858 | -65.9 | 1657 | 511.981 |
+| A | A5 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 6.056 | -3.4 | 17.390 | 2515 | 0.0 | 0 | 0.000 |
+| A | A5 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 5.176 | -17.4 | 8.565 | 854 | -66.0 | 1661 | 514.096 |
+| C | C1 | Baseline | NVIDIA GeForce RTX 2080 Ti | 2.900 | 0.0 | 7.742 | 869 | 0.0 | 0 | 0.000 |
+| C | C1 | IMU | NVIDIA GeForce RTX 2080 Ti | 3.219 | 11.0 | 8.291 | 869 | 0.0 | 0 | 0.000 |
+| C | C1 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 2.402 | -17.2 | 3.728 | 347 | -60.1 | 522 | 194.116 |
+| C | C1 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 2.917 | 0.6 | 7.904 | 869 | 0.0 | 0 | 0.000 |
+| C | C1 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 2.466 | -15.0 | 3.718 | 348 | -60.0 | 521 | 185.418 |
+| C | C1 | ALL | NVIDIA GeForce RTX 2080 Ti | 2.683 | -7.5 | 3.732 | 344 | -60.4 | 525 | 174.445 |
+| C | C2 | Baseline | NVIDIA GeForce RTX 2080 Ti | 2.855 | 0.0 | 7.584 | 823 | 0.0 | 0 | 0.000 |
+| C | C2 | IMU | NVIDIA GeForce RTX 2080 Ti | 3.319 | 16.3 | 7.879 | 823 | 0.0 | 0 | 0.000 |
+| C | C2 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 2.316 | -18.9 | 3.826 | 346 | -58.0 | 477 | 160.277 |
+| C | C2 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 3.106 | 8.8 | 7.835 | 823 | 0.0 | 0 | 0.000 |
+| C | C2 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 2.337 | -18.1 | 3.847 | 349 | -57.6 | 474 | 159.172 |
+| C | C2 | ALL | NVIDIA GeForce RTX 2080 Ti | 2.837 | -0.6 | 3.979 | 349 | -57.6 | 474 | 158.447 |
+| C | C3 | Baseline | NVIDIA GeForce RTX 2080 Ti | 2.066 | 0.0 | 6.267 | 648 | 0.0 | 0 | 0.000 |
+| C | C3 | IMU | NVIDIA GeForce RTX 2080 Ti | 2.355 | 14.0 | 7.031 | 648 | 0.0 | 0 | 0.000 |
+| C | C3 | GI-KF | NVIDIA GeForce RTX 2080 Ti | 1.960 | -5.1 | 3.319 | 278 | -57.1 | 370 | 130.900 |
+| C | C3 | Pyramid | NVIDIA GeForce RTX 2080 Ti | 2.160 | 4.6 | 6.629 | 648 | 0.0 | 0 | 0.000 |
+| C | C3 | GI-KF+Pyramid | NVIDIA GeForce RTX 2080 Ti | 1.959 | -5.2 | 3.575 | 274 | -57.7 | 374 | 131.960 |
+| C | C3 | ALL | NVIDIA GeForce RTX 2080 Ti | 2.207 | 6.9 | 3.600 | 282 | -56.5 | 366 | 129.033 |
+| R | R1 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 2.209 | 0.0 | 8.033 | 423 | 0.0 | 0 | 0.000 |
+| R | R1 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.882 | -14.8 | 8.034 | 355 | -16.1 | 0 | 0.000 |
+| R | R1 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.927 | -12.8 | 7.655 | 424 | 0.2 | 0 | 0.000 |
+| R | R1 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.830 | -17.2 | 7.817 | 355 | -16.1 | 0 | 0.000 |
+| R | R2 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 2.053 | 0.0 | 5.727 | 410 | 0.0 | 0 | 0.000 |
+| R | R2 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.981 | -3.5 | 5.713 | 346 | -15.6 | 0 | 0.000 |
+| R | R2 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.953 | -4.9 | 5.473 | 410 | 0.0 | 0 | 0.000 |
+| R | R2 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.817 | -11.5 | 5.404 | 345 | -15.9 | 0 | 0.000 |
+| R | R3 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 1.810 | 0.0 | 5.930 | 434 | 0.0 | 0 | 0.000 |
+| R | R3 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.704 | -5.9 | 5.944 | 364 | -16.1 | 0 | 0.000 |
+| R | R3 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.807 | -0.2 | 5.878 | 434 | 0.0 | 0 | 0.000 |
+| R | R3 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.727 | -4.6 | 5.941 | 364 | -16.1 | 0 | 0.000 |
+| R | R4 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 2.264 | 0.0 | 5.755 | 437 | 0.0 | 0 | 0.000 |
+| R | R4 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.758 | -22.4 | 5.720 | 362 | -17.2 | 0 | 0.000 |
+| R | R4 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 2.298 | 1.5 | 5.765 | 437 | 0.0 | 0 | 0.000 |
+| R | R4 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.829 | -19.2 | 5.766 | 362 | -17.2 | 0 | 0.000 |
+| R | R5 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 2.827 | 0.0 | 9.327 | 431 | 0.0 | 0 | 0.000 |
+| R | R5 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 2.777 | -1.8 | 9.357 | 364 | -15.5 | 0 | 0.000 |
+| R | R5 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 2.901 | 2.6 | 9.290 | 434 | 0.7 | 0 | 0.000 |
+| R | R5 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 2.757 | -2.5 | 9.346 | 364 | -15.5 | 0 | 0.000 |
+| R | R6 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 1.859 | 0.0 | 7.036 | 433 | 0.0 | 0 | 0.000 |
+| R | R6 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.631 | -12.3 | 7.240 | 353 | -18.5 | 0 | 0.000 |
+| R | R6 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.863 | 0.2 | 7.181 | 433 | 0.0 | 0 | 0.000 |
+| R | R6 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.745 | -6.1 | 7.240 | 352 | -18.7 | 0 | 0.000 |
+| R | R7 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 3.859 | 0.0 | 8.745 | 418 | 0.0 | 0 | 0.000 |
+| R | R7 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 3.275 | -15.1 | 8.732 | 357 | -14.6 | 0 | 0.000 |
+| R | R7 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 4.008 | 3.9 | 8.480 | 418 | 0.0 | 0 | 0.000 |
+| R | R7 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 3.086 | -20.0 | 8.513 | 356 | -14.8 | 0 | 0.000 |
+| R | R8 | Baseline | NVIDIA GeForce RTX 4080 SUPER | 1.871 | 0.0 | 5.022 | 426 | 0.0 | 0 | 0.000 |
+| R | R8 | GI-KF | NVIDIA GeForce RTX 4080 SUPER | 1.552 | -17.0 | 5.012 | 357 | -16.2 | 0 | 0.000 |
+| R | R8 | Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.879 | 0.5 | 4.980 | 427 | 0.2 | 0 | 0.000 |
+| R | R8 | GI-KF+Pyramid | NVIDIA GeForce RTX 4080 SUPER | 1.722 | -7.9 | 4.976 | 358 | -16.0 | 0 | 0.000 |
 
-Time and keyframe deltas use the same-scene Baseline as denominator. A blank delta indicates incompatible recorded hardware/runtime environments.
+Time and keyframe deltas use the same-scene Baseline as denominator. A blank delta indicates incompatible recorded hardware/runtime environments. Peak allocation is measured with `torch.cuda.max_memory_allocated()`; support observations are excluded from persistent-keyframe counts.

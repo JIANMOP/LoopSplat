@@ -152,8 +152,22 @@ def test_metric_arrows_match_metric_direction(tmp_path):
 
     for label in ("ATE (cm) ↓", "LPIPS ↓", "Depth L1 ↓", "Keyframes ↓"):
         assert label in text
-    for label in ("PSNR (dB) ↑", "SSIM ↑"):
+    for label in ("PSNR (dB) ↑", "MS-SSIM ↑"):
         assert label in text
+
+
+def test_efficiency_table_reports_allocation_and_support_updates(tmp_path):
+    _write_run(tmp_path, "A1_0", "01-run")
+    paths = generate_manuscript_tables(
+        load_latest_successful_runs(tmp_path), tmp_path / "paper"
+    )
+
+    text = paths["efficiency"].read_text(encoding="utf-8")
+
+    assert "Peak PyTorch allocation (GiB) ↓" in text
+    assert "Support updates" in text
+    assert "Support time (s)" in text
+    assert "| 4 | 12.000 |" in text
 
 
 def test_relative_changes_use_baseline_as_denominator():

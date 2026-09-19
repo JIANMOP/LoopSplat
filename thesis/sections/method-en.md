@@ -83,7 +83,8 @@ $$
 \mathcal L_{\mathrm{track}}=
 \mathcal L_{\mathrm{vis}}+\mathcal L_{\mathrm{imu}}
 =w_c\mathcal L_C+(1-w_c)\mathcal L_D
-+10^{-3}\mathcal L_R,qquad \lambda_T=0.
++\lambda_R\sum_{j=1}^{3}\rho_{\delta_R/s_R}(r_{R,j}),
+\qquad \lambda_R=10^{-3},\ \lambda_T=0.
 \tag{7}
 $$
 
@@ -91,17 +92,16 @@ We therefore describe the module as a preintegration-derived weak gyroscope rota
 
 ### 3.3 Visibility-aware persistent keyframes
 
-The baseline admits mapping frames at a fixed cadence. GI-KF instead evaluates a frame against the most recent persistent keyframe using the Gaussian centers contained in their camera frusta. Let \(\mathcal V_t\) and \(\mathcal V_k\) be these center-index sets for the current frame and reference keyframe. Let \(b_{t,k}\) be camera-center displacement, \(\widetilde d_t\) the median valid depth, and \(v_t,\omega_t\) the linear and angular velocities estimated from consecutive visual poses. The information score adapted from the visibility-and-motion principle in GI-SLAM [@liu2025_gislam] is
+The baseline admits mapping frames at a fixed cadence. GI-KF instead evaluates a frame against the most recent persistent keyframe using the Gaussian centers contained in their camera frusta. Let \(\mathcal V_t\) and \(\mathcal V_k\) be these center-index sets for the current frame and reference keyframe. Let \(b_{t,k}\) be camera-center displacement, \(\widetilde d_t\) the median valid depth, and \(v_t,\omega_t\) the linear and angular velocities estimated from consecutive visual poses. The visibility-and-baseline score adapted from GI-SLAM's information-aware principle [@liu2025_gislam] is
 
 $$
 S_t=
 w_{\mathrm{cov}}\left(1-\frac{|\mathcal V_t\cap\mathcal V_k|}{|\mathcal V_t\cup\mathcal V_k|}\right)
-+w_b\frac{b_{t,k}}{\max(\widetilde d_t,\varepsilon)}
--w_m\,\mathbb I\!\left[v_t>v_{\max}\ \lor\ \omega_t>\omega_{\max}\right].
++w_b\frac{b_{t,k}}{\max(\widetilde d_t,\varepsilon)}.
 \tag{8}
 $$
 
-The formal configurations use \(w_{\mathrm{cov}}=w_b=1\), \(w_m=2\), threshold \(\tau=0.1\), \(v_{\max}=1.5\,\mathrm{m/s}\), and \(\omega_{\max}=120^\circ/\mathrm{s}\). Although an optional gyroscope-assisted motion flag exists in code, it is disabled in all formal GI-KF configurations; the motion term in Eq. (8) is therefore computed from visual poses.
+The formal configurations use \(w_{\mathrm{cov}}=w_b=1\), threshold \(\tau=0.1\), \(v_{\max}=1.5\,\mathrm{m/s}\), and \(\omega_{\max}=120^\circ/\mathrm{s}\). Motion does not enter Eq. (8). It is evaluated first by the hard gate in Eq. (9): high-motion candidates are rejected before the stable gap and accepted by the coverage-rescue branch at that gap. Although an optional gyroscope-assisted motion flag exists in code, it is disabled in all formal GI-KF configurations, so this gate uses velocities derived from visual poses.
 
 Score thresholding is wrapped in interval safeguards. If \(g_t=t-k\) is the gap to the latest persistent keyframe, \(\mathcal F\) contains the first frame, last frame, and submap-boundary frames. High-motion frames are deferred before the stable gap and accepted by a coverage-rescue branch at that gap. The persistent decision \(K_t\) and tracking-support indicator \(U_t\) can be summarized as
 
@@ -155,7 +155,7 @@ $$
 \tag{11}
 $$
 
-\(\mathcal M\) contains finite positive observed depths and finite rendered depths. The final term softly discourages extreme scale anisotropy while leaving the three scale parameters trainable. SSIM follows [@wang2004_ssim]. Support updates bypass Eq. (10), always use the original observation resolution, and do not advance a persistent keyframe's pyramid counter.
+\(\mathcal M\) contains finite positive observed depths and finite rendered depths, and \(\lambda_s=0.2\) in all experiments. The final term softly discourages extreme scale anisotropy while leaving the three scale parameters trainable. The single-scale SSIM loss follows [@wang2004_ssim]. Support updates bypass Eq. (10), always use the original observation resolution, and do not advance a persistent keyframe's pyramid counter.
 
 ### 3.6 Strategy composition
 

@@ -33,15 +33,15 @@ For IMU-enabled C strategies, the IMU term is a preintegration-derived weak gyro
 
 | Dataset group | Admissible metrics | Exclusions |
 |---|---|---|
-| A, R | ATE, RPE, PSNR, SSIM, LPIPS, Depth L1, persistent keyframe count, submap count, run time, and peak GPU memory | Fixed-observed-view rendering must not be named novel-view synthesis; no mesh-reconstruction metrics are invented. |
-| C | PSNR, SSIM, LPIPS, Depth L1, persistent keyframe count, submap count, run time, peak GPU memory, and separately reported tracking-support updates | No trajectory ground truth: do not report ATE/RPE or trajectory conclusions. |
+| A, R | ATE, RPE, PSNR, MS-SSIM, LPIPS, Depth L1, persistent keyframe count, submap count, run time, and peak PyTorch-allocated GPU memory | Fixed-observed-view rendering uses each run's estimated poses and unrefined submap concatenation; it must not be named novel-view synthesis or isolated world-coordinate map accuracy. No mesh-reconstruction metrics are invented. |
+| C | PSNR, MS-SSIM, LPIPS, Depth L1, persistent keyframe count, submap count, run time, peak PyTorch-allocated GPU memory, and separately reported tracking-support updates | No trajectory ground truth: do not report ATE/RPE or trajectory conclusions. |
 | Azure Kinect | Qualitative engineering/useability examples only | Not a formal ablation; no ATE/RPE or quantitative IMU-validation conclusion. |
 
 ## Fixed-seed and hardware-comparison rule
 
 The approved design states that the current results use the same fixed random seed for each configuration. Therefore, the manuscript may report per-scene values and cross-scene macro averages, but must not describe them as multi-seed means, report unavailable standard deviations, or claim statistical significance. The legacy three-seed language in `md/ablation-guide.md` is not evidence for the current results and is not a manuscript reporting license.
 
-Compare strategies only when the data, evaluation frames, base parameters, strategy switches, and compatible recorded hardware/runtime environment match. Hardware configurations are reported as experimental context, not as cross-hardware performance comparisons. Do not compare elapsed time or peak memory across different GPU/CUDA environments as if they were a strategy effect.
+Compare strategies only when the data, evaluation frames, base parameters, strategy switches, and compatible recorded hardware/runtime environment match. The recorded RTX 2080 Ti environment is a cloud-provisioned 22-GiB instance, and the RTX 4080 SUPER environment has 16 GiB. The reported memory value is PyTorch's peak allocated tensor memory from `torch.cuda.max_memory_allocated()`, not total device occupancy. Hardware configurations are reported as experimental context, not as cross-hardware performance comparisons. Do not compare elapsed time or peak memory across different GPU/CUDA environments as if they were a strategy effect.
 
 ## Internal-only provenance records from run manifests
 

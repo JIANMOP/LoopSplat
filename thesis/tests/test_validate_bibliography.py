@@ -73,6 +73,24 @@ def test_rejects_malformed_doi_values(tmp_path: Path) -> None:
     assert "bad_doi: malformed DOI: https://doi.org/10.1000/example" in errors
 
 
+def test_rejects_malformed_reference_urls(tmp_path: Path) -> None:
+    bibliography = tmp_path / "references.bib"
+    write(
+        bibliography,
+        """@article{bad_url,
+  title = {Bad URL},
+  author = {Ada Lovelace},
+  year = {2024},
+  url = {doi.org/10.1000/example}
+}
+""",
+    )
+
+    errors = validate_bibliography(bibliography, [])
+
+    assert "bad_url: malformed URL: doi.org/10.1000/example" in errors
+
+
 def test_reports_citations_missing_from_bibliography(tmp_path: Path) -> None:
     bibliography = tmp_path / "references.bib"
     manuscript = tmp_path / "manuscript-en.md"

@@ -366,7 +366,7 @@ def _fmt(value: Optional[float], digits: int = 3) -> str:
 def _table_header() -> str:
     return (
         "| Scene | Strategy | ATE (cm) ↓ | RPE-t (m) ↓ | RPE-r (°) ↓ | "
-        "PSNR (dB) ↑ | SSIM ↑ | LPIPS ↓ | Depth L1 ↓ | Keyframes ↓ |\n"
+        "PSNR (dB) ↑ | MS-SSIM ↑ | LPIPS ↓ | Depth L1 ↓ | Keyframes ↓ |\n"
         "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|\n"
     )
 
@@ -428,8 +428,9 @@ def generate_manuscript_tables(
 
     efficiency_lines = [
         "| Dataset | Scene | Strategy | GPU | Time (h) ↓ | Time Δ (%) ↓ | "
-        "Peak GPU (GiB) ↓ | Keyframes ↓ | Keyframe Δ (%) ↓ |",
-        "|---|---|---|---|---:|---:|---:|---:|---:|",
+        "Peak PyTorch allocation (GiB) ↓ | Keyframes ↓ | Keyframe Δ (%) ↓ | "
+        "Support updates | Support time (s) |",
+        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     baseline_by_scene = {
         (record.dataset_group, record.scene_id): record
@@ -454,7 +455,8 @@ def generate_manuscript_tables(
             time_delta = keyframe_delta = None
         efficiency_lines.append(
             "| {group} | {scene} | {strategy} | {gpu} | {time} | {time_delta} | "
-            "{memory} | {keyframes} | {keyframe_delta} |".format(
+            "{memory} | {keyframes} | {keyframe_delta} | {support_count} | "
+            "{support_time} |".format(
                 group=record.dataset_group,
                 scene=record.scene_id,
                 strategy=record.strategy_id,
@@ -464,13 +466,17 @@ def generate_manuscript_tables(
                 memory=_fmt(record.peak_gpu_gib),
                 keyframes=record.keyframe_count,
                 keyframe_delta=_fmt(keyframe_delta, 1),
+                support_count=record.support_update_count,
+                support_time=_fmt(record.support_update_seconds),
             )
         )
     efficiency_lines.extend(
         [
             "",
             "Time and keyframe deltas use the same-scene Baseline as denominator. "
-            "A blank delta indicates incompatible recorded hardware/runtime environments.",
+            "A blank delta indicates incompatible recorded hardware/runtime environments. "
+            "Peak allocation is measured with `torch.cuda.max_memory_allocated()`; "
+            "support observations are excluded from persistent-keyframe counts.",
         ]
     )
     efficiency_path = table_root / "efficiency-results.md"

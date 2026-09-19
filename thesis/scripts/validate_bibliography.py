@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 DOI_RE = re.compile(r"^10\.\d{4,9}/\S+$", re.IGNORECASE)
+URL_RE = re.compile(r"^https?://\S+$", re.IGNORECASE)
 CITATION_RE = re.compile(r"@([A-Za-z0-9_:-]+)")
 
 
@@ -101,6 +102,9 @@ def validate_bibliography(bib_path: Path, manuscripts: list[Path]) -> list[str]:
         doi = entry.fields.get("doi")
         if doi and not DOI_RE.fullmatch(doi.strip()):
             errors.append(f"{entry.key}: malformed DOI: {doi}")
+        url = entry.fields.get("url")
+        if url and not URL_RE.fullmatch(url.strip()):
+            errors.append(f"{entry.key}: malformed URL: {url}")
         is_arxiv = entry.entry_type == "misc" and (
             entry.fields.get("archiveprefix", "").lower() == "arxiv"
             or "arxiv" in entry.fields.get("howpublished", "").lower()
