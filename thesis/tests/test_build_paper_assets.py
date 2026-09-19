@@ -4,8 +4,12 @@ from pathlib import Path
 import pytest
 
 from thesis.scripts.build_paper_assets import (
+    generate_figures,
+    generate_manuscript_tables,
+    hardware_compatible_pairs,
     load_latest_successful_runs,
     macro_average,
+    relative_change,
 )
 
 
@@ -124,3 +128,58 @@ def test_does_not_compute_seed_standard_deviation_from_scenes(tmp_path):
 
     assert summary.scene_count == 2
     assert "std" not in summary.__dataclass_fields__
+
+
+def test_tables_include_every_scene_and_macro_average(tmp_path):
+    _write_run(tmp_path, "A1_0", "01-run")
+    _write_run(tmp_path, "A2_0", "01-run")
+    records = load_latest_successful_runs(tmp_path)
+
+    paths = generate_manuscript_tables(records, tmp_path / "paper")
+    text = paths["A"].read_text(encoding="utf-8")
+
+    assert "A1" in text
+    assert "A2" in text
+    assert "Macro average" in text
+
+
+def test_metric_arrows_match_metric_direction(tmp_path):
+    _write_run(tmp_path, "R1_0", "01-run")
+    paths = generate_manuscript_tables(
+        load_latest_successful_runs(tmp_path), tmp_path / "paper"
+    )
+    text = paths["R"].read_text(encoding="utf-8")
+
+    for label in ("ATE (cm) ↓", "LPIPS ↓", "Depth L1 ↓", "Keyframes ↓"):
+        assert label in text
+    for label in ("PSNR (dB) ↑", "SSIM ↑"):
+        assert label in text
+
+
+def test_relative_changes_use_baseline_as_denominator():
+    assert relative_change(80.0, 100.0) == pytest.approx(-20.0)
+    assert relative_change(110.0, 100.0) == pytest.approx(10.0)
+
+
+def test_figures_are_generated_in_pdf_and_png(tmp_path):
+    for experiment_id, psnr in (("R1_0", 20.0), ("R1_1", 21.0), ("C1_0", 18.0)):
+        _write_run(tmp_path, experiment_id, "01-run", psnr=psnr)
+    records = load_latest_successful_runs(tmp_path)
+
+    paths = generate_figures(records, tmp_path / "paper")
+
+    assert {path.suffix for path in paths} == {".pdf", ".png"}
+    assert all(path.stat().st_size > 100 for path in paths)
+
+
+def test_efficiency_comparisons_do_not_cross_hardware_within_scene(tmp_path):
+    _write_run(tmp_path, "A1_0", "01-run")
+    candidate = _write_run(tmp_path, "A1_1", "01-run")
+    manifest_path = candidate / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["environment"]["gpu"] = "different GPU"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    pairs = hardware_compatible_pairs(load_latest_successful_runs(tmp_path), "GI-KF")
+
+    assert pairs == []
