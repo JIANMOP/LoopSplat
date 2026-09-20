@@ -8,6 +8,8 @@ This directory contains the bilingual journal-paper draft and its auditable expe
 |---|---|---|
 | English master | [manuscript-en.md](manuscript-en.md) | Complete English paper, approximately 6,400 words. |
 | Chinese master | [manuscript-zh.md](manuscript-zh.md) | Complete Chinese counterpart with matching formulas, citations, metrics, tables, and figures. |
+| English review copy | [review/manuscript-en-review.docx](review/manuscript-en-review.docx) / [PDF](review/manuscript-en-review.pdf) | A4 copy for reading and annotation; not an independent source. |
+| Chinese review copy | [review/manuscript-zh-review.docx](review/manuscript-zh-review.docx) / [PDF](review/manuscript-zh-review.pdf) | A4 copy for reading and annotation; not an independent source. |
 | Bibliography | [references.bib](references.bib) | Shared BibTeX library of verified references. |
 | Result tables | [tables](tables) | Per-scene TUM, Replica, FMDataset, and efficiency tables plus normalized CSV sources. |
 | Figures | [figures](figures) | Editable system diagrams, generated result plots, and saved qualitative diagnostics. |
@@ -53,6 +55,20 @@ python thesis/scripts/validate_manuscripts.py \
 
 The manuscript validator checks local assets, citation resolution, bilingual citation sets, formula tags, metric-number sequences, figure/table numbering, placeholders, numbered-section order, and prohibited unsupported claims.
 
+## Building the review copies
+
+The review builder keeps the Markdown masters unchanged. It embeds Tables 2-5, resolves citations, converts display and inline mathematics to editable Word equations, includes the figures, and applies a neutral A4 layout. Run it from the repository root after activating the environment that contains Pandoc and `rsvg-convert`:
+
+~~~bash
+conda activate loop_splat
+python thesis/scripts/build_review_documents.py \
+  --pandoc "$(command -v pandoc)" \
+  --thesis-root thesis \
+  --output-dir thesis/review
+~~~
+
+The command checks that both DOCX files contain all five tables, numbered equations 1-11, at least eight embedded figures, resolved citations, and a reference section. Export the DOCX files from Microsoft Word to refresh the corresponding PDFs, then inspect the wide result tables, equations, figure captions, and page breaks. The review files are convenient reading copies; make substantive edits in `manuscript-en.md` and `manuscript-zh.md`, then rebuild them.
+
 ## Converting after journal selection
 
 1. Download the journal's current Word or LaTeX template and author instructions.
@@ -61,18 +77,6 @@ The manuscript validator checks local assets, citation resolution, bilingual cit
 4. Apply the venue's CSL or BibTeX style to references.bib.
 5. Add author names, affiliations, declarations, acknowledgements, data/code availability text, and any ethics or funding statements required by the venue.
 6. Rerun both validators before submission and visually inspect the rendered PDF for formula, table, font, and figure problems.
-
-Pandoc can provide a preliminary Word copy, but it does not automatically inline the externally linked result-table files:
-
-~~~bash
-pandoc thesis/manuscript-en.md \
-  --citeproc \
-  --bibliography=thesis/references.bib \
-  --resource-path=thesis \
-  -o thesis/manuscript-en-review.docx
-~~~
-
-Treat this file as a review export, not as an independent master.
 
 ## Submission boundary
 

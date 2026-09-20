@@ -198,7 +198,7 @@ This separation addresses a practical failure mode of aggressive keyframe reduct
 The third addition changes the resolution schedule of mapping supervision, not the structure of the Gaussian map. For \(L=2\) sublevels, the RGB image is pre-smoothed and downsampled to \(0.25\times\) and \(0.5\times\) resolution; the original observation supplies the final full-resolution level. Depth is downsampled by validity-weighted area averaging so that missing measurements are not mixed into valid depths. If \(n_t\) is the number of times persistent keyframe \(t\) has been sampled for optimization and \(u=8\) is the use budget per sublevel, then
 
 $$
-a_\ell=2^{-(L-\ell)},\quad \ell=0,\ldots,L-1;qquad
+a_\ell=2^{-(L-\ell)},\quad \ell=0,\ldots,L-1;\qquad
 \ell_t(n_t)=\min\!\left(\left\lfloor\frac{n_t}{u}\right\rfloor,L\right),
 \quad L=2,\ u=8,
 \tag{10}

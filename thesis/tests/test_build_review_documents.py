@@ -1,0 +1,254 @@
+from pathlib import Path
+import subprocess
+import sys
+from zipfile import ZipFile
+
+from thesis.scripts.build_review_documents import (
+    TABLE_SPECS,
+    assemble_review_markdown,
+    build_review_document,
+    build_pandoc_command,
+    format_review_docx,
+    inspect_docx,
+    validate_review_document,
+)
+
+
+def test_assemble_review_markdown_inlines_tables_without_editing_sources(
+    tmp_path: Path,
+) -> None:
+    thesis_root = tmp_path / "thesis"
+    tables = thesis_root / "tables"
+    tables.mkdir(parents=True)
+    manuscript = thesis_root / "manuscript-en.md"
+    manuscript.write_text(
+        "# Paper\n\nFor \\(x_i\\), define\n\n$$\nx=1.\n\\tag{1}\n$$\n\n"
+        "Results are listed in [Table 2](tables/tum-results.md).\n",
+        encoding="utf-8",
+    )
+    table = tables / "tum-results.md"
+    table.write_text("| Scene | PSNR |\n|---|---:|\n| A1 | 12.3 |\n", encoding="utf-8")
+
+    assembled = assemble_review_markdown(
+        manuscript,
+        thesis_root,
+        (TABLE_SPECS["en"][0],),
+    )
+
+    assert "[Table 2](tables/tum-results.md)" not in assembled
+    assert "Results are listed in Table 2." in assembled
+    assert "**Table 2. TUM RGB-D per-scene results.**" in assembled
+    assert assembled.count("| A1 | 12.3 |") == 1
+    assert r"\tag{1}" not in assembled
+    assert r"\qquad\text{(1)}" in assembled
+    assert r"For $x_i$, define" in assembled
+    assert r"\tag{1}" in manuscript.read_text(encoding="utf-8")
+    assert r"For \(x_i\), define" in manuscript.read_text(encoding="utf-8")
+
+
+def test_assemble_review_markdown_compacts_gpu_names_only_in_efficiency_export(
+    tmp_path: Path,
+) -> None:
+    thesis_root = tmp_path / "thesis"
+    tables = thesis_root / "tables"
+    tables.mkdir(parents=True)
+    manuscript = thesis_root / "manuscript-en.md"
+    manuscript.write_text(
+        "# Paper\n\nSee [Table 5](tables/efficiency-results.md).\n",
+        encoding="utf-8",
+    )
+    table = tables / "efficiency-results.md"
+    table.write_text(
+        "| GPU | Time |\n|---|---:|\n"
+        "| NVIDIA GeForce RTX 2080 Ti | 1.0 |\n"
+        "| NVIDIA GeForce RTX 4080 SUPER | 2.0 |\n",
+        encoding="utf-8",
+    )
+
+    assembled = assemble_review_markdown(
+        manuscript,
+        thesis_root,
+        (TABLE_SPECS["en"][3],),
+    )
+
+    assert "| RTX 2080 Ti | 1.0 |" in assembled
+    assert "| RTX 4080 SUPER | 2.0 |" in assembled
+    assert "NVIDIA GeForce" not in assembled
+    assert "NVIDIA GeForce" in table.read_text(encoding="utf-8")
+
+
+def test_build_pandoc_command_enables_citations_math_and_local_assets(
+    tmp_path: Path,
+) -> None:
+    thesis_root = tmp_path / "thesis"
+    source = thesis_root / "assembled.md"
+    output = thesis_root / "review" / "paper.docx"
+    bibliography = thesis_root / "references.bib"
+
+    command = build_pandoc_command(
+        Path("/usr/bin/pandoc"),
+        source,
+        output,
+        bibliography,
+        thesis_root,
+        "References",
+    )
+
+    assert command[0] == "/usr/bin/pandoc"
+    assert "--citeproc" in command
+    assert "--fail-if-warnings" in command
+    assert f"--bibliography={bibliography}" in command
+    assert f"--resource-path={thesis_root}" in command
+    assert "--from=markdown+citations+tex_math_dollars+pipe_tables" in command
+    assert "reference-section-title=References" in command
+    assert command[-2:] == ["--output", str(output)]
+
+
+def test_inspect_docx_counts_tables_equations_media_and_references(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "review.docx"
+    xml = (
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+        'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><w:body>'
+        '<w:tbl/><w:tbl/><m:oMathPara><m:oMath><m:r><m:t>(1)</m:t></m:r>'
+        '</m:oMath></m:oMathPara>'
+        '<w:p><m:oMath><m:r><m:t>(2)</m:t></m:r></m:oMath></w:p>'
+        '<w:p><w:r><w:t>References</w:t>'
+        "</w:r></w:p></w:body></w:document>"
+    )
+    with ZipFile(document, "w") as archive:
+        archive.writestr("word/document.xml", xml)
+        archive.writestr("word/media/image1.png", b"one")
+        archive.writestr("word/media/image2.jpg", b"two")
+
+    inspection = inspect_docx(document, "References")
+
+    assert inspection.table_count == 2
+    assert inspection.equation_count == 1
+    assert inspection.media_count == 2
+    assert inspection.drawing_count == 0
+    assert inspection.has_reference_heading
+    assert inspection.equation_numbers == (1,)
+    assert not inspection.has_unresolved_citations
+    assert not inspection.has_external_table_links
+
+
+def test_validate_review_document_rejects_incomplete_exports() -> None:
+    try:
+        validate_review_document(
+            table_count=4,
+            equation_count=10,
+            equation_numbers=tuple(range(1, 11)),
+            media_count=7,
+            drawing_count=7,
+            has_reference_heading=False,
+            has_unresolved_citations=True,
+            has_external_table_links=True,
+        )
+    except ValueError as error:
+        message = str(error)
+    else:
+        raise AssertionError("incomplete review document was accepted")
+
+    assert "tables 4/5" in message
+    assert "equations 10/11" in message
+    assert "equation numbers 1-10/1-11" in message
+    assert "media 7/8" in message
+    assert "drawings 7/8" in message
+    assert "reference heading missing" in message
+    assert "unresolved citation keys" in message
+    assert "external table links" in message
+
+
+def test_build_review_document_exports_the_complete_english_master(
+    tmp_path: Path,
+) -> None:
+    repository = Path(__file__).resolve().parents[2]
+    thesis_root = repository / "thesis"
+    output = tmp_path / "manuscript-en-review.docx"
+    pandoc = Path(sys.executable).with_name("pandoc")
+
+    inspection = build_review_document(
+        pandoc=pandoc,
+        manuscript=thesis_root / "manuscript-en.md",
+        thesis_root=thesis_root,
+        output=output,
+        language="en",
+    )
+
+    assert output.is_file()
+    assert output.stat().st_size > 100_000
+    assert inspection.table_count >= 5
+    assert inspection.equation_count >= 11
+    assert inspection.media_count >= 8
+    assert inspection.drawing_count >= 8
+    assert inspection.has_reference_heading
+    assert not inspection.has_unresolved_citations
+    assert not inspection.has_external_table_links
+
+
+def test_cli_builds_bilingual_review_documents(tmp_path: Path) -> None:
+    repository = Path(__file__).resolve().parents[2]
+    thesis_root = repository / "thesis"
+    script = thesis_root / "scripts" / "build_review_documents.py"
+    pandoc = Path(sys.executable).with_name("pandoc")
+    output_dir = tmp_path / "review"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--pandoc",
+            str(pandoc),
+            "--thesis-root",
+            str(thesis_root),
+            "--output-dir",
+            str(output_dir),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert (output_dir / "manuscript-en-review.docx").stat().st_size > 100_000
+    assert (output_dir / "manuscript-zh-review.docx").stat().st_size > 100_000
+    assert "built manuscript-en-review.docx" in completed.stdout
+    assert "built manuscript-zh-review.docx" in completed.stdout
+    assert "display equations" in completed.stdout
+    assert "WARNING" not in completed.stderr
+
+
+def test_format_review_docx_sets_a4_margins_and_compact_table_text(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "review.docx"
+    xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Body text</w:t></w:r></w:p>
+    <w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table text</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+    <w:sectPr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+    </w:sectPr>
+  </w:body>
+</w:document>
+"""
+    with ZipFile(document, "w") as archive:
+        archive.writestr("word/document.xml", xml)
+        archive.writestr("word/styles.xml", "styles")
+
+    format_review_docx(document, "zh-CN")
+
+    with ZipFile(document) as archive:
+        updated = archive.read("word/document.xml").decode("utf-8")
+        assert archive.read("word/styles.xml") == b"styles"
+    assert 'w:w="11906"' in updated
+    assert 'w:h="16838"' in updated
+    assert 'w:left="850"' in updated
+    assert 'w:right="850"' in updated
+    assert 'w:val="16"' in updated
+    assert updated.count('w:val="16"') == 2
+    assert 'w:lang w:val="zh-CN"' in updated
