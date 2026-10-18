@@ -70,7 +70,7 @@
 
 ## 第二版 BibTeX 元数据决策
 
-`thesis/v2/references.bib` 是待 Task 6 按英文正文首次引用顺序裁剪、重排的候选库，共 33 条，逐条对应上表 `ACCEPTED` 记录。每条均保留纯 DOI 值和出版商官方 URL，并标记 `keywords = {candidate}`；三条 `REJECTED` 预印本和无 DOI 的 DROID-SLAM 均未进入该库。
+Task 6 finalized the bibliography as 33 formally published, DOI-bearing records in the English first-citation order. All 33 initial candidates are cited and retained; no candidate entry was pruned. The three REJECTED preprints and DOI-less DROID-SLAM remain outside the bibliography.
 
 Task 3 复核 DOI 注册元数据，并沿用上表对核心论文及三个创新点直接支撑文献所做的出版商/正式论文集页面核验。冲突按以下规则落库：
 
@@ -81,6 +81,48 @@ Task 3 复核 DOI 注册元数据，并沿用上表对核心论文及三个创�
 - Keyframe-Based Visual–Inertial Odometry 的 online-first 年份是 2014，但正式卷期为 2015；BibTeX 沿用正式卷期年份。作者姓名中的 `Sandström`、`Gómez Rodríguez`、`Tardós`、`François` 等变音符以正式出版显示为准，不沿用 DOI 导出中的 ASCII 降级形式。
 
 Replica 原始报告没有核验到正式会刊/DOI。正文可写：使用八个 Replica 场景并遵循已发表 Gaussian/RGB-D SLAM 工作中的评测协议，精确场景、采帧和评测帧选择放入可复现材料；数据访问 URL 放在 data-availability statement。可引用 `keetha2024_splatam`、`yan2024_gsslam`、`matsuki2024_gaussiansplatting`、`sandstrom2023_pointslam` 支持“采用的评测协议”，但不能把它们写成 Replica 创建论文。
+
+## Task 6 English citation order and retention
+
+The Task 6 finalization supersedes the earlier candidate-library note: references.bib now retains the 33 formally published DOI-bearing records below in the first-citation order of manuscript-en.md. Every initial candidate is cited by the English master, so the pruning pass removes zero entries. The three REJECTED preprints and DOI-less DROID-SLAM remain outside the bibliography.
+
+| order | citation_key | first English citation | final status |
+|---:|---|---|---|
+| 1 | kerbl2023_3dgs | Section 1, paragraph 1 | RETAINED — cited; formal DOI record |
+| 2 | zhu2025_loopsplat | Section 1, paragraph 1 | RETAINED — cited; formal DOI record |
+| 3 | keetha2024_splatam | Section 1, paragraph 1 | RETAINED — cited; formal DOI record |
+| 4 | yan2024_gsslam | Section 1, paragraph 1 | RETAINED — cited; formal DOI record |
+| 5 | matsuki2024_gaussiansplatting | Section 1, paragraph 1 | RETAINED — cited; formal DOI record |
+| 6 | huang2024_photoslam | Section 1, paragraph 1 | RETAINED — cited; formal DOI record |
+| 7 | newcombe2011_kinectfusion | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 8 | whelan2016_elasticfusion | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 9 | murartal2017_orbslam2 | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 10 | sucar2021_imap | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 11 | zhu2022_niceslam | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 12 | sandstrom2023_pointslam | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 13 | yang2022_voxfusion | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 14 | wang2023_coslam | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 15 | johari2023_eslam | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 16 | tang2023_mipsfusion | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 17 | liso2024_loopyslam | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 18 | zhang2023_goslam | Section 1, paragraph 2 | RETAINED — cited; formal DOI record |
+| 19 | campos2021_orbslam3 | Section 1, paragraph 3 | RETAINED — cited; formal DOI record |
+| 20 | forster2017_preintegration | Section 1, paragraph 3 | RETAINED — cited; formal DOI record |
+| 21 | leutenegger2015_keyframevio | Section 1, paragraph 3 | RETAINED — cited; formal DOI record |
+| 22 | sun2024_mm3dgsslam | Section 1, paragraph 3 | RETAINED — cited; formal DOI record |
+| 23 | wu2025_vingsmono | Section 1, paragraph 3 | RETAINED — cited; formal DOI record |
+| 24 | huber1964_robust | Section 1, paragraph 3 | RETAINED — cited; formal DOI record |
+| 25 | burt1981_fastfilter | Section 1, paragraph 4 | RETAINED — cited; formal DOI record |
+| 26 | burt1983_pyramid | Section 1, paragraph 4 | RETAINED — cited; formal DOI record |
+| 27 | kerbl2024_hierarchical | Section 1, paragraph 4 | RETAINED — cited; formal DOI record |
+| 28 | sturm2012_tumrgbd | Section 1, paragraph 6 | RETAINED — cited; formal DOI record |
+| 29 | horn1987_absoluteorientation | Section 1, paragraph 6 | RETAINED — cited; formal DOI record |
+| 30 | zhu2019_fmdataset | Section 1, paragraph 6 | RETAINED — cited; formal DOI record |
+| 31 | wang2003_msssim | Section 1, paragraph 6 | RETAINED — cited; formal DOI record |
+| 32 | wang2004_ssim | Section 1, paragraph 6 | RETAINED — cited; formal DOI record |
+| 33 | zhang2018_lpips | Section 1, paragraph 6 | RETAINED — cited; formal DOI record |
+
+Pruned entries: none. Candidate records: 33. Retained and cited records: 33.
 
 ## REJECTED 审计记录：不得进入推荐引用集合
 
