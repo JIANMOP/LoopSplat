@@ -27,6 +27,15 @@
 | FAILURE-SEED | Experiments / statistical boundary | All 70 selected records use seed 0; reported changes are descriptive cross-scene macro differences, not multi-seed estimates or significance tests. | 70 条选定记录均使用 seed 0；所报变化是描述性的跨场景宏差异，不是多 seed 估计或显著性检验。 | `thesis/tables/result-source.csv:2-71`, column `seed` | 无文献依赖 | 70/70 rows have `seed=0`; denominators are scene counts `5/8/3`, not random-seed counts | 不得写 statistically significant、variance、confidence interval 或 mean over random seeds。 |
 | FAILURE-VIEW | Experiments / rendering boundary | Rendering metrics and the R5 panels evaluate fixed observed views; they do not establish novel-view generalization, global-map accuracy, or mesh quality. | 渲染指标和 R5 图评估固定观测视角；它们不证明 novel-view 泛化、全局地图精度或网格质量。 | Metric protocol in `thesis/internal/experiment-audit.md`; R5 rows `result-source.csv:56,59`; mapper diagnostic images audited at frame 1990 | `wang2003_msssim` `10.1109/ACSSC.2003.1292216`; `zhang2018_lpips` `10.1109/CVPR.2018.00068` | R5 Depth L1 reduction `100(.049038207-.040517256)/.049038207=17.37%`; scene example only | 不得称 novel-view synthesis、unseen-view generalization、world-coordinate global-map accuracy 或 mesh reconstruction accuracy。 |
 
+## Task 4 方法稿追踪补充
+
+| claim_id | manuscript_location | audited_claims | implementation_evidence |
+|---|---|---|---|
+| METHOD-DRAFT-01 | `thesis/v2/sections/method-en.md`, Secs. 3.1-3.2, Eqs. (1)-(8) | `BACKEND-01`, `IMU-01`, `IMU-02`；正式平移权重为零，继承后端不归入 OARS-GS 创新。 | `src/entities/tracker.py:190-405,444-610`; `src/entities/imu_preintegration.py:44-96,114-262`; `src/entities/gaussian_slam.py:370-410,486-563` |
+| METHOD-DRAFT-02 | `thesis/v2/sections/method-en.md`, Secs. 3.3-3.4, Eqs. (9)-(15), Fig. 2 | `GIKF-01`, `GIKF-02`, `SUPPORT-01`, `SUPPORT-02`；motion 先硬门控再 score，support 观测不持久化但参数影响可进入后续 checkpoint。 | `src/entities/gaussian_slam.py:55-66,97-193,508-600`; `src/utils/keyframe_selection.py:20-139`; `src/entities/mapper.py:420-430` |
+| METHOD-DRAFT-03 | `thesis/v2/sections/method-en.md`, Sec. 3.5, Eqs. (16)-(20) | `PYR-01`, `PYR-02`, `MAPLOSS-01`；仅改变 raster 宽高，保留 FOV/投影字段，不显式缩放像素内参字段；有限预算不保证全分辨率。 | `src/entities/mapper.py:78-118,185-329`; `src/utils/mapper_utils.py:506-659`; `tests/test_gaussian_pyramid.py:36-55,89-104` |
+| METHOD-ALG-01 | `thesis/v2/sections/method-en.md`, Sec. 3.6, Algorithm 1, Fig. 1 | 真实分支序为 track → decide/audit → boundary backend → persistent map XOR support；终止时再保存剩余活动子图。 | `src/entities/gaussian_slam.py:486-670`; `src/entities/tracker.py:444-610`; `src/entities/mapper.py:227-329,420-430` |
+
 ## 发布前总闸门
 
 - 任何 TUM 宏结果后紧跟 `FAILURE-A3`。

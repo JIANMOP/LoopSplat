@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">OARS-GS processing overview</title>
+  <desc id="desc">Per-frame RGB-D tracking with optional inertial rotation regularization, observation-adaptive keyframing, persistent coarse-to-fine mapping, transient tracking-support updates, and the inherited LoopSplat submap backend.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#2563eb"/>
+    </marker>
+    <style>
+      .title { font: 700 28px Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 15px Arial, sans-serif; fill: #475569; }
+      .node-title { font: 700 17px Arial, sans-serif; fill: #0f172a; text-anchor: middle; }
+      .node-body { font: 400 14px Arial, sans-serif; fill: #334155; text-anchor: middle; }
+      .label { font: 700 13px Arial, sans-serif; fill: #475569; text-anchor: middle; }
+      .backend-title { font: 700 18px Arial, sans-serif; fill: #ffffff; text-anchor: middle; }
+      .backend-body { font: 400 14px Arial, sans-serif; fill: #dbeafe; text-anchor: middle; }
+      .arrow { fill: none; stroke: #334155; stroke-width: 2.2; marker-end: url(#arrow); }
+      .arrow-blue { fill: none; stroke: #2563eb; stroke-width: 2.4; marker-end: url(#arrow-blue); }
+      .arrow-dashed { fill: none; stroke: #64748b; stroke-width: 2; stroke-dasharray: 8 6; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1200" height="760" fill="#ffffff"/>
+  <text x="600" y="42" class="title" text-anchor="middle">OARS-GS Processing Overview</text>
+  <text x="600" y="68" class="subtitle" text-anchor="middle">Observation-dependent tracking, persistence, and supervision over one shared active Gaussian model</text>
+
+  <g id="rgbd-observation">
+    <rect x="50" y="105" width="245" height="88" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <text x="172.5" y="138" class="node-title">RGB-D Observation</text>
+    <text x="172.5" y="164" class="node-body">color, depth, timestamp</text>
+  </g>
+
+  <g id="optional-calibrated-imu">
+    <rect x="50" y="225" width="245" height="88" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="172.5" y="258" class="node-title">Optional Calibrated IMU</text>
+    <text x="172.5" y="284" class="node-body">interpolated valid interval</text>
+  </g>
+
+  <g id="rgbd-tracking">
+    <rect x="390" y="105" width="300" height="110" rx="12" fill="#eef2ff" stroke="#4f46e5" stroke-width="2.2"/>
+    <text x="540" y="139" class="node-title">RGB-D Tracking</text>
+    <text x="540" y="166" class="node-body">rendered RGB-D residuals</text>
+    <text x="540" y="189" class="node-body">best-loss camera pose</text>
+  </g>
+
+  <g id="inertial-rotation-regularization">
+    <rect x="390" y="245" width="300" height="110" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2.2"/>
+    <text x="540" y="279" class="node-title">Inertial Rotation Regularization</text>
+    <text x="540" y="306" class="node-body">midpoint SO(3) preintegration</text>
+    <text x="540" y="329" class="node-body">scale-normalized componentwise Huber</text>
+  </g>
+
+  <g id="observation-adaptive-keyframing">
+    <rect x="790" y="125" width="350" height="126" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="2.2"/>
+    <text x="965" y="160" class="node-title">Observation-Adaptive Keyframing</text>
+    <text x="965" y="188" class="node-body">interval constraints + motion hard gate</text>
+    <text x="965" y="212" class="node-body">frustum-proxy novelty + normalized baseline</text>
+  </g>
+
+  <g id="persistent-keyframe">
+    <rect x="740" y="345" width="230" height="84" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="2.2"/>
+    <text x="855" y="379" class="node-title">Persistent Keyframe</text>
+    <text x="855" y="404" class="node-body">stored observation</text>
+  </g>
+
+  <g id="transient-tracking-support-update">
+    <rect x="990" y="330" width="190" height="114" rx="12" fill="#fefce8" stroke="#ca8a04" stroke-width="2.2"/>
+    <text x="1085" y="359" class="node-title">Transient</text>
+    <text x="1085" y="381" class="node-title">Tracking-Support Update</text>
+    <text x="1085" y="407" class="node-body">20 full-resolution steps</text>
+    <text x="1085" y="427" class="node-body">no persistent record</text>
+  </g>
+
+  <g id="usage-guided-coarse-to-fine-rgbd-mapping">
+    <rect x="505" y="490" width="465" height="112" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2.2"/>
+    <text x="737.5" y="526" class="node-title">Usage-Guided Coarse-to-Fine RGB-D Mapping</text>
+    <text x="737.5" y="553" class="node-body">per-keyframe use count: 1/4 → 1/2 → full resolution</text>
+    <text x="737.5" y="577" class="node-body">one shared active Gaussian model</text>
+  </g>
+
+  <g id="inherited-loopsplat-submap-backend">
+    <rect x="50" y="650" width="1090" height="78" rx="14" fill="#1e3a8a" stroke="#172554" stroke-width="2"/>
+    <text x="595" y="682" class="backend-title">Inherited LoopSplat Submap Backend</text>
+    <text x="595" y="708" class="backend-body">checkpointing · Gaussian registration · loop closure · pose-graph optimization</text>
+  </g>
+
+  <path d="M295 149 H390" class="arrow-blue"/>
+  <path d="M295 269 H390" class="arrow"/>
+  <path d="M540 245 V216" class="arrow"/>
+  <path d="M690 160 H790" class="arrow-blue"/>
+  <path d="M965 251 V294 H855 V345" class="arrow"/>
+  <path d="M965 251 V294 H1085 V330" class="arrow"/>
+  <text x="865" y="285" class="label">K<tspan baseline-shift="sub">t</tspan> = 1</text>
+  <text x="1082" y="285" class="label">U<tspan baseline-shift="sub">t</tspan> = 1</text>
+  <path d="M855 429 V490" class="arrow-blue"/>
+  <path d="M1085 444 V625 H900 V650" class="arrow-dashed"/>
+  <path d="M737 602 V650" class="arrow-blue"/>
+  <path d="M965 251 V307 H620 V650" class="arrow-dashed"/>
+  <text x="659" y="634" class="label">submap boundary</text>
+  <text x="1005" y="622" class="label">parameter effects may reach a later checkpoint</text>
+
+  <g id="legend">
+    <line x1="65" y1="605" x2="120" y2="605" class="arrow-blue"/>
+    <text x="190" y="610" class="node-body">per-frame optimization path</text>
+    <line x1="300" y1="605" x2="355" y2="605" class="arrow-dashed"/>
+    <text x="425" y="610" class="node-body">inherited backend interaction</text>
+  </g>
+</svg>

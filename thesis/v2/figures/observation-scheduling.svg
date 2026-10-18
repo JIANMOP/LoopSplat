@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="1460" viewBox="0 0 1300 1460" role="img" aria-labelledby="title desc">
+  <title id="title">Observation-adaptive keyframing and transient support scheduling</title>
+  <desc id="desc">Exact reachable gate order from submap boundary and valid depth through interval and motion gates to the frustum-proxy score, persistent keyframe admission, or a transient tracking-support update.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#334155"/>
+    </marker>
+    <style>
+      .title { font: 700 28px Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 15px Arial, sans-serif; fill: #475569; }
+      .node-title { font: 700 16px Arial, sans-serif; fill: #0f172a; text-anchor: middle; }
+      .node-body { font: 400 13px Arial, sans-serif; fill: #334155; text-anchor: middle; }
+      .edge-label { font: 700 13px Arial, sans-serif; fill: #475569; text-anchor: middle; }
+      .arrow { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+      .note { font: 400 13px Arial, sans-serif; fill: #475569; }
+    </style>
+  </defs>
+
+  <rect width="1300" height="1460" fill="#ffffff"/>
+  <text x="650" y="42" class="title" text-anchor="middle">Observation Scheduling</text>
+  <text x="650" y="68" class="subtitle" text-anchor="middle">Motion is a hard gate before scoring; only narrow rejected cases reach transient support</text>
+
+  <g id="tracked-frame-and-estimated-pose">
+    <rect x="475" y="95" width="350" height="68" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <text x="650" y="123" class="node-title">Tracked Frame and Estimated Pose</text>
+    <text x="650" y="146" class="node-body">current observation t</text>
+  </g>
+
+  <g id="submap-boundary-gate">
+    <path d="M650 200 L800 260 L650 320 L500 260 Z" fill="#f8fafc" stroke="#475569" stroke-width="2"/>
+    <text x="650" y="254" class="node-title">Submap Boundary?</text>
+    <text x="650" y="276" class="node-body">tested before ordinary gates</text>
+  </g>
+
+  <g id="valid-depth-gate">
+    <path d="M650 365 L800 425 L650 485 L500 425 Z" fill="#f8fafc" stroke="#475569" stroke-width="2"/>
+    <text x="650" y="420" class="node-title">Valid Depth?</text>
+    <text x="650" y="442" class="node-body">finite D &gt; 0 exists</text>
+  </g>
+
+  <g id="forced-frame-gate">
+    <path d="M650 530 L825 595 L650 660 L475 595 Z" fill="#f8fafc" stroke="#475569" stroke-width="2"/>
+    <text x="650" y="588" class="node-title">First/Last Frame or</text>
+    <text x="650" y="610" class="node-title">No Prior Persistent Keyframe?</text>
+  </g>
+
+  <g id="minimum-gap-gate">
+    <path d="M650 705 L800 765 L650 825 L500 765 Z" fill="#f8fafc" stroke="#475569" stroke-width="2"/>
+    <text x="650" y="758" class="node-title">Frame Gap &lt; Minimum Gap?</text>
+    <text x="650" y="780" class="node-body">g<tspan baseline-shift="sub">t</tspan> &lt; g<tspan baseline-shift="sub">min</tspan></text>
+  </g>
+
+  <g id="high-motion-gate">
+    <path d="M650 870 L800 930 L650 990 L500 930 Z" fill="#fff7ed" stroke="#ea580c" stroke-width="2.2"/>
+    <text x="650" y="923" class="node-title">High Motion?</text>
+    <text x="650" y="945" class="node-body">v &gt; v<tspan baseline-shift="sub">max</tspan> or ω &gt; ω<tspan baseline-shift="sub">max</tspan></text>
+  </g>
+
+  <g id="high-motion-stable-gap-gate">
+    <path d="M365 1015 L500 1070 L365 1125 L230 1070 Z" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="365" y="1064" class="node-title">Gap ≥ Stable Gap?</text>
+    <text x="365" y="1086" class="node-body">high-motion coverage gate</text>
+  </g>
+
+  <g id="stable-gap-gate">
+    <path d="M805 1015 L940 1070 L805 1125 L670 1070 Z" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+    <text x="805" y="1064" class="node-title">Gap ≥ Stable Gap?</text>
+    <text x="805" y="1086" class="node-body">ordinary coverage gate</text>
+  </g>
+
+  <g id="frustum-proxy-score">
+    <rect x="690" y="1170" width="350" height="90" rx="12" fill="#ecfeff" stroke="#0891b2" stroke-width="2.2"/>
+    <text x="865" y="1200" class="node-title">Frustum-Proxy Novelty</text>
+    <text x="865" y="1223" class="node-title">+ Normalized Baseline</text>
+    <text x="865" y="1246" class="node-body">score reached only after motion gates</text>
+  </g>
+
+  <g id="score-threshold-gate">
+    <path d="M865 1290 L990 1340 L865 1390 L740 1340 Z" fill="#ecfeff" stroke="#0891b2" stroke-width="2"/>
+    <text x="865" y="1335" class="node-title">Score &gt; 0.1?</text>
+    <text x="865" y="1357" class="node-body">strict threshold</text>
+  </g>
+
+  <g id="persistent-keyframe">
+    <rect x="1045" y="555" width="220" height="90" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="2.4"/>
+    <text x="1155" y="589" class="node-title">Persistent Keyframe</text>
+    <text x="1155" y="614" class="node-body">K<tspan baseline-shift="sub">t</tspan> = 1; stored and mapped</text>
+  </g>
+
+  <g id="rejected-observation">
+    <rect x="35" y="695" width="250" height="110" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="2.2"/>
+    <text x="160" y="730" class="node-title">Rejected Observation</text>
+    <text x="160" y="755" class="node-body">K<tspan baseline-shift="sub">t</tspan> = 0</text>
+    <text x="160" y="780" class="node-body">preserve exact rejection reason</text>
+  </g>
+
+  <g id="transient-support-eligibility">
+    <path d="M365 1190 L555 1260 L365 1330 L175 1260 Z" fill="#fefce8" stroke="#ca8a04" stroke-width="2.2"/>
+    <text x="365" y="1244" class="node-title">Transient Support Eligibility?</text>
+    <text x="365" y="1267" class="node-body">min_interval at gap 1, or</text>
+    <text x="365" y="1288" class="node-body">below/high-motion reject at gap 2</text>
+  </g>
+
+  <g id="transient-tracking-support-update">
+    <rect x="65" y="1360" width="320" height="78" rx="12" fill="#fefce8" stroke="#ca8a04" stroke-width="2.4"/>
+    <text x="225" y="1392" class="node-title">Transient Tracking-Support Update</text>
+    <text x="225" y="1417" class="node-body">20 full-resolution, no-prune steps</text>
+  </g>
+
+  <g id="no-mapping-update">
+    <rect x="435" y="1360" width="230" height="78" rx="12" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+    <text x="550" y="1392" class="node-title">No Mapping Update</text>
+    <text x="550" y="1417" class="node-body">observation remains transient</text>
+  </g>
+
+  <g id="maximum-gap-note">
+    <rect x="1015" y="890" width="250" height="104" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <text x="1032" y="920" class="note">Maximum-gap guard:</text>
+    <text x="1032" y="944" class="note">g<tspan baseline-shift="sub">stable</tspan> ≤ g<tspan baseline-shift="sub">max</tspan>, so any</text>
+    <text x="1032" y="968" class="note">maximum-gap candidate is already</text>
+    <text x="1032" y="988" class="note">selected by a stable-gap branch.</text>
+  </g>
+
+  <path d="M650 163 V200" class="arrow"/>
+  <path d="M650 320 V365" class="arrow"/>
+  <text x="672" y="346" class="edge-label">no</text>
+  <path d="M800 260 H1155 V555" class="arrow"/>
+  <text x="830" y="250" class="edge-label">yes</text>
+  <path d="M650 485 V530" class="arrow"/>
+  <text x="672" y="512" class="edge-label">yes</text>
+  <path d="M500 425 H160 V695" class="arrow"/>
+  <text x="470" y="414" class="edge-label">no: invalid_depth</text>
+  <path d="M825 595 H1045" class="arrow"/>
+  <text x="855" y="585" class="edge-label">yes</text>
+  <path d="M650 660 V705" class="arrow"/>
+  <text x="672" y="686" class="edge-label">no</text>
+  <path d="M500 765 H285" class="arrow"/>
+  <text x="408" y="753" class="edge-label">yes: min_interval</text>
+  <path d="M650 825 V870" class="arrow"/>
+  <text x="672" y="850" class="edge-label">no</text>
+  <path d="M500 930 H365 V1015" class="arrow"/>
+  <text x="466" y="918" class="edge-label">yes</text>
+  <path d="M800 930 H805 V1015" class="arrow"/>
+  <text x="829" y="918" class="edge-label">no</text>
+  <path d="M365 1125 V1150 H160 V805" class="arrow"/>
+  <text x="340" y="1147" class="edge-label">no: high_motion_reject</text>
+  <path d="M500 1070 H1155 V645" class="arrow"/>
+  <text x="525" y="1058" class="edge-label">yes: coverage rescue</text>
+  <path d="M940 1070 H1155 V645" class="arrow"/>
+  <text x="969" y="1058" class="edge-label">yes: stable_gap</text>
+  <path d="M805 1125 V1170" class="arrow"/>
+  <text x="827" y="1152" class="edge-label">no</text>
+  <path d="M865 1260 V1290" class="arrow"/>
+  <path d="M990 1340 H1155 V645" class="arrow"/>
+  <text x="1021" y="1328" class="edge-label">yes</text>
+  <path d="M740 1340 H700 V830 H285" class="arrow"/>
+  <text x="685" y="1328" class="edge-label">no: below_threshold</text>
+  <path d="M160 805 V1160 H365 V1190" class="arrow"/>
+  <path d="M365 1330 V1345 H225 V1360" class="arrow"/>
+  <text x="340" y="1350" class="edge-label">yes</text>
+  <path d="M365 1330 V1345 H550 V1360" class="arrow"/>
+  <text x="393" y="1350" class="edge-label">no</text>
+</svg>
