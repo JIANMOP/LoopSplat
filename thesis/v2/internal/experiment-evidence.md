@@ -41,7 +41,7 @@
 
 ## TUM A3：强制单列失败边界
 
-`thesis/tables/result-source.csv:10-13` 给出 A3 的 Baseline/GI-KF/Pyramid/combined。Baseline、GI-KF、combined 的 aligned ATE 分别为 **7.004943 / 563.912100 / 18.782076 cm**。GI-KF 相对 Baseline 增加 `100(563.912100-7.004943)/7.004943 = 7952.16%`；combined 虽低于 GI-KF，仍比 Baseline 高 `100(18.782076-7.004943)/7.004943 = 168.12%`。这直接排除“在 TUM 上鲁棒”“统一改善跟踪”“防止发散”等表述；现有数据也不能确定该失败的物理原因。
+`thesis/tables/result-source.csv:10-13` 给出 A3 的 Baseline/GI-KF/Pyramid/combined。Baseline、GI-KF、combined 的 aligned ATE 分别为 **7.004943 / 563.912100 / 18.782076 cm**。GI-KF 相对 Baseline 增加 `100(563.912100-7.004943)/7.004943 = 7950.20%`；combined 虽低于 GI-KF，仍比 Baseline 高 `100(18.782076-7.004943)/7.004943 = 168.13%`。这直接排除“在 TUM 上鲁棒”“统一改善跟踪”“防止发散”等表述；现有数据也不能确定该失败的物理原因。
 
 可作为正向但有限的场景例子：A2 combined 相对 Baseline 的 ATE 为 `3.321704 vs 3.794986 cm`，PSNR 为 `13.593519 vs 12.5008 dB`，持久 KF 为 `286 vs 635`（`result-source.csv:6,9`）；该例不替代五场景宏结论。
 
