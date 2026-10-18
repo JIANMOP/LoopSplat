@@ -68,6 +68,18 @@
 4. Coarse-to-fine：`burt1981_fastfilter`、`burt1983_pyramid` 支持经典图像金字塔；`huang2024_photoslam`、`yan2024_gsslam` 是不同机制的先例；`kerbl2024_hierarchical` 仅用于区分表示层级。
 5. 数据与指标：TUM/ATE/RPE 用 `sturm2012_tumrgbd`，刚体对齐用 `horn1987_absoluteorientation`，FM 用 `zhu2019_fmdataset`，MS-SSIM/SSIM/LPIPS 分别用 `wang2003_msssim`、`wang2004_ssim`、`zhang2018_lpips`。
 
+## 第二版 BibTeX 元数据决策
+
+`thesis/v2/references.bib` 是待 Task 6 按英文正文首次引用顺序裁剪、重排的候选库，共 33 条，逐条对应上表 `ACCEPTED` 记录。每条均保留纯 DOI 值和出版商官方 URL，并标记 `keywords = {candidate}`；三条 `REJECTED` 预印本和无 DOI 的 DROID-SLAM 均未进入该库。
+
+Task 3 复核 DOI 注册元数据，并沿用上表对核心论文及三个创新点直接支撑文献所做的出版商/正式论文集页面核验。冲突按以下规则落库：
+
+- SplaTAM 的 CVF HTML 索引省略 `Splat` 后的逗号，但 CVF 正式论文 PDF 和 DOI 注册题名均为 “SplaTAM: Splat, Track & Map …”；BibTeX 采用带逗号的正式题名。Photo-SLAM 的 CVF PDF 将 `Real-time` 写成句式大小写，而 DOI/IEEE 正式记录为 `Real-Time`；BibTeX 采用 DOI/IEEE 形式。其余作者顺序和年份一致。
+- 3DGS、MIPS-Fusion 和层次化 3DGS 的 DOI 注册页码分别显示 `1–14`、`1–16`、`1–15`，但 ACM 正式卷期按 Article 139、246、62 编号；BibTeX 使用 `articleno`，不把文章内页伪装成卷内连续页码。
+- iMAP、NICE-SLAM、Point-SLAM、GO-SLAM 的 CVF OA 页面与 IEEE/Crossref 最终页码不一致；继续采用上表已核验的 IEEE/Crossref 页码 `6209–6218`、`12776–12786`、`18387–18398`、`3704–3714`。
+- KinectFusion 的 DOI 注册作者串误写 `Pushmeet Kohi`，正式论文为 `Pushmeet Kohli`；TUM RGB-D 的 DOI 注册导出丢失 `Jürgen` 的变音符；Asilomar DOI 注册容器名含 `Thrity-Seventh` 拼写错误且发布日期字段缺失。BibTeX 分别采用正式论文/论文集中的 `Pushmeet Kohli`、`Jürgen Sturm`、`Thirty-Seventh …` 和 2003 年。
+- Keyframe-Based Visual–Inertial Odometry 的 online-first 年份是 2014，但正式卷期为 2015；BibTeX 沿用正式卷期年份。作者姓名中的 `Sandström`、`Gómez Rodríguez`、`Tardós`、`François` 等变音符以正式出版显示为准，不沿用 DOI 导出中的 ASCII 降级形式。
+
 Replica 原始报告没有核验到正式会刊/DOI。正文可写：使用八个 Replica 场景并遵循已发表 Gaussian/RGB-D SLAM 工作中的评测协议，精确场景、采帧和评测帧选择放入可复现材料；数据访问 URL 放在 data-availability statement。可引用 `keetha2024_splatam`、`yan2024_gsslam`、`matsuki2024_gaussiansplatting`、`sandstrom2023_pointslam` 支持“采用的评测协议”，但不能把它们写成 Replica 创建论文。
 
 ## REJECTED 审计记录：不得进入推荐引用集合
