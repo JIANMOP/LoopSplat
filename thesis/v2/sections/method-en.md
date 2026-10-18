@@ -33,33 +33,40 @@ where the RGB and depth terms are renderer residuals over the tracker validity m
 The inertial path is enabled only when the dataset exposes an interval interface and \(t>0\). For FMDataset, the RGB-D endpoints, after the configured time offset \(o_\tau\), are inserted by componentwise linear interpolation; strictly internal IMU samples are retained. Thus
 
 \[
-\mathcal{I}_t=
-\big\{(\widetilde a(\tau),\widetilde\omega(\tau),\tau):
-\tau\in\{\tau_{t-1}+o_\tau\}\cup
-\{\tau_k^I:\tau_{t-1}+o_\tau<\tau_k^I<\tau_t+o_\tau\}\cup
-\{\tau_t+o_\tau\}\big\},
+\begin{aligned}
+\mathcal{I}_t
+&=\big((\widetilde a_{t,k}^I,\widetilde\omega_{t,k}^I,
+\widetilde\tau_{t,k})\big)_{k=0}^{m_t-1},\\
+\widetilde\tau_{t,0}&=\tau_{t-1}+o_\tau,\qquad
+\widetilde\tau_{t,m_t-1}=\tau_t+o_\tau,\\
+\{\widetilde\tau_{t,k}\}_{k=1}^{m_t-2}
+&=\{\tau_j^I:\tau_{t-1}+o_\tau<\tau_j^I<\tau_t+o_\tau\}
+\quad\text{in increasing order},
+\end{aligned}
 \tag{3}
 \]
 
-where tildes denote the endpoint-interpolated streams. An interval is rejected if it is not covered by the IMU stream, has fewer than two samples, contains non-finite values, has non-increasing timestamps, exceeds \(0.2\,\mathrm{s}\), or exceeds the configured acceleration or angular-rate bounds (\(50\,\mathrm{m\,s^{-2}}\) and \(20\,\mathrm{rad\,s^{-1}}\) in the formal configuration). Rejection sets both inertial contributions in Eq. (2) to zero.
+where \(m_t=|\mathcal{I}_t|\) is the ordered interval sample count. The endpoint measurements \((\widetilde a_{t,0}^I,\widetilde\omega_{t,0}^I)\) and \((\widetilde a_{t,m_t-1}^I,\widetilde\omega_{t,m_t-1}^I)\) are obtained by componentwise linear interpolation; internal tilded values equal their retained IMU samples. An interval is rejected if it is not covered by the IMU stream, has fewer than two samples, contains non-finite values, has non-increasing timestamps, exceeds \(0.2\,\mathrm{s}\), or exceeds the configured acceleration or angular-rate bounds (\(50\,\mathrm{m\,s^{-2}}\) and \(20\,\mathrm{rad\,s^{-1}}\) in the formal configuration). Rejection sets both inertial contributions in Eq. (2) to zero.
 
-Let \(T_{CI}=[R_{CI},t_{CI};0,1]\) be the fixed IMU-to-camera calibration and \(b_g\) the fixed gyroscope bias. For adjacent samples \(k,k+1\), \(\Delta\tau_k=\tau_{k+1}^I-\tau_k^I\). Midpoint SO(3) preintegration [@forster2017_preintegration] is
+Let \(T_{CI}=[R_{CI},t_{CI};0,1]\) be the fixed IMU-to-camera calibration and \(b_g\) the fixed gyroscope bias. For adjacent ordered samples \(k,k+1\), midpoint SO(3) preintegration [@forster2017_preintegration] is
 
 \[
-\bar\omega_k^C=
-R_{CI}\!\left(\frac{\widetilde\omega_k^I+\widetilde\omega_{k+1}^I}{2}-b_g\right),
+\bar\omega_{t,k}^C=
+R_{CI}\!\left(
+\frac{\widetilde\omega_{t,k}^I+\widetilde\omega_{t,k+1}^I}{2}-b_g
+\right),
 \qquad
-\Delta R_t^I=\prod_{k=0}^{m-2}
-\operatorname{Exp}\!\left(\bar\omega_k^C\Delta\tau_k\right),
+\Delta\widehat R_t^C=\prod_{k=0}^{m_t-2}
+\operatorname{Exp}\!\left(\bar\omega_{t,k}^C\Delta\widetilde\tau_{t,k}\right),
 \tag{4}
 \]
 
-with right-multiplication in increasing time order. The formal runs use \(b_g=(0,0,0)^\top\), and the bias is not optimized. The visual relative motion evaluated at each differentiable tracking iteration is
+where \(\Delta\widetilde\tau_{t,k}=\widetilde\tau_{t,k+1}-\widetilde\tau_{t,k}\), and the product right-multiplies increments in increasing time order. The superscript \(C\) states that the prediction is expressed in camera coordinates after applying \(R_{CI}\); the hat distinguishes the inertial prediction from the visual relative motion. The formal runs use \(b_g=(0,0,0)^\top\), and the bias is not optimized. The visual relative motion evaluated at each differentiable tracking iteration is
 
 \[
 \Delta T_t^V=T_{t-1}^{CW}T_t^{WC},
 \qquad
-r_{R,t}=\operatorname{Log}\!\left((\Delta R_t^I)^\top\Delta R_t^V\right)\in\mathbb{R}^{3},
+r_{R,t}=\operatorname{Log}\!\left((\Delta\widehat R_t^C)^\top\Delta R_t^V\right)\in\mathbb{R}^{3},
 \tag{5}
 \]
 
@@ -85,10 +92,10 @@ componentwise after physical-scale normalization:
 \tag{7}
 \]
 
-This is a sum of three robust scalar residuals, not a Huber penalty on the vector norm. When a stationary interval has initialized a fixed gravity direction, the implementation can also integrate acceleration, include the calibrated lever arm, and form a translation prediction \(\widehat p_t^I\). A valid translation residual and its loss are
+This is a sum of three robust scalar residuals, not a Huber penalty on the vector norm. When a stationary interval has initialized a fixed gravity direction, the implementation can also integrate acceleration, include the calibrated lever arm, and form a camera-coordinate translation prediction \(\widehat p_t^C\). A valid translation residual and its loss are
 
 \[
-r_{p,t}=\Delta t_t^V-\widehat p_t^I,
+r_{p,t}=\Delta t_t^V-\widehat p_t^C,
 \qquad
 \mathcal{L}_{T}=\lambda_T
 \sum_{j=1}^{3}\rho_{\delta_T/s_T}\!\left(\frac{r_{p,t,j}}{s_T}\right),
@@ -100,6 +107,8 @@ r_{p,t}=\Delta t_t^V-\widehat p_t^I,
 Here \(\Delta t_t^V\) is the translation block of \(\Delta T_t^V\). Equation (8) may be evaluated for diagnostics, but its formal optimization contribution is exactly zero because \(\lambda_T=0\). OARS-GS therefore uses inertial data as a rotation regularizer; it does not jointly optimize velocity, gravity, or sensor bias. The regularizer acts inside each valid tracking iteration, and the final visual pose is then used to update the diagnostic inertial state.
 
 ## 3.3. Observation-adaptive keyframing
+
+Overlap-based observation selection already appears in published Gaussian RGB-D SLAM; SplaTAM, for example, uses overlap information in its keyframe management [@keetha2024_splatam]. OARS-GS does not treat overlap itself as the distinguishing mechanism. The implementation studied here places submap, depth, interval, and motion hard gates before a current-center frustum-proxy score, and couples persistent admission to the separately defined transient support lifecycle in Section 3.4.
 
 After tracking, persistent-keyframe admission compares the observation with the temporally latest persistent keyframe \(k\). The visibility proxy projects the centers of the *current* active Gaussians into each camera. With \(\pi_i(T,D)=1\) when center \(\mu_i\) has positive camera-space depth and lies inside the image frustum used with depth image \(D\), define
 
@@ -190,6 +199,8 @@ The support observation is transient: its identifier and RGB-D data are absent f
 
 ## 3.5. Usage-guided coarse-to-fine RGB-D mapping
 
+Classical image-pyramid processing establishes low-pass filtering and multiresolution image representations [@burt1981_fastfilter; @burt1983_pyramid], while Photo-SLAM applies a different multi-level mechanism to photorealistic Gaussian mapping [@huang2024_photoslam]. These precedents motivate coarse-to-fine supervision but do not define the construction or schedule below. OARS-GS uses valid-depth-weighted sublevels generated from each original observation and selects their resolution from an executed-optimizer-use count maintained independently for each persistent keyframe; the schedule changes supervision only, not the active Gaussian representation.
+
 For every persistent keyframe, OARS-GS independently constructs \(L\) sub-resolution targets from the original RGB-D observation. At sublevel \(\ell\in\{0,\ldots,L-1\}\), from coarsest to finest, the scale and raster dimensions are
 
 \[
@@ -275,7 +286,7 @@ Output: estimated poses and inherited persistent submap records
 for t = 0, ..., T - 1 do
     if a non-GT tracking path is active then
         form interpolated IMU interval I_t when available
-        validate I_t and midpoint-preintegrate Delta R_t^I
+        validate I_t and midpoint-preintegrate Delta Rhat_t^C
         optimize the relative camera pose with L_track
             (L_R is active only for a valid interval; formal L_T = 0)
         retain the best-loss pose and commit inertial diagnostics
