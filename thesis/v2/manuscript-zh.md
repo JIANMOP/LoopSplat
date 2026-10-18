@@ -387,6 +387,8 @@ run the inherited final loop-closure path when configured
 
 **策略。** Baseline 是关闭三项 OARS-GS 决策的继承 LoopSplat 配置。TUM 和 Replica 比较 Baseline、GI-KF、Pyramid 及 GI-KF+Pyramid。FMDataset 还包括 IMU 和 ALL，其中 ALL 启用惯性旋转正则、GI-KF 和 Pyramid。
 
+**表 1. 消融策略矩阵。**
+
 | 数据集组 | 策略 | 惯性旋转 | GI-KF | Pyramid |
 |---|---|---:|---:|---:|
 | TUM, Replica, FM | Baseline |  |  |  |
@@ -406,7 +408,7 @@ Replica 相对其继承基线使用预算匹配的关键帧节奏，并禁用临
 
 渲染在每种方法自身估计轨迹下的固定采样输入观测列表上进行。PSNR 和 MS-SSIM 衡量光度与多尺度结构一致性，LPIPS 衡量感知距离，Depth L1 衡量有效像素上的渲染深度误差 [@wang2003_msssim; @zhang2018_lpips]。PSNR 和 MS-SSIM 越高越好；LPIPS 和 Depth L1 越低越好。被评测图像是由直接、未经细化的子图拼接渲染出的已观测视角。这些测量不证明未观测视角泛化、独立全局地图几何或网格精度。
 
-详细的逐场景结果见 [TUM 表](../tables/tum-results.md)、[Replica 表](../tables/replica-results.md)、[FMDataset 表](../tables/fm-results.md) 和[配对资源表](../tables/efficiency-results.md)。
+详细的逐场景结果见 [表 2](../tables/tum-results.md)、[表 3](../tables/replica-results.md)、[表 4](../tables/fm-results.md) 和[表 5](../tables/efficiency-results.md)。
 
 ## 4.2. 跟踪精度
 
