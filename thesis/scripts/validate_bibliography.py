@@ -85,7 +85,23 @@ def parse_bibliography(path: Path) -> list[BibEntry]:
     return entries
 
 
-def validate_bibliography(bib_path: Path, manuscripts: list[Path]) -> list[str]:
+def citation_sequence(path: Path) -> list[str]:
+    seen: set[str] = set()
+    sequence: list[str] = []
+    for key in CITATION_RE.findall(Path(path).read_text(encoding="utf-8")):
+        if key not in seen:
+            seen.add(key)
+            sequence.append(key)
+    return sequence
+
+
+def validate_bibliography(
+    bib_path: Path,
+    manuscripts: list[Path],
+    published_only: bool = False,
+    require_doi: bool = False,
+    require_order: bool = False,
+) -> list[str]:
     errors: list[str] = []
     try:
         entries = parse_bibliography(bib_path)
@@ -100,6 +116,8 @@ def validate_bibliography(bib_path: Path, manuscripts: list[Path]) -> list[str]:
             if not entry.fields.get(required, "").strip():
                 errors.append(f"{entry.key}: missing {required}")
         doi = entry.fields.get("doi")
+        if require_doi and not doi:
+            errors.append(f"{entry.key}: missing DOI")
         if doi and not DOI_RE.fullmatch(doi.strip()):
             errors.append(f"{entry.key}: malformed DOI: {doi}")
         url = entry.fields.get("url")
@@ -113,6 +131,15 @@ def validate_bibliography(bib_path: Path, manuscripts: list[Path]) -> list[str]:
             errors.append(
                 f"{entry.key}: arXiv preprint must include keyword 'preprint'"
             )
+        if published_only:
+            if entry.entry_type == "misc":
+                errors.append(f"{entry.key}: unpublished entry type: misc")
+            if entry.fields.get("eprint") or entry.fields.get(
+                "archiveprefix", ""
+            ).lower() == "arxiv":
+                errors.append(
+                    f"{entry.key}: arXiv preprint metadata is not allowed"
+                )
 
     if manuscripts:
         cited: set[str] = set()
@@ -126,19 +153,50 @@ def validate_bibliography(bib_path: Path, manuscripts: list[Path]) -> list[str]:
                 )
         for entry in entries:
             is_candidate = "candidate" in entry.fields.get("keywords", "").lower()
-            if entry.key not in cited and not is_candidate:
+            if entry.key not in cited and (require_order or not is_candidate):
                 errors.append(
                     f"{entry.key}: bibliography entry is unused by every manuscript"
                 )
+        if require_order:
+            bib_sequence = [entry.key for entry in entries]
+            for manuscript in manuscripts:
+                manuscript_sequence = citation_sequence(manuscript)
+                if bib_sequence != manuscript_sequence:
+                    index = _first_sequence_difference(bib_sequence, manuscript_sequence)
+                    key = (
+                        manuscript_sequence[index]
+                        if index < len(manuscript_sequence)
+                        else bib_sequence[index]
+                    )
+                    errors.append(
+                        "BibTeX entry sequence differs from first citation sequence "
+                        f"at {key} in {Path(manuscript).name}"
+                    )
     return errors
+
+
+def _first_sequence_difference(left: list[str], right: list[str]) -> int:
+    for index, (left_key, right_key) in enumerate(zip(left, right)):
+        if left_key != right_key:
+            return index
+    return min(len(left), len(right))
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bibliography", type=Path)
     parser.add_argument("manuscripts", nargs="*", type=Path)
+    parser.add_argument("--published-only", action="store_true")
+    parser.add_argument("--require-doi", action="store_true")
+    parser.add_argument("--require-order", action="store_true")
     args = parser.parse_args()
-    errors = validate_bibliography(args.bibliography, args.manuscripts)
+    errors = validate_bibliography(
+        args.bibliography,
+        args.manuscripts,
+        published_only=args.published_only,
+        require_doi=args.require_doi,
+        require_order=args.require_order,
+    )
     if errors:
         for error in errors:
             print(error)

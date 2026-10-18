@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from thesis.scripts import validate_bibliography as bibliography_validator
 from thesis.scripts.validate_bibliography import validate_bibliography
 
 
@@ -134,3 +135,102 @@ def test_reports_entries_unused_by_every_manuscript(tmp_path: Path) -> None:
     assert "unused: bibliography entry is unused by every manuscript" in errors
     assert "used: bibliography entry is unused by every manuscript" not in errors
     assert "candidate: bibliography entry is unused by every manuscript" not in errors
+
+
+def test_returns_unique_citations_in_first_appearance_order(tmp_path: Path) -> None:
+    manuscript = tmp_path / "manuscript-en.md"
+    write(manuscript, "See [@beta; @alpha] and again [@beta].\n")
+
+    assert bibliography_validator.citation_sequence(manuscript) == ["beta", "alpha"]
+
+
+def test_strict_mode_rejects_arxiv_and_misc_entries(tmp_path: Path) -> None:
+    bibliography = tmp_path / "references.bib"
+    write(
+        bibliography,
+        """@misc{misc_preprint,
+  title = {Misc preprint}, author = {Ada Lovelace}, year = {2025},
+  doi = {10.1000/misc}, archiveprefix = {arXiv}
+}
+@article{eprint_preprint,
+  title = {Eprint preprint}, author = {Ada Lovelace}, year = {2025},
+  doi = {10.1000/eprint}, eprint = {2501.00001}
+}
+@article{archive_preprint,
+  title = {Archive preprint}, author = {Ada Lovelace}, year = {2025},
+  doi = {10.1000/archive}, archiveprefix = {arXiv}
+}
+""",
+    )
+
+    errors = validate_bibliography(bibliography, [], published_only=True)
+
+    assert "misc_preprint: unpublished entry type: misc" in errors
+    assert "eprint_preprint: arXiv preprint metadata is not allowed" in errors
+    assert "archive_preprint: arXiv preprint metadata is not allowed" in errors
+
+
+def test_strict_mode_requires_a_bare_doi(tmp_path: Path) -> None:
+    bibliography = tmp_path / "references.bib"
+    write(
+        bibliography,
+        """@article{missing_doi,
+  title = {Missing DOI}, author = {Ada Lovelace}, year = {2024}
+}
+@article{prefixed_doi,
+  title = {Prefixed DOI}, author = {Grace Hopper}, year = {2024},
+  doi = {https://doi.org/10.1000/prefixed}
+}
+""",
+    )
+
+    errors = validate_bibliography(bibliography, [], require_doi=True)
+
+    assert "missing_doi: missing DOI" in errors
+    assert "prefixed_doi: malformed DOI: https://doi.org/10.1000/prefixed" in errors
+
+
+def test_strict_mode_rejects_uncited_entries(tmp_path: Path) -> None:
+    bibliography = tmp_path / "references.bib"
+    manuscript = tmp_path / "manuscript-en.md"
+    write(
+        bibliography,
+        """@article{cited,
+  title = {Cited}, author = {Ada Lovelace}, year = {2024}
+}
+@article{uncited,
+  title = {Uncited}, author = {Grace Hopper}, year = {2024},
+  keywords = {candidate}
+}
+""",
+    )
+    write(manuscript, "See [@cited].\n")
+
+    errors = validate_bibliography(bibliography, [manuscript], require_order=True)
+
+    assert "uncited: bibliography entry is unused by every manuscript" in errors
+
+
+def test_strict_mode_requires_bibtex_order_to_match_first_citations(
+    tmp_path: Path,
+) -> None:
+    bibliography = tmp_path / "references.bib"
+    manuscript = tmp_path / "manuscript-en.md"
+    write(
+        bibliography,
+        """@article{alpha,
+  title = {Alpha}, author = {Ada Lovelace}, year = {2024}
+}
+@article{beta,
+  title = {Beta}, author = {Grace Hopper}, year = {2024}
+}
+""",
+    )
+    write(manuscript, "See [@beta] before [@alpha].\n")
+
+    errors = validate_bibliography(bibliography, [manuscript], require_order=True)
+
+    assert any(
+        "BibTeX entry sequence differs from first citation sequence at beta" in error
+        for error in errors
+    )

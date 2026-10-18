@@ -8,9 +8,12 @@ import re
 from pathlib import Path
 
 try:
-    from thesis.scripts.validate_bibliography import parse_bibliography
+    from thesis.scripts.validate_bibliography import (
+        citation_sequence,
+        parse_bibliography,
+    )
 except ModuleNotFoundError:
-    from validate_bibliography import parse_bibliography
+    from validate_bibliography import citation_sequence, parse_bibliography
 
 
 CITATION_RE = re.compile(r"@([A-Za-z0-9_:-]+)")
@@ -165,6 +168,7 @@ def validate_manuscripts(
     chinese_path: Path,
     bibliography_path: Path,
     root: Path,
+    require_citation_order: bool = False,
 ) -> list[str]:
     del root  # Link targets are resolved relative to each manuscript.
     paths = [Path(english_path), Path(chinese_path), Path(bibliography_path)]
@@ -204,6 +208,30 @@ def validate_manuscripts(
                 f"@{differing_key}",
             )
         )
+
+    if require_citation_order:
+        english_sequence = citation_sequence(Path(english_path))
+        chinese_sequence = citation_sequence(Path(chinese_path))
+        if english_sequence != chinese_sequence:
+            index = _first_sequence_difference(english_sequence, chinese_sequence)
+            key = (
+                english_sequence[index]
+                if index < len(english_sequence)
+                else chinese_sequence[index]
+            )
+            source_path, source_text = (
+                (Path(english_path), english)
+                if index < len(english_sequence)
+                else (Path(chinese_path), chinese)
+            )
+            errors.append(
+                _located_message(
+                    source_path,
+                    source_text,
+                    f"bilingual first-citation sequences differ at {key}",
+                    f"@{key}",
+                )
+            )
 
     english_equations = EQUATION_RE.findall(english)
     chinese_equations = EQUATION_RE.findall(chinese)
@@ -308,9 +336,14 @@ def main() -> int:
     parser.add_argument("chinese", type=Path)
     parser.add_argument("--bib", required=True, type=Path)
     parser.add_argument("--root", required=True, type=Path)
+    parser.add_argument("--require-citation-order", action="store_true")
     args = parser.parse_args()
     errors = validate_manuscripts(
-        args.english, args.chinese, args.bib, args.root
+        args.english,
+        args.chinese,
+        args.bib,
+        args.root,
+        require_citation_order=args.require_citation_order,
     )
     if errors:
         for error in errors:

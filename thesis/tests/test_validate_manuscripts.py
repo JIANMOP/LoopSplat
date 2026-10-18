@@ -142,6 +142,38 @@ def test_reports_bilingual_citation_and_equation_mismatches(tmp_path: Path) -> N
     )
 
 
+def test_reports_bilingual_first_citation_order_mismatch(tmp_path: Path) -> None:
+    english, chinese, bib, root = valid_pair(tmp_path)
+    write(
+        bib,
+        """@article{alpha,
+  title = {Alpha}, author = {Ada Lovelace}, year = {2024}
+}
+@article{beta,
+  title = {Beta}, author = {Grace Hopper}, year = {2024}
+}
+""",
+    )
+    english.write_text(
+        english.read_text(encoding="utf-8").replace("[@source]", "[@alpha] [@beta]"),
+        encoding="utf-8",
+    )
+    chinese.write_text(
+        chinese.read_text(encoding="utf-8").replace("[@source]", "[@beta] [@alpha]"),
+        encoding="utf-8",
+    )
+
+    errors = validate_manuscripts(
+        english, chinese, bib, root, require_citation_order=True
+    )
+
+    assert any(
+        "bilingual first-citation sequences differ at alpha" in error
+        and "manuscript-en.md:" in error
+        for error in errors
+    )
+
+
 def test_reports_line_numbers_for_noncontiguous_local_numbering(
     tmp_path: Path,
 ) -> None:
