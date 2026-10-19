@@ -56,6 +56,58 @@ class ReviewInspection:
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 WORD = {"w": WORD_NS}
 MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+NUMERIC_CSL = """<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
+  <info>
+    <title>LoopSplat numeric review style</title>
+    <id>https://example.invalid/styles/loopsplat-numeric-review</id>
+    <updated>2026-10-18T00:00:00+00:00</updated>
+  </info>
+  <macro name="author">
+    <names variable="author">
+      <name initialize-with=". " and="text" et-al-min="7" et-al-use-first="6"/>
+    </names>
+  </macro>
+  <macro name="title">
+    <text variable="title"/>
+  </macro>
+  <macro name="container">
+    <group delimiter=", ">
+      <text variable="container-title" font-style="italic"/>
+      <text variable="volume" font-weight="bold"/>
+      <text variable="issue" prefix="(" suffix=")"/>
+      <text variable="page"/>
+    </group>
+  </macro>
+  <macro name="issued">
+    <date variable="issued">
+      <date-part name="year"/>
+    </date>
+  </macro>
+  <citation collapse="citation-number">
+    <sort>
+      <key variable="citation-number"/>
+    </sort>
+    <layout prefix="[" suffix="]" delimiter=", ">
+      <text variable="citation-number"/>
+    </layout>
+  </citation>
+  <bibliography entry-spacing="0" second-field-align="flush">
+    <layout suffix=".">
+      <text variable="citation-number" prefix="[" suffix="]"/>
+      <group delimiter=". ">
+        <text macro="author"/>
+        <text macro="title"/>
+        <group delimiter=", ">
+          <text macro="container"/>
+          <text macro="issued"/>
+        </group>
+        <text variable="DOI" prefix="https://doi.org/"/>
+      </group>
+    </layout>
+  </bibliography>
+</style>
+"""
 
 
 def _word_tag(name: str) -> str:
@@ -66,10 +118,14 @@ def assemble_review_markdown(
     manuscript: Path,
     thesis_root: Path,
     table_specs: tuple[TableSpec, ...],
+    *,
+    table_root: Path | None = None,
 ) -> str:
     """Return manuscript Markdown with linked result tables embedded once."""
     text = manuscript.read_text(encoding="utf-8")
     text = re.sub(r"\\\(([^\n]+?)\\\)", r"$\1$", text)
+    text = re.sub(r"(?m)^\\\[$", "$$", text)
+    text = re.sub(r"(?m)^\\\]$", "$$", text)
     text = re.sub(
         r"\\tag\{([^{}]+)\}",
         lambda match: rf"\qquad\text{{({match.group(1)})}}",
@@ -77,19 +133,25 @@ def assemble_review_markdown(
     )
     paragraphs = text.split("\n\n")
     for spec in table_specs:
-        matches = [index for index, paragraph in enumerate(paragraphs) if spec.link in paragraph]
+        if table_root is None:
+            link = spec.link
+            source = thesis_root / spec.target
+        else:
+            source = table_root / Path(spec.target).name
+            relative_target = Path(os.path.relpath(source, manuscript.parent)).as_posix()
+            link = f"[{spec.label}]({relative_target})"
+        matches = [index for index, paragraph in enumerate(paragraphs) if link in paragraph]
         if len(matches) != 1:
             raise ValueError(
                 f"expected one manuscript link for {spec.label}, found {len(matches)}"
             )
-        source = thesis_root / spec.target
         table = source.read_text(encoding="utf-8").strip()
         if not table.startswith("|"):
             raise ValueError(f"table source is not a Markdown pipe table: {source}")
-        if spec.target == "tables/efficiency-results.md":
+        if source.name == "efficiency-results.md":
             table = table.replace("NVIDIA GeForce RTX ", "RTX ")
         index = matches[0]
-        paragraphs[index] = paragraphs[index].replace(spec.link, spec.label)
+        paragraphs[index] = paragraphs[index].replace(link, spec.label)
         paragraphs.insert(index + 1, f"**{spec.label}. {spec.caption}**\n\n{table}")
     return "\n\n".join(paragraphs).rstrip() + "\n"
 
@@ -101,9 +163,10 @@ def build_pandoc_command(
     bibliography: Path,
     thesis_root: Path,
     reference_heading: str,
+    citation_style: Path | None = None,
 ) -> list[str]:
     """Construct the deterministic Pandoc command used for review copies."""
-    return [
+    command = [
         str(pandoc),
         str(source),
         "--from=markdown+citations+tex_math_dollars+pipe_tables",
@@ -114,12 +177,18 @@ def build_pandoc_command(
         f"--resource-path={thesis_root}",
         "--metadata",
         f"reference-section-title={reference_heading}",
-        "--output",
-        str(output),
     ]
+    if citation_style is not None:
+        command.append(f"--csl={citation_style}")
+    command.extend(("--output", str(output)))
+    return command
 
 
-def inspect_docx(document: Path, reference_heading: str) -> ReviewInspection:
+def inspect_docx(
+    document: Path,
+    reference_heading: str,
+    expected_equation_count: int = 11,
+) -> ReviewInspection:
     """Inspect the Open XML payload without relying on a desktop application."""
     with ZipFile(document) as archive:
         xml = archive.read("word/document.xml").decode("utf-8")
@@ -143,7 +212,7 @@ def inspect_docx(document: Path, reference_heading: str) -> ReviewInspection:
             number for number in {
                 int(value) for value in re.findall(r"\((\d+)\)", display_math_text)
             }
-            if 1 <= number <= 11
+            if 1 <= number <= expected_equation_count
         )
     )
     return ReviewInspection(
@@ -170,14 +239,15 @@ def validate_review_document(
     has_reference_heading: bool,
     has_unresolved_citations: bool,
     has_external_table_links: bool,
+    expected_equation_count: int = 11,
 ) -> None:
     """Reject an export that dropped required manuscript content."""
     errors = []
     if table_count < 5:
         errors.append(f"tables {table_count}/5")
-    if equation_count < 11:
-        errors.append(f"equations {equation_count}/11")
-    expected_equation_numbers = tuple(range(1, 12))
+    if equation_count < expected_equation_count:
+        errors.append(f"equations {equation_count}/{expected_equation_count}")
+    expected_equation_numbers = tuple(range(1, expected_equation_count + 1))
     if equation_numbers != expected_equation_numbers:
         if equation_numbers and equation_numbers == tuple(
             range(equation_numbers[0], equation_numbers[-1] + 1)
@@ -185,7 +255,7 @@ def validate_review_document(
             found = f"{equation_numbers[0]}-{equation_numbers[-1]}"
         else:
             found = ",".join(map(str, equation_numbers)) or "none"
-        errors.append(f"equation numbers {found}/1-11")
+        errors.append(f"equation numbers {found}/1-{expected_equation_count}")
     if media_count < 8:
         errors.append(f"media {media_count}/8")
     if drawing_count < 8:
@@ -266,6 +336,9 @@ def build_review_document(
     thesis_root: Path,
     output: Path,
     language: str,
+    bibliography: Path | None = None,
+    table_root: Path | None = None,
+    numeric_citations: bool = False,
 ) -> ReviewInspection:
     """Assemble, export, and structurally verify one review document."""
     if language not in TABLE_SPECS:
@@ -273,23 +346,32 @@ def build_review_document(
     if not pandoc.is_file():
         raise FileNotFoundError(f"Pandoc executable not found: {pandoc}")
     output.parent.mkdir(parents=True, exist_ok=True)
+    expected_equation_count = len(
+        set(re.findall(r"\\tag\{(\d+)\}", manuscript.read_text(encoding="utf-8")))
+    )
     assembled = assemble_review_markdown(
         manuscript,
         thesis_root,
         TABLE_SPECS[language],
+        table_root=table_root,
     )
     heading = "References" if language == "en" else "参考文献"
     language_tag = "en-US" if language == "en" else "zh-CN"
     with tempfile.TemporaryDirectory(prefix="loopsplat-review-") as temporary:
         source = Path(temporary) / f"assembled-{language}.md"
         source.write_text(assembled, encoding="utf-8")
+        citation_style = None
+        if numeric_citations:
+            citation_style = Path(temporary) / "numeric.csl"
+            citation_style.write_text(NUMERIC_CSL, encoding="utf-8")
         command = build_pandoc_command(
             pandoc,
             source,
             output,
-            thesis_root / "references.bib",
+            bibliography or thesis_root / "references.bib",
             thesis_root,
             heading,
+            citation_style,
         )
         environment = os.environ.copy()
         environment["PATH"] = str(pandoc.parent) + os.pathsep + environment.get(
@@ -297,7 +379,7 @@ def build_review_document(
         )
         subprocess.run(command, check=True, env=environment)
     format_review_docx(output, language_tag)
-    inspection = inspect_docx(output, heading)
+    inspection = inspect_docx(output, heading, expected_equation_count)
     validate_review_document(
         table_count=inspection.table_count,
         equation_count=inspection.equation_count,
@@ -307,6 +389,7 @@ def build_review_document(
         has_reference_heading=inspection.has_reference_heading,
         has_unresolved_citations=inspection.has_unresolved_citations,
         has_external_table_links=inspection.has_external_table_links,
+        expected_equation_count=expected_equation_count,
     )
     return inspection
 
@@ -315,20 +398,28 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pandoc", type=Path, required=True)
     parser.add_argument("--thesis-root", type=Path, default=Path("thesis"))
+    parser.add_argument("--manuscript-dir", type=Path)
+    parser.add_argument("--bibliography", type=Path)
+    parser.add_argument("--table-root", type=Path)
+    parser.add_argument("--numeric-citations", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=Path("thesis/review"))
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    manuscript_dir = args.manuscript_dir or args.thesis_root
     for language in ("en", "zh"):
         output = args.output_dir / f"manuscript-{language}-review.docx"
         inspection = build_review_document(
             pandoc=args.pandoc,
-            manuscript=args.thesis_root / f"manuscript-{language}.md",
-            thesis_root=args.thesis_root,
+            manuscript=manuscript_dir / f"manuscript-{language}.md",
+            thesis_root=manuscript_dir,
             output=output,
             language=language,
+            bibliography=args.bibliography,
+            table_root=args.table_root,
+            numeric_citations=args.numeric_citations,
         )
         print(
             f"built {output.name}: {inspection.table_count} tables, "

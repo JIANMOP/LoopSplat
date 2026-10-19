@@ -1,6 +1,7 @@
 from pathlib import Path
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 
 from thesis.scripts.build_review_documents import (
@@ -75,6 +76,36 @@ def test_assemble_review_markdown_compacts_gpu_names_only_in_efficiency_export(
     assert "| RTX 4080 SUPER | 2.0 |" in assembled
     assert "NVIDIA GeForce" not in assembled
     assert "NVIDIA GeForce" in table.read_text(encoding="utf-8")
+
+
+def test_assemble_review_markdown_uses_explicit_shared_table_root_for_parent_links(
+    tmp_path: Path,
+) -> None:
+    manuscript_dir = tmp_path / "thesis" / "v2"
+    table_root = tmp_path / "thesis" / "tables"
+    manuscript_dir.mkdir(parents=True)
+    table_root.mkdir(parents=True)
+    manuscript = manuscript_dir / "manuscript-en.md"
+    manuscript.write_text(
+        "# Paper\n\nResults are listed in [Table 2](../tables/tum-results.md).\n",
+        encoding="utf-8",
+    )
+    table = table_root / "tum-results.md"
+    table.write_text("| Scene | PSNR |\n|---|---:|\n| A1 | 12.3 |\n", encoding="utf-8")
+
+    assembled = assemble_review_markdown(
+        manuscript,
+        manuscript_dir,
+        (TABLE_SPECS["en"][0],),
+        table_root=table_root,
+    )
+
+    assert "[Table 2](../tables/tum-results.md)" not in assembled
+    assert "Results are listed in Table 2." in assembled
+    assert assembled.count("| A1 | 12.3 |") == 1
+    assert "[Table 2](../tables/tum-results.md)" in manuscript.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_build_pandoc_command_enables_citations_math_and_local_assets(
@@ -161,6 +192,20 @@ def test_validate_review_document_rejects_incomplete_exports() -> None:
     assert "external table links" in message
 
 
+def test_validate_review_document_accepts_all_twenty_v2_equations() -> None:
+    validate_review_document(
+        table_count=5,
+        equation_count=20,
+        equation_numbers=tuple(range(1, 21)),
+        media_count=8,
+        drawing_count=8,
+        has_reference_heading=True,
+        has_unresolved_citations=False,
+        has_external_table_links=False,
+        expected_equation_count=20,
+    )
+
+
 def test_build_review_document_exports_the_complete_english_master(
     tmp_path: Path,
 ) -> None:
@@ -218,6 +263,78 @@ def test_cli_builds_bilingual_review_documents(tmp_path: Path) -> None:
     assert "built manuscript-zh-review.docx" in completed.stdout
     assert "display equations" in completed.stdout
     assert "WARNING" not in completed.stderr
+
+
+def test_cli_builds_v2_from_explicit_inputs_without_touching_v1_reviews(
+    tmp_path: Path,
+) -> None:
+    repository = Path(__file__).resolve().parents[2]
+    thesis_root = repository / "thesis"
+    manuscript_dir = thesis_root / "v2"
+    script = thesis_root / "scripts" / "build_review_documents.py"
+    pandoc = Path(sys.executable).with_name("pandoc")
+    output_dir = tmp_path / "review"
+    bibliography = tmp_path / "references.bib"
+    bibliography.write_text(
+        (manuscript_dir / "references.bib")
+        .read_text(encoding="utf-8")
+        .replace(
+            "3D Gaussian Splatting for Real-Time Radiance Field Rendering",
+            "Explicit Bibliography Path Sentinel",
+        ),
+        encoding="utf-8",
+    )
+    v1_reviews = tuple(sorted((thesis_root / "review").glob("manuscript-*-review.*")))
+    before = {document: document.read_bytes() for document in v1_reviews}
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--pandoc",
+            str(pandoc),
+            "--manuscript-dir",
+            str(manuscript_dir),
+            "--bibliography",
+            str(bibliography),
+            "--table-root",
+            str(thesis_root / "tables"),
+            "--numeric-citations",
+            "--output-dir",
+            str(output_dir),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    for language, heading in (("en", "References"), ("zh", "参考文献")):
+        document = output_dir / f"manuscript-{language}-review.docx"
+        assert document.stat().st_size > 100_000
+        inspection = inspect_docx(
+            document,
+            heading,
+            expected_equation_count=20,
+        )
+        validate_review_document(
+            table_count=inspection.table_count,
+            equation_count=inspection.equation_count,
+            equation_numbers=inspection.equation_numbers,
+            media_count=inspection.media_count,
+            drawing_count=inspection.drawing_count,
+            has_reference_heading=inspection.has_reference_heading,
+            has_unresolved_citations=inspection.has_unresolved_citations,
+            has_external_table_links=inspection.has_external_table_links,
+            expected_equation_count=20,
+        )
+        with ZipFile(document) as archive:
+            root = ET.fromstring(archive.read("word/document.xml"))
+        plain_text = "".join(root.itertext())
+        assert "[1]" in plain_text
+        assert "(Kerbl" not in plain_text
+        assert "Explicit bibliography path sentinel" in plain_text
+    assert {document: document.read_bytes() for document in v1_reviews} == before
 
 
 def test_format_review_docx_sets_a4_margins_and_compact_table_text(

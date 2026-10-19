@@ -60,7 +60,7 @@ When the v2 Chinese master is added, run the bilingual structural gate before pr
   thesis/v2/manuscript-en.md \
   thesis/v2/manuscript-zh.md \
   --bib thesis/v2/references.bib \
-  --root thesis \
+  --root thesis/v2 \
   --require-citation-order
 ~~~
 
@@ -71,10 +71,42 @@ After both v2 masters pass validation and Pandoc is available, build journal-neu
 ~~~bash
 /home/pfy22/miniconda3/envs/loop_splat/bin/python \
   thesis/scripts/build_review_documents.py \
-  --pandoc "$(command -v pandoc)" \
-  --thesis-root thesis/v2 \
+  --pandoc /home/pfy22/miniconda3/envs/loop_splat/bin/pandoc \
+  --manuscript-dir thesis/v2 \
+  --bibliography thesis/v2/references.bib \
+  --table-root thesis/tables \
+  --numeric-citations \
   --output-dir thesis/v2/review
 ~~~
+
+The command writes `thesis/v2/review/manuscript-en-review.docx` and `thesis/v2/review/manuscript-zh-review.docx`. Refresh their PDF counterparts with Microsoft Word's PDF exporter from Windows PowerShell at the repository root:
+
+~~~powershell
+$reviewDir = (Resolve-Path "thesis\v2\review").Path
+$word = New-Object -ComObject Word.Application
+$word.Visible = $false
+$word.DisplayAlerts = 0
+try {
+  Get-ChildItem $reviewDir -Filter "manuscript-*-review.docx" | ForEach-Object {
+    $document = $word.Documents.Open($_.FullName)
+    try {
+      $pdf = [System.IO.Path]::ChangeExtension($_.FullName, ".pdf")
+      $document.ExportAsFixedFormat($pdf, 17)
+    } finally {
+      $document.Close(0)
+    }
+  }
+} finally {
+  $word.Quit()
+}
+~~~
+
+The four review outputs are:
+
+- `thesis/v2/review/manuscript-en-review.docx`
+- `thesis/v2/review/manuscript-en-review.pdf`
+- `thesis/v2/review/manuscript-zh-review.docx`
+- `thesis/v2/review/manuscript-zh-review.pdf`
 
 Inspect the generated DOCX/PDF files for equation, table, figure, citation, and page-break issues. Apply substantive corrections to the Markdown masters and rebuild; review copies are not independent sources.
 
