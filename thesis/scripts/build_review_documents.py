@@ -402,15 +402,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bibliography", type=Path)
     parser.add_argument("--table-root", type=Path)
     parser.add_argument("--numeric-citations", action="store_true")
-    parser.add_argument("--output-dir", type=Path, default=Path("thesis/review"))
+    parser.add_argument("--output-dir", type=Path)
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     manuscript_dir = args.manuscript_dir or args.thesis_root
+    if args.output_dir is not None:
+        output_dir = args.output_dir
+    elif args.manuscript_dir is not None:
+        output_dir = manuscript_dir / "review"
+    else:
+        output_dir = args.thesis_root / "review"
     for language in ("en", "zh"):
-        output = args.output_dir / f"manuscript-{language}-review.docx"
+        output = output_dir / f"manuscript-{language}-review.docx"
         inspection = build_review_document(
             pandoc=args.pandoc,
             manuscript=manuscript_dir / f"manuscript-{language}.md",

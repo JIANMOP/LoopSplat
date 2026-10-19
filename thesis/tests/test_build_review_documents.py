@@ -1,4 +1,5 @@
 from pathlib import Path
+from shutil import copytree, ignore_patterns
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -335,6 +336,85 @@ def test_cli_builds_v2_from_explicit_inputs_without_touching_v1_reviews(
         assert "(Kerbl" not in plain_text
         assert "Explicit bibliography path sentinel" in plain_text
     assert {document: document.read_bytes() for document in v1_reviews} == before
+
+
+def test_cli_defaults_explicit_v2_inputs_to_its_review_directory(
+    tmp_path: Path,
+) -> None:
+    repository = Path(__file__).resolve().parents[2]
+    source_thesis = repository / "thesis"
+    thesis_root = tmp_path / "thesis"
+    manuscript_dir = thesis_root / "v2"
+    copytree(
+        source_thesis / "v2",
+        manuscript_dir,
+        ignore=ignore_patterns("review"),
+    )
+    copytree(source_thesis / "tables", thesis_root / "tables")
+    copytree(source_thesis / "figures", thesis_root / "figures")
+    script = source_thesis / "scripts" / "build_review_documents.py"
+    pandoc = Path(sys.executable).with_name("pandoc")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--pandoc",
+            str(pandoc),
+            "--manuscript-dir",
+            str(manuscript_dir),
+            "--bibliography",
+            str(manuscript_dir / "references.bib"),
+            "--table-root",
+            str(thesis_root / "tables"),
+            "--numeric-citations",
+        ],
+        check=False,
+        capture_output=True,
+        cwd=tmp_path,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    review_dir = manuscript_dir / "review"
+    assert (review_dir / "manuscript-en-review.docx").is_file()
+    assert (review_dir / "manuscript-zh-review.docx").is_file()
+    assert not (thesis_root / "review").exists()
+
+
+def test_cli_defaults_legacy_inputs_to_the_thesis_root_review_directory(
+    tmp_path: Path,
+) -> None:
+    repository = Path(__file__).resolve().parents[2]
+    source_thesis = repository / "thesis"
+    thesis_root = tmp_path / "isolated-thesis"
+    thesis_root.mkdir()
+    for name in ("manuscript-en.md", "manuscript-zh.md", "references.bib"):
+        (thesis_root / name).write_bytes((source_thesis / name).read_bytes())
+    copytree(source_thesis / "tables", thesis_root / "tables")
+    copytree(source_thesis / "figures", thesis_root / "figures")
+    script = source_thesis / "scripts" / "build_review_documents.py"
+    pandoc = Path(sys.executable).with_name("pandoc")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--pandoc",
+            str(pandoc),
+            "--thesis-root",
+            str(thesis_root),
+        ],
+        check=False,
+        capture_output=True,
+        cwd=tmp_path,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    review_dir = thesis_root / "review"
+    assert (review_dir / "manuscript-en-review.docx").is_file()
+    assert (review_dir / "manuscript-zh-review.docx").is_file()
 
 
 def test_format_review_docx_sets_a4_margins_and_compact_table_text(
