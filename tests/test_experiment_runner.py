@@ -36,6 +36,20 @@ from src.utils.experiment_utils import (
 import src.utils.experiment_utils as experiment_utils
 
 
+def test_ablation_help_labels_default_seed_set_as_optional_robustness_extension(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(sys, "argv", ["run_ablation.py", "--help"])
+
+    with pytest.raises(SystemExit) as error:
+        run_ablation_module.main()
+
+    assert error.value.code == 0
+    help_text = " ".join(capsys.readouterr().out.split())
+    assert "Optional robustness extension" in help_text
+    assert "selected seed-0 v2 table protocol" in help_text
+
+
 def write_valid_formal_outputs(run_dir):
     (run_dir / "manifest.json").write_text(json.dumps({
         "git_commit": "a" * 40,

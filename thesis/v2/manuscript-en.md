@@ -57,7 +57,7 @@ OARS-GS uses a different control variable: the number of times each persistent k
 
 OARS-GS changes how an online Gaussian SLAM system uses incoming observations. It adds a weak gyroscope-derived rotation regularizer to camera tracking, admits persistent keyframes according to the current observation and motion state, assigns a narrow class of rejected observations to transient tracking-support updates, and schedules persistent-keyframe supervision from coarse to full resolution. Figure 1 summarizes these paths. The renderer, Gaussian parameterization, submap construction, Gaussian-to-Gaussian registration, loop closure, and pose-graph optimization are inherited from LoopSplat [@zhu2025_loopsplat]; they are not introduced by OARS-GS.
 
-![OARS-GS processing overview. Solid arrows show the per-frame path; dashed arrows mark inherited submap-boundary and checkpoint interactions.](figures/oars-gs-overview.svg){#fig:oars-gs-overview}
+![Figure 1. OARS-GS processing overview. Solid arrows show the per-frame path; dashed arrows mark inherited submap-boundary and checkpoint interactions.](figures/oars-gs-overview.svg){#fig:oars-gs-overview}
 
 ## 3.1. System overview and preliminaries
 
@@ -81,7 +81,7 @@ w_C\mathcal{L}^{\mathrm{trk}}_{1,C}
 \tag{2}
 \]
 
-where the RGB and depth terms are renderer residuals over the tracker validity mask, \(w_C=0.6\) in the FMDataset configuration, and \(\mathcal{L}_{R}\) and \(\mathcal{L}_{T}\) are the inertial rotation and translation terms defined below. The best-loss pose seen during the tracking iterations is retained. Persistent mapping then updates the same \(\Theta_G\), may seed Gaussians from a selected keyframe, and stores that observation in the inherited submap record. At a submap boundary, the inherited backend checkpoints the previous active submap, performs loop processing and any pose-graph correction, and initializes the next active model.
+where the depth term is always averaged over the tracker validity mask. The RGB term uses that mask when `mask_invalid_depth` is enabled; with soft alpha and this option disabled, it is the all-pixel mean of the \(\widehat A_t^3\)-weighted residual. Replica uses `soft_alpha=true` and `mask_invalid_depth=false`, so it uses the latter; TUM RGB-D and FMDataset enable the color mask. In the FMDataset configuration, \(w_C=0.6\), and \(\mathcal{L}_{R}\) and \(\mathcal{L}_{T}\) are the inertial rotation and translation terms defined below. The best-loss pose seen during the tracking iterations is retained. Persistent mapping then updates the same \(\Theta_G\), may seed Gaussians from a selected keyframe, and stores that observation in the inherited submap record. At a submap boundary, the inherited backend checkpoints the previous active submap, performs loop processing and any pose-graph correction, and initializes the next active model.
 
 ## 3.2. Inertial rotation regularization
 
@@ -233,7 +233,7 @@ K_t=
 
 The submap-boundary test occurs outside the ordinary decision function and therefore precedes invalid-depth rejection. Inside that function, valid depth is required before any forced-frame result is returned. A candidate at \(g_t\ge g_{\max}\) is also at or beyond the stable gap and is therefore selected by one of the two coverage branches before scoring. Figure 2 shows this ordering and separates the persistent and transient outcomes.
 
-![Observation scheduling with motion as a hard gate before the frustum-novelty score.](figures/observation-scheduling.svg){#fig:observation-scheduling}
+![Figure 2. Observation scheduling with motion as a hard gate before the frustum-novelty score.](figures/observation-scheduling.svg){#fig:observation-scheduling}
 
 ## 3.4. Transient tracking-support update
 
@@ -373,11 +373,11 @@ for t = 0, ..., T - 1 do
     end if
 end for
 
-checkpoint any remaining active submap and its persistent keyframes
 run the inherited final loop-closure path when configured
+checkpoint any remaining active submap and its persistent keyframes
 ~~~
 
-The algorithm preserves the inherited distinction between an active submap and the globally corrected trajectory. OARS-GS changes the rotation term, observation admission, transient update path, and supervision schedule; registration, loop detection, checkpoint structure, and graph correction remain backend operations.
+The reported configurations disable the optional final loop-closure path. The algorithm preserves the inherited distinction between an active submap and the globally corrected trajectory. OARS-GS changes the rotation term, observation admission, transient update path, and supervision schedule; registration, loop detection, checkpoint structure, and graph correction remain backend operations.
 
 # 4. Experiments
 
@@ -426,7 +426,7 @@ On Replica, GI-KF+Pyramid reduces persistent keyframes by 16.30%, raises macro P
 
 FMDataset supports reconstruction and resource claims only. Relative to its Baseline macro, ALL raises fixed-observed-view PSNR by 1.159 dB and MS-SSIM by 3.47%, while reducing LPIPS by 8.97%, Depth L1 by 25.64%, and persistent keyframes by 58.33%. There is no trajectory reference in these records, so these differences do not demonstrate improved localization, drift, or visual-inertial odometry.
 
-![Dataset-level metric changes relative to Baseline. Lower-is-better quantities are sign-adjusted only for visualization.](../figures/metric-deltas.png){#fig:metric-deltas}
+![Figure 3. Dataset-level metric changes relative to Baseline. Lower-is-better quantities are sign-adjusted only for visualization.](../figures/metric-deltas.png){#fig:metric-deltas}
 
 ## 4.4. Resource efficiency
 
@@ -436,7 +436,7 @@ On FMDataset, ALL reduces macro peak PyTorch allocation by 47.61% and macro elap
 
 Persistent storage and update accounting must also remain separate. The TUM combined macro contains 610.4 persistent keyframes and 1080.4 transient support updates, for 1690.8 processed frames. The reported persistent-keyframe reduction does not imply an equal reduction in mapping or update events: support updates perform a shorter, non-persistent optimization on the live map and are timed separately.
 
-![Fixed-observed-view quality and resource changes. Values are dataset-specific and should not be compared as absolute cross-hardware performance.](../figures/quality-efficiency.png){#fig:quality-efficiency}
+![Figure 4. Fixed-observed-view quality and resource changes. Values are dataset-specific and should not be compared as absolute cross-hardware performance.](../figures/quality-efficiency.png){#fig:quality-efficiency}
 
 ## 4.5. Ablation study
 
@@ -452,15 +452,15 @@ Persistent storage and update accounting must also remain separate. The TUM comb
 
 The Replica R5 mapper panels show the sampled input, rendered RGB-D output, depth residual, and densification mask for the same observed frame under Baseline and GI-KF+Pyramid. They are optimization diagnostics, not held-out renderings or complete global-map evaluations.
 
-![Replica R5 Baseline mapper diagnostic at observed frame 1990.](../figures/qualitative/replica-r5-baseline.jpg){#fig:r5-baseline}
+![Figure 5. Replica R5 Baseline mapper diagnostic at observed frame 1990.](../figures/qualitative/replica-r5-baseline.jpg){#fig:r5-baseline}
 
-![Replica R5 GI-KF+Pyramid mapper diagnostic at observed frame 1990.](../figures/qualitative/replica-r5-combined.jpg){#fig:r5-combined}
+![Figure 6. Replica R5 GI-KF+Pyramid mapper diagnostic at observed frame 1990.](../figures/qualitative/replica-r5-combined.jpg){#fig:r5-combined}
 
 The A3 trajectories visualize the failure already quantified in Section 4.2. Baseline remains near the aligned reference, whereas GI-KF departs substantially. This contrast shows why fixed-observed-view rendering agreement cannot stand in for global trajectory accuracy, and why a safer fallback for observation admission remains necessary in trajectory-sensitive settings.
 
-![TUM A3 Baseline trajectory after rigid alignment.](../figures/qualitative/tum-a3-baseline-trajectory.png){#fig:a3-baseline}
+![Figure 7. TUM A3 Baseline trajectory after rigid alignment.](../figures/qualitative/tum-a3-baseline-trajectory.png){#fig:a3-baseline}
 
-![TUM A3 GI-KF trajectory after rigid alignment.](../figures/qualitative/tum-a3-gikf-trajectory.png){#fig:a3-gikf}
+![Figure 8. TUM A3 GI-KF trajectory after rigid alignment.](../figures/qualitative/tum-a3-gikf-trajectory.png){#fig:a3-gikf}
 
 The failure boundary is empirical. The records do not isolate whether motion, overlap estimation, map state, or another factor causes A3, so assigning a physical mechanism would exceed the evidence. Likewise, Azure Kinect material without a controlled reference remains an engineering illustration rather than an ablation or accuracy result.
 

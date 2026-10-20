@@ -132,7 +132,7 @@ def assemble_review_markdown(
         text,
     )
     paragraphs = text.split("\n\n")
-    for spec in table_specs:
+    for spec in reversed(table_specs):
         if table_root is None:
             link = spec.link
             source = thesis_root / spec.target
@@ -286,6 +286,25 @@ def format_review_docx(document: Path, language_tag: str) -> None:
                 language = ET.SubElement(properties, _word_tag("lang"))
             language.set(_word_tag("val"), language_tag)
         for table in root.findall(".//w:tbl", WORD):
+            if len(table.findall("w:tblGrid/w:gridCol", WORD)) >= 11:
+                table_properties = table.find("w:tblPr", WORD)
+                if table_properties is None:
+                    table_properties = ET.Element(_word_tag("tblPr"))
+                    table.insert(0, table_properties)
+                layout = table_properties.find("w:tblLayout", WORD)
+                if layout is None:
+                    layout = ET.SubElement(table_properties, _word_tag("tblLayout"))
+                layout.set(_word_tag("type"), "autofit")
+                for row in table.findall("w:tr", WORD):
+                    for column, cell in enumerate(row.findall("w:tc", WORD)):
+                        if column >= 4:
+                            continue
+                        cell_properties = cell.find("w:tcPr", WORD)
+                        if cell_properties is None:
+                            cell_properties = ET.Element(_word_tag("tcPr"))
+                            cell.insert(0, cell_properties)
+                        if cell_properties.find("w:noWrap", WORD) is None:
+                            ET.SubElement(cell_properties, _word_tag("noWrap"))
             for run in table.findall(".//w:r", WORD):
                 properties = run.find("w:rPr", WORD)
                 if properties is None:

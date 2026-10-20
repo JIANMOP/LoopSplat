@@ -7,7 +7,8 @@ Three dataset groups × all strategy combinations.
 Group A  TUM RGB-D (no IMU)      5 scenes × 4 combos = 20 configurations
 Group R  Replica (no IMU)        8 scenes × 4 combos = 32 configurations
 Group C  FMDataset (has IMU)     3 scenes × 6 combos = 18 configurations
-                          70 configurations × 3 seeds = 210 formal runs
+The default seed set (0, 1, 2) is an optional robustness extension.
+The current v2 paper tables use the selected seed-0 protocol only; they are not multi-seed averages.
 
 Strategy codes per experiment:
   _0 = Baseline (all off)
@@ -314,7 +315,8 @@ def main():
     parser.add_argument("--force", action="store_true")
     parser.add_argument(
         "--seeds", nargs="+", type=int, default=[0, 1, 2],
-        help="Random seeds for repeated formal runs (default: 0 1 2)")
+        help=("Optional robustness extension; selected seed-0 v2 table protocol "
+              "uses seed 0 only (default: 0 1 2)"))
     parser.add_argument("--experiment", type=str, default=None,
                         help="Run single experiment, e.g. A1_0")
     parser.add_argument("--group", type=str, default=None,

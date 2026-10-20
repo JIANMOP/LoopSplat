@@ -14,7 +14,7 @@ On Replica, GI-KF+Pyramid reduces persistent keyframes by 16.30%, raises macro P
 
 FMDataset supports reconstruction and resource claims only. Relative to its Baseline macro, ALL raises fixed-observed-view PSNR by 1.159 dB and MS-SSIM by 3.47%, while reducing LPIPS by 8.97%, Depth L1 by 25.64%, and persistent keyframes by 58.33%. There is no trajectory reference in these records, so these differences do not demonstrate improved localization, drift, or visual-inertial odometry.
 
-![Dataset-level metric changes relative to Baseline. Lower-is-better quantities are sign-adjusted only for visualization.](../../figures/metric-deltas.png){#fig:metric-deltas}
+![Figure 3. Dataset-level metric changes relative to Baseline. Lower-is-better quantities are sign-adjusted only for visualization.](../../figures/metric-deltas.png){#fig:metric-deltas}
 
 ## 4.4. Resource efficiency
 
@@ -24,7 +24,7 @@ On FMDataset, ALL reduces macro peak PyTorch allocation by 47.61% and macro elap
 
 Persistent storage and update accounting must also remain separate. The TUM combined macro contains 610.4 persistent keyframes and 1080.4 transient support updates, for 1690.8 processed frames. Thus the reported persistent-keyframe reduction does not imply an equal reduction in mapping or update events: support updates perform a shorter, non-persistent optimization on the live map and are timed separately.
 
-![Fixed-observed-view quality and resource changes. Values are dataset-specific and should not be compared as absolute cross-hardware performance.](../../figures/quality-efficiency.png){#fig:quality-efficiency}
+![Figure 4. Fixed-observed-view quality and resource changes. Values are dataset-specific and should not be compared as absolute cross-hardware performance.](../../figures/quality-efficiency.png){#fig:quality-efficiency}
 
 ## 4.5. Ablation study
 
@@ -40,14 +40,14 @@ Persistent storage and update accounting must also remain separate. The TUM comb
 
 The Replica R5 mapper panels show the sampled input, rendered RGB-D output, depth residual, and densification mask for the same observed frame under Baseline and GI-KF+Pyramid. They are optimization diagnostics, not held-out renderings or complete global-map evaluations.
 
-![Replica R5 Baseline mapper diagnostic at observed frame 1990.](../../figures/qualitative/replica-r5-baseline.jpg){#fig:r5-baseline}
+![Figure 5. Replica R5 Baseline mapper diagnostic at observed frame 1990.](../../figures/qualitative/replica-r5-baseline.jpg){#fig:r5-baseline}
 
-![Replica R5 GI-KF+Pyramid mapper diagnostic at observed frame 1990.](../../figures/qualitative/replica-r5-combined.jpg){#fig:r5-combined}
+![Figure 6. Replica R5 GI-KF+Pyramid mapper diagnostic at observed frame 1990.](../../figures/qualitative/replica-r5-combined.jpg){#fig:r5-combined}
 
 The A3 trajectories visualize the failure already quantified in Section 4.2. Baseline remains near the aligned reference, whereas GI-KF departs substantially. This contrast shows why fixed-observed-view rendering agreement cannot stand in for global trajectory accuracy, and why a safer fallback for observation admission remains necessary in trajectory-sensitive settings.
 
-![TUM A3 Baseline trajectory after rigid alignment.](../../figures/qualitative/tum-a3-baseline-trajectory.png){#fig:a3-baseline}
+![Figure 7. TUM A3 Baseline trajectory after rigid alignment.](../../figures/qualitative/tum-a3-baseline-trajectory.png){#fig:a3-baseline}
 
-![TUM A3 GI-KF trajectory after rigid alignment.](../../figures/qualitative/tum-a3-gikf-trajectory.png){#fig:a3-gikf}
+![Figure 8. TUM A3 GI-KF trajectory after rigid alignment.](../../figures/qualitative/tum-a3-gikf-trajectory.png){#fig:a3-gikf}
 
 The failure boundary is empirical. The records do not isolate whether motion, overlap estimation, map state, or another factor causes A3, so assigning a physical mechanism would exceed the evidence. Likewise, Azure Kinect material without a controlled reference remains an engineering illustration rather than an ablation or accuracy result.

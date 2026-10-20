@@ -57,7 +57,7 @@ OARS-GS 采用不同的控制变量：每个持久关键帧实际被选中优化
 
 OARS-GS 改变在线高斯 SLAM 系统使用到达观测的方式：它向相机跟踪加入弱的陀螺仪旋转正则，根据当前观测和运动状态接纳持久关键帧，将一类严格限定的被拒观测用于临时跟踪支撑更新，并将持久关键帧监督从粗分辨率调度至全分辨率。图 1 概括了这些路径。渲染器、高斯参数化、子图构建、高斯到高斯配准、回环和位姿图优化均继承自 LoopSplat [@zhu2025_loopsplat]，并非 OARS-GS 新增。
 
-![OARS-GS 处理流程概览。实线箭头表示逐帧路径；虚线箭头标示继承的子图边界与检查点交互。](figures/oars-gs-overview.svg){#fig:oars-gs-overview}
+![图 1. OARS-GS 处理流程概览。实线箭头表示逐帧路径；虚线箭头标示继承的子图边界与检查点交互。](figures/oars-gs-overview.svg){#fig:oars-gs-overview}
 
 ## 3.1. 系统概览与预备定义
 
@@ -81,7 +81,7 @@ w_C\mathcal{L}^{\mathrm{trk}}_{1,C}
 \tag{2}
 \]
 
-其中 RGB 与深度项是跟踪器有效掩码上的渲染残差；在 FMDataset 配置中 \(w_C=0.6\)；\(\mathcal{L}_{R}\) 和 \(\mathcal{L}_{T}\) 是下文定义的惯性旋转与平移项。跟踪迭代中见到的最小损失位姿被保留。随后，持久建图更新同一 \(\Theta_G\)，可由被选中的关键帧播种高斯，并在继承的子图记录中存储该观测。到达子图边界时，继承后端检查点保存先前活动子图，执行回环处理及其位姿图校正，并初始化下一活动模型。
+其中，深度项始终在跟踪器有效掩码上求均值。仅在启用 `mask_invalid_depth` 时 RGB 项使用该掩码；启用 soft alpha 而关闭该选项时，RGB 项为经 \(\widehat A_t^3\) 加权后对所有像素求均值的残差。Replica 设置 `soft_alpha=true` 和 `mask_invalid_depth=false`，因而使用后一种形式；TUM RGB-D 和 FMDataset 启用颜色掩码。FMDataset 配置中 \(w_C=0.6\)；\(\mathcal{L}_{R}\) 和 \(\mathcal{L}_{T}\) 是下文定义的惯性旋转与平移项。跟踪迭代中见到的最小损失位姿被保留。随后，持久建图更新同一 \(\Theta_G\)，可由被选中的关键帧播种高斯，并在继承的子图记录中存储该观测。到达子图边界时，继承后端检查点保存先前活动子图，执行回环处理及其位姿图校正，并初始化下一活动模型。
 
 ## 3.2. 惯性旋转正则
 
@@ -233,7 +233,7 @@ K_t=
 
 子图边界测试位于普通决策函数之外，因此先于无效深度拒绝执行。在函数内部，有效深度是返回任何强制帧结果之前的必要条件。候选帧在 \(g_t\ge g_{\max}\) 时也已经达到稳定间隔，故会在评分之前由两个覆盖分支之一选中。图 2 展示该顺序，并区分持久与临时结果。
 
-![观测调度：运动作为视锥新颖度分数之前的硬门控。](figures/observation-scheduling.svg){#fig:observation-scheduling}
+![图 2. 观测调度：运动作为视锥新颖度分数之前的硬门控。](figures/observation-scheduling.svg){#fig:observation-scheduling}
 
 ## 3.4. 临时跟踪支撑更新
 
@@ -373,11 +373,11 @@ for t = 0, ..., T - 1 do
     end if
 end for
 
-checkpoint any remaining active submap and its persistent keyframes
 run the inherited final loop-closure path when configured
+checkpoint any remaining active submap and its persistent keyframes
 ~~~
 
-该算法保持继承系统对活动子图和全局校正轨迹的区分。OARS-GS 修改旋转项、观测接纳、临时更新路径和监督调度；配准、回环检测、检查点结构和图校正仍是后端操作。
+所报告的配置均禁用可选的最终回环路径。该算法保持继承系统对活动子图和全局校正轨迹的区分。OARS-GS 修改旋转项、观测接纳、临时更新路径和监督调度；配准、回环检测、检查点结构和图校正仍是后端操作。
 
 # 4. 实验
 
@@ -426,7 +426,7 @@ A3 是必须报告的反例：Baseline 的对齐 ATE 为 7.005 cm，GI-KF 为 56
 
 FMDataset 只支持重建和资源主张。相对其 Baseline 宏，ALL 将固定已观测视角 PSNR 提高 1.159 dB、MS-SSIM 提高 3.47%，并将 LPIPS 降低 8.97%、Depth L1 降低 25.64%、持久关键帧降低 58.33%。记录中没有轨迹参考，因此这些差异不证明定位、漂移或视觉惯性里程计得到改善。
 
-![相对 Baseline 的数据集级指标变化。仅为可视化，对数值越低越好的量作符号调整。](../figures/metric-deltas.png){#fig:metric-deltas}
+![图 3. 相对 Baseline 的数据集级指标变化。仅为可视化，对数值越低越好的量作符号调整。](../figures/metric-deltas.png){#fig:metric-deltas}
 
 ## 4.4. 资源效率
 
@@ -436,7 +436,7 @@ FMDataset 只支持重建和资源主张。相对其 Baseline 宏，ALL 将固�
 
 持久存储与更新核算也必须分开。TUM 组合宏包含 610.4 个持久关键帧和 1080.4 次临时支撑更新，共处理 1690.8 帧。报告的持久关键帧减少并不意味着建图或更新事件等比例减少：支撑更新在实时地图上执行更短、非持久的优化，并单独计时。
 
-![固定已观测视角质量与资源变化。数值具有数据集特异性，不应作为绝对的跨硬件性能比较。](../figures/quality-efficiency.png){#fig:quality-efficiency}
+![图 4. 固定已观测视角质量与资源变化。数值具有数据集特异性，不应作为绝对的跨硬件性能比较。](../figures/quality-efficiency.png){#fig:quality-efficiency}
 
 ## 4.5. 消融研究
 
@@ -452,15 +452,15 @@ FMDataset 只支持重建和资源主张。相对其 Baseline 宏，ALL 将固�
 
 Replica R5 建图器面板展示了同一已观测帧在 Baseline 与 GI-KF+Pyramid 下的采样输入、渲染 RGB-D 输出、深度残差和增密掩码。它们是优化诊断，而非留出渲染或完整全局地图评测。
 
-![已观测帧 1990 上的 Replica R5 Baseline 建图器诊断。](../figures/qualitative/replica-r5-baseline.jpg){#fig:r5-baseline}
+![图 5. 已观测帧 1990 上的 Replica R5 Baseline 建图器诊断。](../figures/qualitative/replica-r5-baseline.jpg){#fig:r5-baseline}
 
-![已观测帧 1990 上的 Replica R5 GI-KF+Pyramid 建图器诊断。](../figures/qualitative/replica-r5-combined.jpg){#fig:r5-combined}
+![图 6. 已观测帧 1990 上的 Replica R5 GI-KF+Pyramid 建图器诊断。](../figures/qualitative/replica-r5-combined.jpg){#fig:r5-combined}
 
 A3 轨迹可视化了第 4.2 节已量化的失败。Baseline 保持在对齐参考附近，而 GI-KF 显著偏离。这一对照说明，固定已观测视角的渲染一致性不能代替全局轨迹精度，也说明在轨迹敏感设置中，观测接纳仍需要更安全的回退机制。
 
-![刚性对齐后的 TUM A3 Baseline 轨迹。](../figures/qualitative/tum-a3-baseline-trajectory.png){#fig:a3-baseline}
+![图 7. 刚性对齐后的 TUM A3 Baseline 轨迹。](../figures/qualitative/tum-a3-baseline-trajectory.png){#fig:a3-baseline}
 
-![刚性对齐后的 TUM A3 GI-KF 轨迹。](../figures/qualitative/tum-a3-gikf-trajectory.png){#fig:a3-gikf}
+![图 8. 刚性对齐后的 TUM A3 GI-KF 轨迹。](../figures/qualitative/tum-a3-gikf-trajectory.png){#fig:a3-gikf}
 
 失败边界来自经验结果。记录没有分离运动、重叠估计、地图状态或其他因素是否导致 A3，因此归因于某种物理机制将超出证据。类似地，没有受控参考的 Azure Kinect 材料仍是工程说明，而非消融或精度结果。
 

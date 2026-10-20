@@ -14,7 +14,7 @@ A3 是必须报告的反例：Baseline 的对齐 ATE 为 7.005 cm，GI-KF 为 56
 
 FMDataset 只支持重建和资源主张。相对其 Baseline 宏，ALL 将固定已观测视角 PSNR 提高 1.159 dB、MS-SSIM 提高 3.47%，并将 LPIPS 降低 8.97%、Depth L1 降低 25.64%、持久关键帧降低 58.33%。记录中没有轨迹参考，因此这些差异不证明定位、漂移或视觉惯性里程计得到改善。
 
-![相对 Baseline 的数据集级指标变化。仅为可视化，对数值越低越好的量作符号调整。](../../figures/metric-deltas.png){#fig:metric-deltas}
+![图 3. 相对 Baseline 的数据集级指标变化。仅为可视化，对数值越低越好的量作符号调整。](../../figures/metric-deltas.png){#fig:metric-deltas}
 
 ## 4.4. 资源效率
 
@@ -24,7 +24,7 @@ FMDataset 只支持重建和资源主张。相对其 Baseline 宏，ALL 将固�
 
 持久存储与更新核算也必须分开。TUM 组合宏包含 610.4 个持久关键帧和 1080.4 次临时支撑更新，共处理 1690.8 帧。因此，报告的持久关键帧减少并不意味着建图或更新事件等比例减少：支撑更新在实时地图上执行更短、非持久的优化，并单独计时。
 
-![固定已观测视角质量与资源变化。数值具有数据集特异性，不应作为绝对的跨硬件性能比较。](../../figures/quality-efficiency.png){#fig:quality-efficiency}
+![图 4. 固定已观测视角质量与资源变化。数值具有数据集特异性，不应作为绝对的跨硬件性能比较。](../../figures/quality-efficiency.png){#fig:quality-efficiency}
 
 ## 4.5. 消融研究
 
@@ -40,14 +40,14 @@ FMDataset 只支持重建和资源主张。相对其 Baseline 宏，ALL 将固�
 
 Replica R5 建图器面板展示了同一已观测帧在 Baseline 与 GI-KF+Pyramid 下的采样输入、渲染 RGB-D 输出、深度残差和增密掩码。它们是优化诊断，而非留出渲染或完整全局地图评测。
 
-![已观测帧 1990 上的 Replica R5 Baseline 建图器诊断。](../../figures/qualitative/replica-r5-baseline.jpg){#fig:r5-baseline}
+![图 5. 已观测帧 1990 上的 Replica R5 Baseline 建图器诊断。](../../figures/qualitative/replica-r5-baseline.jpg){#fig:r5-baseline}
 
-![已观测帧 1990 上的 Replica R5 GI-KF+Pyramid 建图器诊断。](../../figures/qualitative/replica-r5-combined.jpg){#fig:r5-combined}
+![图 6. 已观测帧 1990 上的 Replica R5 GI-KF+Pyramid 建图器诊断。](../../figures/qualitative/replica-r5-combined.jpg){#fig:r5-combined}
 
 A3 轨迹可视化了第 4.2 节已量化的失败。Baseline 保持在对齐参考附近，而 GI-KF 显著偏离。这一对照说明，固定已观测视角的渲染一致性不能代替全局轨迹精度，也说明在轨迹敏感设置中，观测接纳仍需要更安全的回退机制。
 
-![刚性对齐后的 TUM A3 Baseline 轨迹。](../../figures/qualitative/tum-a3-baseline-trajectory.png){#fig:a3-baseline}
+![图 7. 刚性对齐后的 TUM A3 Baseline 轨迹。](../../figures/qualitative/tum-a3-baseline-trajectory.png){#fig:a3-baseline}
 
-![刚性对齐后的 TUM A3 GI-KF 轨迹。](../../figures/qualitative/tum-a3-gikf-trajectory.png){#fig:a3-gikf}
+![图 8. 刚性对齐后的 TUM A3 GI-KF 轨迹。](../../figures/qualitative/tum-a3-gikf-trajectory.png){#fig:a3-gikf}
 
 失败边界来自经验结果。记录没有分离运动、重叠估计、地图状态或其他因素是否导致 A3，因此归因于某种物理机制将超出证据。类似地，没有受控参考的 Azure Kinect 材料仍是工程说明，而非消融或精度结果。

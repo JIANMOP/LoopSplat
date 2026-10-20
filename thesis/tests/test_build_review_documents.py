@@ -79,6 +79,40 @@ def test_assemble_review_markdown_compacts_gpu_names_only_in_efficiency_export(
     assert "NVIDIA GeForce" in table.read_text(encoding="utf-8")
 
 
+def test_assemble_review_markdown_preserves_table_order_for_links_in_one_paragraph(
+    tmp_path: Path,
+) -> None:
+    thesis_root = tmp_path / "thesis"
+    tables = thesis_root / "tables"
+    tables.mkdir(parents=True)
+    manuscript = thesis_root / "manuscript-en.md"
+    manuscript.write_text(
+        "# Paper\n\n"
+        "See [Table 2](tables/tum-results.md), "
+        "[Table 3](tables/replica-results.md), "
+        "[Table 4](tables/fm-results.md), and "
+        "[Table 5](tables/efficiency-results.md).\n",
+        encoding="utf-8",
+    )
+    for spec in TABLE_SPECS["en"]:
+        (tables / Path(spec.target).name).write_text(
+            "| Label | Value |\n|---|---:|\n| A | 1 |\n",
+            encoding="utf-8",
+        )
+
+    assembled = assemble_review_markdown(
+        manuscript,
+        thesis_root,
+        TABLE_SPECS["en"],
+    )
+
+    caption_offsets = [
+        assembled.index(f"**{label}.")
+        for label in ("Table 2", "Table 3", "Table 4", "Table 5")
+    ]
+    assert caption_offsets == sorted(caption_offsets)
+
+
 def test_assemble_review_markdown_uses_explicit_shared_table_root_for_parent_links(
     tmp_path: Path,
 ) -> None:
@@ -335,6 +369,12 @@ def test_cli_builds_v2_from_explicit_inputs_without_touching_v1_reviews(
         assert "[1]" in plain_text
         assert "(Kerbl" not in plain_text
         assert "Explicit bibliography path sentinel" in plain_text
+        figure_prefix = "Figure" if language == "en" else "图"
+        figure_offsets = [
+            plain_text.index(f"{figure_prefix} {number}.")
+            for number in range(1, 9)
+        ]
+        assert figure_offsets == sorted(figure_offsets)
     assert {document: document.read_bytes() for document in v1_reviews} == before
 
 
@@ -425,7 +465,19 @@ def test_format_review_docx_sets_a4_margins_and_compact_table_text(
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <w:p><w:r><w:t>Body text</w:t></w:r></w:p>
-    <w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table text</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+    <w:tbl><w:tr><w:tc><w:p><w:r><w:t>Ordinary table</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+    <w:tbl><w:tblPr><w:tblLayout w:type="fixed" /></w:tblPr><w:tr>
+      <w:tc><w:p><w:r><w:t>Dataset</w:t></w:r></w:p></w:tc>
+      <w:tc><w:p><w:r><w:t>GI-KF+Pyramid</w:t></w:r></w:p></w:tc>
+      <w:tc><w:p><w:r><w:t>Metric</w:t></w:r></w:p></w:tc>
+      <w:tc><w:p><w:r><w:t>RTX 2080 Ti</w:t></w:r></w:p></w:tc>
+      <w:tc><w:p><w:r><w:t>Value</w:t></w:r></w:p></w:tc>
+    </w:tr><w:tblGrid>
+      <w:gridCol w:w="594" /><w:gridCol w:w="594" /><w:gridCol w:w="594" />
+      <w:gridCol w:w="594" /><w:gridCol w:w="792" /><w:gridCol w:w="792" />
+      <w:gridCol w:w="792" /><w:gridCol w:w="792" /><w:gridCol w:w="792" />
+      <w:gridCol w:w="792" /><w:gridCol w:w="792" />
+    </w:tblGrid></w:tbl>
     <w:sectPr>
       <w:pgSz w:w="12240" w:h="15840"/>
       <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
@@ -447,5 +499,35 @@ def test_format_review_docx_sets_a4_margins_and_compact_table_text(
     assert 'w:left="850"' in updated
     assert 'w:right="850"' in updated
     assert 'w:val="16"' in updated
-    assert updated.count('w:val="16"') == 2
+    assert updated.count('w:val="16"') == 12
     assert 'w:lang w:val="zh-CN"' in updated
+    root = ET.fromstring(updated)
+    namespace = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    wide_layout = root.findall(f".//{namespace}tbl")[1].find(
+        f"{namespace}tblPr/{namespace}tblLayout"
+    )
+    assert wide_layout is not None
+    assert wide_layout.get(f"{namespace}type") == "autofit"
+    cells = root.findall(
+        ".//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tbl/"
+        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tr/"
+        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tc"
+    )
+    no_wrap = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}noWrap"
+    assert [cell.find(f".//{no_wrap}") is not None for cell in cells] == [
+        False,
+        True,
+        True,
+        True,
+        True,
+        False,
+    ]
+    fit_text = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tcFitText"
+    assert [cell.find(f".//{fit_text}") is not None for cell in cells] == [
+        False,
+        False,
+        False,
+        False,
+        False,
+        False,
+    ]

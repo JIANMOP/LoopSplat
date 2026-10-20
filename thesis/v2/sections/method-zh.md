@@ -2,7 +2,7 @@
 
 OARS-GS 改变在线高斯 SLAM 系统使用到达观测的方式：它向相机跟踪加入弱的陀螺仪旋转正则，根据当前观测和运动状态接纳持久关键帧，将一类严格限定的被拒观测用于临时跟踪支撑更新，并将持久关键帧监督从粗分辨率调度至全分辨率。图 1 概括了这些路径。渲染器、高斯参数化、子图构建、高斯到高斯配准、回环和位姿图优化均继承自 LoopSplat [@zhu2025_loopsplat]，并非 OARS-GS 新增。
 
-![OARS-GS 处理流程概览。实线箭头表示逐帧路径；虚线箭头标示继承的子图边界与检查点交互。](../figures/oars-gs-overview.svg){#fig:oars-gs-overview}
+![图 1. OARS-GS 处理流程概览。实线箭头表示逐帧路径；虚线箭头标示继承的子图边界与检查点交互。](../figures/oars-gs-overview.svg){#fig:oars-gs-overview}
 
 ## 3.1. 系统概览与预备定义
 
@@ -26,7 +26,7 @@ w_C\mathcal{L}^{\mathrm{trk}}_{1,C}
 \tag{2}
 \]
 
-其中 RGB 与深度项是跟踪器有效掩码上的渲染残差；在 FMDataset 配置中 \(w_C=0.6\)；\(\mathcal{L}_{R}\) 和 \(\mathcal{L}_{T}\) 是下文定义的惯性旋转与平移项。跟踪迭代中见到的最小损失位姿被保留。随后，持久建图更新同一 \(\Theta_G\)，可由被选中的关键帧播种高斯，并在继承的子图记录中存储该观测。到达子图边界时，继承后端检查点保存先前活动子图，执行回环处理及其位姿图校正，并初始化下一活动模型。
+其中，深度项始终在跟踪器有效掩码上求均值。仅在启用 `mask_invalid_depth` 时 RGB 项使用该掩码；启用 soft alpha 而关闭该选项时，RGB 项为经 \(\widehat A_t^3\) 加权后对所有像素求均值的残差。Replica 设置 `soft_alpha=true` 和 `mask_invalid_depth=false`，因而使用后一种形式；TUM RGB-D 和 FMDataset 启用颜色掩码。FMDataset 配置中 \(w_C=0.6\)；\(\mathcal{L}_{R}\) 和 \(\mathcal{L}_{T}\) 是下文定义的惯性旋转与平移项。跟踪迭代中见到的最小损失位姿被保留。随后，持久建图更新同一 \(\Theta_G\)，可由被选中的关键帧播种高斯，并在继承的子图记录中存储该观测。到达子图边界时，继承后端检查点保存先前活动子图，执行回环处理及其位姿图校正，并初始化下一活动模型。
 
 ## 3.2. 惯性旋转正则
 
@@ -178,7 +178,7 @@ K_t=
 
 子图边界测试位于普通决策函数之外，因此先于无效深度拒绝执行。在函数内部，有效深度是返回任何强制帧结果之前的必要条件。候选帧在 \(g_t\ge g_{\max}\) 时也已经达到稳定间隔，故会在评分之前由两个覆盖分支之一选中。图 2 展示该顺序，并区分持久与临时结果。
 
-![观测调度：运动作为视锥新颖度分数之前的硬门控。](../figures/observation-scheduling.svg){#fig:observation-scheduling}
+![图 2. 观测调度：运动作为视锥新颖度分数之前的硬门控。](../figures/observation-scheduling.svg){#fig:observation-scheduling}
 
 ## 3.4. 临时跟踪支撑更新
 
@@ -318,8 +318,8 @@ for t = 0, ..., T - 1 do
     end if
 end for
 
-checkpoint any remaining active submap and its persistent keyframes
 run the inherited final loop-closure path when configured
+checkpoint any remaining active submap and its persistent keyframes
 ~~~
 
-该算法保持继承系统对活动子图和全局校正轨迹的区分。OARS-GS 修改旋转项、观测接纳、临时更新路径和监督调度；配准、回环检测、检查点结构和图校正仍是后端操作。
+所报告的配置均禁用可选的最终回环路径。该算法保持继承系统对活动子图和全局校正轨迹的区分。OARS-GS 修改旋转项、观测接纳、临时更新路径和监督调度；配准、回环检测、检查点结构和图校正仍是后端操作。
