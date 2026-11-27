@@ -47,3 +47,12 @@ def test_gt_visibility_excludes_occluded_and_behind_camera_points():
     intrinsic = np.array([[1., 0., 1.], [0., 1., 1.], [0., 0., 1.]])
     mask = module.visible_in_depth(points, np.eye(4), intrinsic, np.ones((3, 3)), 0.02)
     assert mask.tolist() == [True, False, False]
+
+
+def test_surface_loader_preserves_all_faces_in_ply_with_degenerate_triangle(tmp_path):
+    module = geometry_module()
+    path = tmp_path / 'surface.ply'
+    path.write_text('ply\nformat ascii 1.0\nelement vertex 4\nproperty float x\nproperty float y\nproperty float z\nelement face 2\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n2 0 0\n3 0 1 2\n3 0 1 3\n')
+    vertices, faces = module.load_surface_arrays(path)
+    assert vertices.shape == (4, 3)
+    assert faces.shape == (2, 3)

@@ -79,6 +79,15 @@ def sample_surface(mesh, count, seed):
     return (selected * weights[:, :, None]).sum(axis=1)
 
 
+def load_surface_arrays(path):
+    import trimesh
+    mesh = trimesh.load(path, force='mesh', process=False)
+    vertices, faces = np.asarray(mesh.vertices), np.asarray(mesh.faces)
+    if not np.isfinite(vertices).all() or len(faces) == 0:
+        raise ValueError('GT mesh must have finite vertices and nonempty faces')
+    return vertices, faces
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('run_dir', type=Path)
@@ -135,7 +144,10 @@ def main():
         'gt_mesh_sha256': hashlib.sha256(args.gt_mesh.read_bytes()).hexdigest(),
     }
     (args.output / 'protocol.json').write_text(json.dumps(protocol, indent=2))
-    gt_mesh = o3d.io.read_triangle_mesh(str(args.gt_mesh))
+    vertices, faces = load_surface_arrays(args.gt_mesh)
+    print(f'Loaded complete GT mesh: {len(vertices)} vertices, {len(faces)} faces', flush=True)
+    gt_mesh = o3d.geometry.TriangleMesh(
+        o3d.utility.Vector3dVector(vertices), o3d.utility.Vector3iVector(faces))
     target_candidates = sample_surface(gt_mesh, 200000, 0)
     seen = np.zeros(len(target_candidates), dtype=bool)
     for frame_id in frame_ids:
